@@ -65,28 +65,49 @@
 
   ## Railway Deployment
 
-  Deploy server and client as separate Railway services.
+  This repository is a monorepo. Deploy it as two Railway services.
 
-  ### 1. Backend service (server)
+  ### Why your build failed
 
-  1. Create new Railway service from server directory.
-  2. Set environment variables:
+  If Railway builds from repository root without app config, Railpack can fail with:
+  Error creating build plan with Railpack.
+
+  This repo now includes explicit Nixpacks config files:
+
+  - root service fallback: nixpacks.toml
+  - backend service: server/nixpacks.toml
+  - frontend service: client/nixpacks.toml
+
+  ### 1. Backend service
+
+  1. In Railway, create service from this GitHub repo.
+  2. Set Root Directory to server.
+  3. Set variables:
     - MONGO_URI
     - JWT_SECRET
-    - PORT (Railway injects this automatically, but keeping it is fine)
-    - CLIENT_ORIGIN (set this to your deployed frontend URL)
-  3. Start command:
-    - npm start
+    - CLIENT_ORIGIN=https://your-frontend-domain
+  4. Deploy.
 
-  ### 2. Frontend service (client)
+  Backend uses:
+  - Install: npm ci
+  - Start: npm start
 
-  1. Create new Railway service from client directory.
-  2. Set environment variable:
-    - VITE_API_URL=https://your-backend-service-url
-  3. Build command:
-    - npm run build
-  4. Start command:
-    - npx vite preview --host 0.0.0.0 --port $PORT
+  ### 2. Frontend service
+
+  1. Create second service from same GitHub repo.
+  2. Set Root Directory to client.
+  3. Set variable:
+    - VITE_API_URL=https://your-backend-domain
+  4. Deploy.
+
+  Frontend uses:
+  - Install: npm ci
+  - Build: npm run build
+  - Start: npm run start
+
+  ### 3. Final CORS check
+
+  After frontend URL is generated, update backend CLIENT_ORIGIN to that URL and redeploy backend.
 
   ## Business Rules Implemented
 
