@@ -39,7 +39,12 @@ export function SearchResults() {
         setLiveRides(response.data.liveRides || []);
         setUpcomingRides(response.data.upcomingRides || []);
       } catch (requestError: any) {
-        setError(requestError?.response?.data?.message || 'Could not load rides');
+        const apiMessage = requestError?.response?.data?.message;
+        if (apiMessage === 'Passengers only') {
+          setError('Switch to Passenger to search rides');
+        } else {
+          setError(apiMessage || 'Could not load rides');
+        }
       } finally {
         setLoading(false);
       }

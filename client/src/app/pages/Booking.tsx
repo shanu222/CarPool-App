@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { api } from '../lib/api';
 import type { Ride } from '../types';
 import { useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 export function Booking() {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export function Booking() {
   const [isRequested, setIsRequested] = useState(false);
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState('');
+  const { user } = useAuth();
 
   const seats = parseInt(searchParams.get('seats') || '1');
 
@@ -43,6 +45,11 @@ export function Booking() {
   const total = subtotal + serviceFee;
 
   const handleBook = async () => {
+    if (user?.role !== 'passenger') {
+      setError('Switch to Passenger to book rides');
+      return;
+    }
+
     try {
       setIsProcessing(true);
       setError('');
@@ -210,7 +217,7 @@ export function Booking() {
       <div className="absolute bottom-0 left-0 right-0 mx-3 mb-3 rounded-2xl glass-panel px-6 py-4">
         <button
           onClick={handleBook}
-          disabled={isProcessing}
+          disabled={isProcessing || user?.role !== 'passenger'}
           className="w-full bg-blue-600 text-white py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {isProcessing ? (

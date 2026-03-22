@@ -9,6 +9,7 @@ interface AuthContextValue {
   token: string | null;
   isAuthenticated: boolean;
   setAuth: (nextToken: string, nextUser: User) => void;
+  setCurrentUser: (nextUser: User) => void;
   logout: () => void;
 }
 
@@ -25,6 +26,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(nextUser);
   };
 
+  const setCurrentUser = (nextUser: User) => {
+    setStoredUser(nextUser);
+    setUser(nextUser);
+  };
+
   const logout = () => {
     clearSession();
     disconnectSocket();
@@ -38,6 +44,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       token: tokenState,
       isAuthenticated: Boolean(user && tokenState),
       setAuth,
+      setCurrentUser,
       logout,
     }),
     [user, tokenState]

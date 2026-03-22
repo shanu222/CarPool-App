@@ -2,8 +2,65 @@ import { Router } from "express";
 import { protect } from "../middleware/auth.js";
 import { submitVerification } from "../controllers/verificationController.js";
 import { upload } from "../middleware/upload.js";
+import { User } from "../models/User.js";
 
 const router = Router();
+
+router.patch("/role", protect, async (req, res, next) => {
+  try {
+    const { role } = req.body;
+
+    if (!role || !["passenger", "driver"].includes(role)) {
+      return res.status(400).json({ message: "role must be passenger or driver" });
+    }
+
+    if (req.user.role === "admin") {
+      return res.status(403).json({ message: "Admin role cannot be switched" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.role = role;
+    await user.save();
+
+    return res.json({
+      message: `Switched to ${role}`,
+      user: {
+        id: user._id,
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        accountStatus: user.accountStatus,
+        suspensionReason: user.suspensionReason,
+        rating: user.rating,
+        isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus,
+        cnicNumber: user.cnicNumber || user.cnic,
+        cnic: user.cnic,
+        cnicPhoto: user.cnicPhoto || user.licensePhoto,
+        profilePhoto: user.profilePhoto,
+        carPhoto: user.carPhoto,
+        carMake: user.carMake,
+        carModel: user.carModel,
+        carColor: user.carColor,
+        carPlateNumber: user.carPlateNumber,
+        carYear: user.carYear,
+        licensePhoto: user.licensePhoto,
+        ratingCount: user.ratingCount,
+        canPostRide: user.canPostRide,
+        canBookRide: user.canBookRide,
+        canChat: user.canChat,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.post(
   "/upload-documents",

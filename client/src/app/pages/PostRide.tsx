@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Users } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -20,11 +21,17 @@ export function PostRide() {
     totalSeats: '3',
   });
 
+  useEffect(() => {
+    if (user?.role && user.role !== 'driver') {
+      setError('Switch to Driver to post a ride');
+    }
+  }, [user?.role]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (user?.role !== 'driver') {
-      setError('Only drivers can post rides. Please register/login as driver.');
+      setError('Switch to Driver to post a ride');
       return;
     }
 
@@ -195,7 +202,7 @@ export function PostRide() {
 
         <button
           type="submit"
-          disabled={!isFormValid || loading}
+          disabled={!isFormValid || loading || user?.role !== 'driver'}
           className="w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Posting...' : 'Post Ride'}

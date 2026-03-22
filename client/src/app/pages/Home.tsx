@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { MapPin, Calendar, Search, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useAuth } from '../context/AuthContext';
 
 export function Home() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [date, setDate] = useState('');
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isDriver = user?.role === 'driver';
+  const isPassenger = user?.role === 'passenger';
 
   const handleSearch = () => {
     navigate('/search?from=' + from + '&to=' + to + '&date=' + date);
@@ -22,21 +26,23 @@ export function Home() {
       </div>
 
       <div className="px-6 py-6">
-        <button
-          onClick={() => navigate('/post-ride')}
-          className="mb-6 w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30"
-        >
-          <Plus className="mr-2 inline-block h-5 w-5" />
-          Offer a Ride
-        </button>
+        {isDriver ? (
+          <button
+            onClick={() => navigate('/post-ride')}
+            className="mb-6 w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30"
+          >
+            <Plus className="mr-2 inline-block h-5 w-5" />
+            Offer a Ride
+          </button>
+        ) : null}
 
-        {/* Search Form */}
-        <motion.div
-          key="find"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel rounded-3xl p-6 space-y-4"
-        >
+        {isPassenger ? (
+          <motion.div
+            key="find"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-panel rounded-3xl p-6 space-y-4"
+          >
           <div>
             <label className="block text-sm mb-2 text-gray-700">From</label>
             <div className="relative">
@@ -87,7 +93,12 @@ export function Home() {
             <Search className="mr-2 inline-block h-5 w-5" />
             Search Rides
           </button>
-        </motion.div>
+          </motion.div>
+        ) : (
+          <div className="glass-panel rounded-3xl p-6 text-sm text-slate-100">
+            Switch to Passenger to find and book rides.
+          </div>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mt-6">

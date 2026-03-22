@@ -47,3 +47,19 @@ export const requireAdmin = (req, res, next) => {
 
   return next();
 };
+
+export const requireDriver = (req, res, next) => {
+  if (!req.user || req.user.role !== "driver") {
+    return res.status(403).json({ message: "Drivers only" });
+  }
+
+  return next();
+};
+
+export const requirePassenger = (req, res, next) => {
+  if (!req.user || req.user.role !== "passenger") {
+    return res.status(403).json({ message: "Passengers only" });
+  }
+
+  return next();
+};

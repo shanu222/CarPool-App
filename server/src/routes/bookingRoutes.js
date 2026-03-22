@@ -5,13 +5,13 @@ import {
 	getMyBookings,
 	respondToBookingRequest,
 } from "../controllers/bookingController.js";
-import { protect, requireRole } from "../middleware/auth.js";
+import { protect, requireDriver, requirePassenger } from "../middleware/auth.js";
 
 const router = Router();
 
-router.post("/create", protect, requireRole("passenger"), createBooking);
+router.post("/create", protect, requirePassenger, createBooking);
 router.get("/my", protect, getMyBookings);
-router.get("/driver-requests", protect, requireRole("driver"), getDriverBookingRequests);
-router.patch("/:bookingId/respond", protect, requireRole("driver"), respondToBookingRequest);
+router.get("/driver-requests", protect, requireDriver, getDriverBookingRequests);
+router.patch("/:bookingId/respond", protect, requireDriver, respondToBookingRequest);
 
 export default router;
