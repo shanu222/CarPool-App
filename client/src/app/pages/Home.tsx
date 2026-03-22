@@ -19,34 +19,26 @@ export function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
+    <div className="min-h-screen bg-transparent">
       {/* Header */}
-      <div className="bg-white px-6 pt-12 pb-6 rounded-b-3xl shadow-sm">
-        <h1 className="text-3xl mb-2">Welcome back! 👋</h1>
-        <p className="text-gray-600">Where would you like to go?</p>
+      <div className="glass-panel mx-4 mt-4 px-6 pt-12 pb-6 rounded-3xl">
+        <h1 className="text-3xl mb-2 text-white">Welcome back! 👋</h1>
+        <p className="text-slate-200">Where would you like to go?</p>
       </div>
 
       <div className="px-6 py-6">
         {/* Toggle */}
-        <div className="bg-white p-2 rounded-2xl shadow-sm mb-6 flex gap-2">
+        <div className="glass-subtle p-2 rounded-2xl mb-6 flex gap-2">
           <button
             onClick={() => setMode('find')}
-            className={`flex-1 py-3 rounded-xl transition-all ${
-              mode === 'find'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-gray-600'
-            }`}
+            className={`tab-pill flex-1 py-3 rounded-xl ${mode === 'find' ? 'active' : ''}`}
           >
             <Search className="w-5 h-5 inline-block mr-2" />
             Find a Ride
           </button>
           <button
             onClick={() => setMode('offer')}
-            className={`flex-1 py-3 rounded-xl transition-all ${
-              mode === 'offer'
-                ? 'bg-green-600 text-white shadow-md'
-                : 'text-gray-600'
-            }`}
+            className={`tab-pill flex-1 py-3 rounded-xl ${mode === 'offer' ? 'active' : ''}`}
           >
             <Plus className="w-5 h-5 inline-block mr-2" />
             Offer a Ride
@@ -58,7 +50,7 @@ export function Home() {
           key={mode}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl shadow-lg p-6 space-y-4"
+          className="glass-panel rounded-3xl p-6 space-y-4"
         >
           <div>
             <label className="block text-sm mb-2 text-gray-700">From</label>
@@ -105,7 +97,7 @@ export function Home() {
           <button
             onClick={handleSearch}
             disabled={mode === 'find' && (!from || !to || !date)}
-            className={`w-full py-4 rounded-2xl shadow-lg transition-all ${
+            className={`w-full py-4 rounded-2xl shadow-lg transition-all duration-200 ${
               mode === 'find'
                 ? 'bg-blue-600 text-white shadow-blue-600/30'
                 : 'bg-green-600 text-white shadow-green-600/30'
@@ -117,23 +109,23 @@ export function Home() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mt-6">
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <div className="text-2xl mb-1">12K+</div>
-            <div className="text-xs text-gray-600">Active Rides</div>
+          <div className="glass-subtle rounded-2xl p-4 text-center">
+            <div className="text-2xl mb-1 text-white">12K+</div>
+            <div className="text-xs text-slate-200">Active Rides</div>
           </div>
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <div className="text-2xl mb-1">50K+</div>
-            <div className="text-xs text-gray-600">Happy Users</div>
+          <div className="glass-subtle rounded-2xl p-4 text-center">
+            <div className="text-2xl mb-1 text-white">50K+</div>
+            <div className="text-xs text-slate-200">Happy Users</div>
           </div>
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <div className="text-2xl mb-1">4.9★</div>
-            <div className="text-xs text-gray-600">Avg Rating</div>
+          <div className="glass-subtle rounded-2xl p-4 text-center">
+            <div className="text-2xl mb-1 text-white">4.9★</div>
+            <div className="text-xs text-slate-200">Avg Rating</div>
           </div>
         </div>
 
         <button
           onClick={() => navigate('/map')}
-          className="mt-6 w-full rounded-2xl bg-slate-900 px-5 py-4 text-white shadow-lg"
+          className="mt-6 w-full rounded-2xl bg-white/20 px-5 py-4 text-white shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-white/30"
         >
           Open Live Map
         </button>

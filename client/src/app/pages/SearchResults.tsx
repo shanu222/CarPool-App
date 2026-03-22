@@ -59,16 +59,16 @@ export function SearchResults() {
   }, [rides, sortBy]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-transparent pb-24">
       {/* Header */}
-      <div className="bg-white px-6 py-4 border-b border-gray-200">
+      <div className="glass-panel mx-4 mt-4 px-6 py-4 rounded-3xl">
         <div className="flex items-center gap-4 mb-4">
-          <button onClick={() => navigate('/home')} className="p-2 -ml-2">
+          <button onClick={() => navigate('/home')} className="p-2 -ml-2 text-white/90">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div className="flex-1">
-            <h1 className="text-xl">{from || 'Any'} → {to || 'Any'}</h1>
-            <p className="text-sm text-gray-600">
+            <h1 className="text-xl text-white">{from || 'Any'} → {to || 'Any'}</h1>
+            <p className="text-sm text-slate-200">
               {date ? new Date(date).toLocaleDateString('en-US', {
                 weekday: 'short', 
                 month: 'short', 
@@ -78,7 +78,7 @@ export function SearchResults() {
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="p-2 rounded-xl bg-gray-100"
+            className="glass-subtle p-2 rounded-xl text-white"
           >
             <SlidersHorizontal className="w-5 h-5" />
           </button>
@@ -93,22 +93,14 @@ export function SearchResults() {
           >
             <button
               onClick={() => setSortBy('price')}
-              className={`px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${
-                sortBy === 'price'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
+              className={`tab-pill px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${sortBy === 'price' ? 'active' : ''}`}
             >
               <TrendingDown className="w-4 h-4" />
               Lowest Price
             </button>
             <button
               onClick={() => setSortBy('time')}
-              className={`px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${
-                sortBy === 'time'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
+              className={`tab-pill px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${sortBy === 'time' ? 'active' : ''}`}
             >
               <Clock className="w-4 h-4" />
               Earliest
@@ -119,12 +111,12 @@ export function SearchResults() {
 
       {/* Results */}
       <div className="px-6 py-4 space-y-3">
-        {loading && <p className="text-sm text-gray-600">Loading rides...</p>}
+        {loading && <p className="text-sm text-slate-100">Loading rides...</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {!loading && !error && filteredRides.length > 0 ? (
           <>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-100">
               {filteredRides.length} ride{filteredRides.length !== 1 ? 's' : ''} found
             </p>
             {filteredRides.map((ride) => (
@@ -134,17 +126,17 @@ export function SearchResults() {
         ) : null}
 
         {!loading && !error && filteredRides.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Car className="w-12 h-12 text-gray-400" />
+          <div className="glass-panel text-center py-12 rounded-3xl">
+            <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Car className="w-12 h-12 text-white/80" />
             </div>
-            <h2 className="text-xl mb-2">No rides found</h2>
-            <p className="text-gray-600 mb-6">
+            <h2 className="text-xl mb-2 text-white">No rides found</h2>
+            <p className="text-slate-100 mb-6">
               Try adjusting your search or check back later
             </p>
             <button
               onClick={() => navigate('/post-ride')}
-              className="bg-blue-600 text-white px-6 py-3 rounded-2xl"
+              className="bg-white/85 text-slate-900 px-6 py-3 rounded-2xl transition-all duration-200 hover:bg-white"
             >
               Post Your Own Ride
             </button>

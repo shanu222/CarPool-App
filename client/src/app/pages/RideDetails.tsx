@@ -50,14 +50,14 @@ export function RideDetails() {
   const canRequestBooking = ride.availableSeats > 0 && ['scheduled', 'ongoing'].includes(ride.status || 'scheduled');
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="relative min-h-screen bg-transparent pb-28">
       {/* Header */}
-      <div className="bg-white px-6 py-4 border-b border-gray-200 sticky top-0 z-10">
+      <div className="glass-panel mx-4 mt-4 px-6 py-4 rounded-3xl sticky top-2 z-10">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-white/90">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl">Ride Details</h1>
+          <h1 className="text-xl text-white">Ride Details</h1>
         </div>
       </div>
 
@@ -69,7 +69,7 @@ export function RideDetails() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-4 shadow-sm"
+          className="glass-panel rounded-2xl p-4"
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl">
@@ -77,19 +77,19 @@ export function RideDetails() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-lg">{ride.driver.name}</h2>
+                <h2 className="text-lg text-white">{ride.driver.name}</h2>
                 {ride.driver.isVerified ? (
                   <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Verified ✓</span>
                 ) : null}
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-sm text-slate-100">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                 <span>{ride.driver.rating}</span>
               </div>
             </div>
             <button
               onClick={() => navigate(`/chat/${ride._id}`)}
-              className="p-3 bg-blue-50 text-blue-600 rounded-xl"
+              className="p-3 bg-white/20 text-white rounded-xl"
             >
               <MessageCircle className="w-5 h-5" />
             </button>
@@ -100,9 +100,9 @@ export function RideDetails() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-4 shadow-sm"
+          className="glass-panel rounded-2xl p-4"
         >
-          <h3 className="text-base mb-3">Route</h3>
+          <h3 className="text-base mb-3 text-white">Route</h3>
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-center gap-1 pt-1">
               <div className="w-4 h-4 rounded-full bg-green-500" />
@@ -111,8 +111,8 @@ export function RideDetails() {
             </div>
             <div className="flex-1 space-y-4">
               <div>
-                <div className="text-base">{ride.fromCity}</div>
-                <div className="text-sm text-gray-500">
+                <div className="text-base text-white">{ride.fromCity}</div>
+                <div className="text-sm text-slate-100">
                   {new Date(ride.date).toLocaleDateString('en-US', {
                     weekday: 'short',
                     month: 'short',
@@ -122,12 +122,12 @@ export function RideDetails() {
                 </div>
               </div>
               <div>
-                <div className="text-base">{ride.toCity}</div>
-                <div className="text-sm text-gray-500">
+                <div className="text-base text-white">{ride.toCity}</div>
+                <div className="text-sm text-slate-100">
                   Price ${ride.pricePerSeat} per seat
                 </div>
                 {(ride.distanceText || ride.durationText) && (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-slate-200 mt-1">
                     {ride.distanceText || 'Distance unavailable'}
                     {ride.durationText ? ` • ${ride.durationText}` : ''}
                   </div>
@@ -141,26 +141,26 @@ export function RideDetails() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-4 shadow-sm"
+          className="glass-panel rounded-2xl p-4"
         >
-          <h3 className="text-base mb-3">Select Seats</h3>
+          <h3 className="text-base mb-3 text-white">Select Seats</h3>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-gray-600">Number of seats</span>
+            <span className="text-slate-100">Number of seats</span>
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setSelectedSeats(Math.max(1, selectedSeats - 1))}
                 disabled={selectedSeats === 1}
-                className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center disabled:opacity-50"
+                className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center disabled:opacity-50"
               >
                 -
               </button>
-              <span className="text-xl w-8 text-center">{selectedSeats}</span>
+              <span className="text-xl w-8 text-center text-white">{selectedSeats}</span>
               <button
                 onClick={() =>
                   setSelectedSeats(Math.min(ride.availableSeats, selectedSeats + 1))
                 }
                 disabled={selectedSeats === ride.availableSeats}
-                className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center disabled:opacity-50"
+                className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center disabled:opacity-50"
               >
                 +
               </button>
@@ -176,24 +176,24 @@ export function RideDetails() {
                     ? 'bg-gray-300'
                     : i < ride.totalSeats - ride.availableSeats + selectedSeats
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100'
+                    : 'bg-white/20 text-white/90'
                 }`}
               >
                 <Users className="w-6 h-6" />
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2 text-center">
+          <p className="text-xs text-slate-200 mt-2 text-center">
             {ride.availableSeats} seat{ride.availableSeats !== 1 ? 's' : ''} available
           </p>
         </motion.div>
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 max-w-md mx-auto">
+      <div className="absolute bottom-0 left-0 right-0 mx-3 mb-3 rounded-2xl glass-panel px-6 py-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-sm text-gray-600">Total Price</div>
+            <div className="text-sm text-slate-100">Total Price</div>
             <div className="text-2xl text-blue-600">${totalPrice}</div>
           </div>
           <button

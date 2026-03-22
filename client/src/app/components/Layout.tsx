@@ -13,14 +13,14 @@ export function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col max-w-md mx-auto relative">
+    <div className="min-h-screen flex flex-col relative">
       {/* Main Content */}
-      <main className="flex-1 pb-20">
+      <main className="flex-1 pb-24">
         <Outlet />
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 max-w-md mx-auto">
+      <nav className="absolute bottom-0 left-0 right-0 mx-3 mb-3 rounded-2xl glass-panel">
         <div className="flex items-center justify-around px-4 py-3">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -29,8 +29,10 @@ export function Layout() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center gap-1 px-4 py-1 rounded-lg transition-colors ${
-                  isActive ? 'text-blue-600' : 'text-gray-500'
+                className={`flex flex-col items-center gap-1 px-4 py-1 rounded-xl transition-all duration-200 ${
+                  isActive
+                    ? 'bg-white/80 text-slate-900 shadow-md'
+                    : 'text-white/85 hover:bg-white/15'
                 }`}
               >
                 <Icon className="w-5 h-5" />

@@ -66,17 +66,17 @@ export function Booking() {
 
   if (isRequested) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center max-w-md mx-auto">
+      <div className="min-h-screen flex items-center justify-center">
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="text-center px-8"
+          className="glass-panel rounded-3xl text-center px-8 py-10"
         >
           <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-16 h-16 text-white" />
           </div>
           <h1 className="text-3xl mb-2">Request Sent!</h1>
-          <p className="text-gray-600">
+          <p className="text-slate-100">
             Your booking request is pending driver approval
           </p>
         </motion.div>
@@ -85,14 +85,14 @@ export function Booking() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="relative min-h-screen bg-transparent pb-28">
       {/* Header */}
-      <div className="bg-white px-6 py-4 border-b border-gray-200 sticky top-0 z-10">
+      <div className="glass-panel mx-4 mt-4 px-6 py-4 rounded-3xl sticky top-2 z-10">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-white/90">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl">Booking Summary</h1>
+          <h1 className="text-xl text-white">Booking Summary</h1>
         </div>
       </div>
 
@@ -101,19 +101,19 @@ export function Booking() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-4 shadow-sm"
+          className="glass-panel rounded-2xl p-4"
         >
-          <h3 className="text-base mb-3">Trip Details</h3>
+          <h3 className="text-base mb-3 text-white">Trip Details</h3>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-gray-600">Route</span>
-              <span>
+              <span className="text-slate-100">Route</span>
+              <span className="text-white">
                 {ride.fromCity} → {ride.toCity}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Date</span>
-              <span>
+              <span className="text-slate-100">Date</span>
+              <span className="text-white">
                 {new Date(ride.date).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
@@ -122,12 +122,12 @@ export function Booking() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Driver</span>
-              <span>{ride.driver.name}</span>
+              <span className="text-slate-100">Driver</span>
+              <span className="text-white">{ride.driver.name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Seats</span>
-              <span>{seats}</span>
+              <span className="text-slate-100">Seats</span>
+              <span className="text-white">{seats}</span>
             </div>
           </div>
         </motion.div>
@@ -137,9 +137,9 @@ export function Booking() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-4 shadow-sm"
+          className="glass-panel rounded-2xl p-4"
         >
-          <h3 className="text-base mb-3">Payment Method</h3>
+          <h3 className="text-base mb-3 text-white">Payment Method</h3>
           <div className="space-y-2">
             <PaymentOption
               icon={CreditCard}
@@ -170,23 +170,23 @@ export function Booking() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-4 shadow-sm"
+          className="glass-panel rounded-2xl p-4"
         >
-          <h3 className="text-base mb-3">Price Breakdown</h3>
+          <h3 className="text-base mb-3 text-white">Price Breakdown</h3>
           <div className="space-y-2">
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-slate-100">
               <span>
                 ${ride.pricePerSeat} × {seats} seat{seats > 1 ? 's' : ''}
               </span>
               <span>${subtotal}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-slate-100">
               <span>Service fee</span>
               <span>${serviceFee}</span>
             </div>
-            <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between">
-              <span>Total</span>
-              <span className="text-xl text-blue-600">${total}</span>
+            <div className="border-t border-white/30 pt-2 mt-2 flex justify-between">
+              <span className="text-white">Total</span>
+              <span className="text-xl text-blue-200">${total}</span>
             </div>
           </div>
         </motion.div>
@@ -196,10 +196,10 @@ export function Booking() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-blue-50 rounded-2xl p-4"
+          className="glass-subtle rounded-2xl p-4"
         >
-          <h4 className="text-sm mb-1">Cancellation Policy</h4>
-          <p className="text-xs text-gray-600">
+          <h4 className="text-sm mb-1 text-white">Cancellation Policy</h4>
+          <p className="text-xs text-slate-100">
             Free cancellation up to 24 hours before departure. 50% refund within 24
             hours.
           </p>
@@ -207,7 +207,7 @@ export function Booking() {
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 max-w-md mx-auto">
+      <div className="absolute bottom-0 left-0 right-0 mx-3 mb-3 rounded-2xl glass-panel px-6 py-4">
         <button
           onClick={handleBook}
           disabled={isProcessing}
@@ -222,7 +222,7 @@ export function Booking() {
             <>Send Request · ${total}</>
           )}
         </button>
-        {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+        {error && <p className="text-sm text-red-300 mt-2">{error}</p>}
       </div>
     </div>
   );
@@ -240,18 +240,18 @@ function PaymentOption({ icon: Icon, label, selected, onSelect }: PaymentOptionP
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-        selected ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white'
+      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
+        selected ? 'border-white/70 bg-white/30' : 'border-white/30 bg-white/10 hover:bg-white/20'
       }`}
     >
-      <Icon className={`w-5 h-5 ${selected ? 'text-blue-600' : 'text-gray-600'}`} />
-      <span className="flex-1 text-left">{label}</span>
+      <Icon className={`w-5 h-5 ${selected ? 'text-white' : 'text-slate-100'}`} />
+      <span className="flex-1 text-left text-white">{label}</span>
       <div
         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-          selected ? 'border-blue-600' : 'border-gray-300'
+          selected ? 'border-white' : 'border-white/50'
         }`}
       >
-        {selected && <div className="w-3 h-3 rounded-full bg-blue-600" />}
+        {selected && <div className="w-3 h-3 rounded-full bg-white" />}
       </div>
     </button>
   );

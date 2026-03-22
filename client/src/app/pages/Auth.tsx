@@ -6,7 +6,6 @@ import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import type { AuthResponse } from '../types';
-import bgImage from '../../assets/carpool-bg.png';
 
 export function Auth() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -75,32 +74,26 @@ export function Auth() {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${bgImage})` }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-slate-900/65 to-black/80" />
-
-      <div className="relative z-10 min-h-screen flex flex-col max-w-md mx-auto">
+      <div className="relative z-10 min-h-screen flex flex-col">
         <div className="flex-1 flex flex-col justify-center px-8 py-12">
         <div className="text-center mb-12">
-          <div className="bg-gradient-to-br from-blue-500 to-purple-600 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="glass-panel w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <Car className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-3xl mb-2 text-white">RideShare</h1>
           <p className="text-slate-200">Login or create your account</p>
         </div>
 
-        <div className="bg-white/15 backdrop-blur-md p-1 rounded-xl mb-6 flex border border-white/25">
+        <div className="glass-subtle p-1 rounded-xl mb-6 flex">
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-2 rounded-lg ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-100'}`}
+            className={`tab-pill flex-1 py-2 rounded-lg ${mode === 'login' ? 'active' : ''}`}
           >
             Login
           </button>
           <button
             onClick={() => setMode('signup')}
-            className={`flex-1 py-2 rounded-lg ${mode === 'signup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-100'}`}
+            className={`tab-pill flex-1 py-2 rounded-lg ${mode === 'signup' ? 'active' : ''}`}
           >
             Sign up
           </button>
@@ -110,7 +103,7 @@ export function Auth() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-3xl bg-white/90 p-6 shadow-2xl backdrop-blur-sm"
+          className="space-y-4 rounded-3xl glass-panel p-6"
         >
           {mode === 'signup' && (
             <input
@@ -158,14 +151,14 @@ export function Auth() {
               <button
                 type="button"
                 onClick={() => setRole('passenger')}
-                className={`py-3 rounded-xl ${role === 'passenger' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                  className={`tab-pill py-3 rounded-xl ${role === 'passenger' ? 'active' : ''}`}
               >
                 Passenger
               </button>
               <button
                 type="button"
                 onClick={() => setRole('driver')}
-                className={`py-3 rounded-xl ${role === 'driver' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                  className={`tab-pill py-3 rounded-xl ${role === 'driver' ? 'active' : ''}`}
               >
                 Driver
               </button>

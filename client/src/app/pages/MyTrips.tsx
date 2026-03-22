@@ -91,40 +91,32 @@ export function MyTrips() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-transparent">
       {/* Header */}
-      <div className="bg-white px-6 pt-12 pb-6">
-        <h1 className="text-3xl mb-1">My Trips</h1>
-        <p className="text-gray-600">View and manage your bookings</p>
+      <div className="glass-panel mx-4 mt-4 px-6 pt-12 pb-6 rounded-3xl">
+        <h1 className="text-3xl mb-1 text-white">My Trips</h1>
+        <p className="text-slate-200">View and manage your bookings</p>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white px-6 pb-4 border-b border-gray-200">
+      <div className="mx-4 mt-3 px-2 pb-1 glass-subtle rounded-2xl">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('passenger')}
-            className={`flex-1 py-3 rounded-xl transition-all ${
-              activeTab === 'passenger'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600'
-            }`}
+            className={`tab-pill flex-1 py-3 rounded-xl ${activeTab === 'passenger' ? 'active' : ''}`}
           >
             As Passenger
           </button>
           <button
             onClick={() => setActiveTab('driver')}
-            className={`flex-1 py-3 rounded-xl transition-all ${
-              activeTab === 'driver'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-100 text-gray-600'
-            }`}
+            className={`tab-pill flex-1 py-3 rounded-xl ${activeTab === 'driver' ? 'active' : ''}`}
           >
             As Driver
           </button>
         </div>
       </div>
 
-      {loading && <div className="px-6 py-4 text-sm text-gray-600">Loading trips...</div>}
+      {loading && <div className="px-6 py-4 text-sm text-slate-100">Loading trips...</div>}
 
       <div className="px-6 py-4 space-y-3">
         {!loading && activeTab === 'passenger' && bookings.length > 0
@@ -151,7 +143,7 @@ export function MyTrips() {
 
         {!loading && activeTab === 'driver' && driverRequests.length > 0 ? (
           <div className="space-y-2">
-            <h3 className="text-sm text-gray-600">Booking Requests</h3>
+            <h3 className="text-sm text-slate-100">Booking Requests</h3>
             {driverRequests.map((request) => (
               <DriverRequestCard
                 key={request._id}
@@ -163,12 +155,12 @@ export function MyTrips() {
         ) : null}
 
         {!loading && ((activeTab === 'passenger' && bookings.length === 0) || (activeTab === 'driver' && driverRides.length === 0)) ? (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Calendar className="w-12 h-12 text-gray-400" />
+          <div className="glass-panel text-center py-12 rounded-3xl">
+            <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Calendar className="w-12 h-12 text-white/80" />
             </div>
-            <h2 className="text-xl mb-2">No trips yet</h2>
-            <p className="text-gray-600 mb-6">
+            <h2 className="text-xl mb-2 text-white">No trips yet</h2>
+            <p className="text-slate-100 mb-6">
               {activeTab === 'passenger'
                 ? 'Book your first ride to get started'
                 : 'Post a ride to start earning'}
@@ -215,7 +207,7 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white rounded-2xl p-4 shadow-sm cursor-pointer border border-gray-100"
+      className="glass-panel rounded-2xl p-4 cursor-pointer"
     >
       {/* Status Badge */}
       <div className="flex items-center justify-between mb-3">
@@ -230,7 +222,7 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
             navigate(`/chat/${ride._id}`);
           }}
           disabled={!canChat}
-          className="p-2 bg-gray-100 rounded-xl"
+          className="p-2 bg-white/20 rounded-xl text-white disabled:opacity-50"
         >
           <MessageCircle className="w-4 h-4" />
         </button>
@@ -245,8 +237,8 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
         </div>
         <div className="flex-1 space-y-3">
           <div>
-            <div className="text-sm">{ride.fromCity}</div>
-            <div className="text-xs text-gray-500">
+            <div className="text-sm text-white">{ride.fromCity}</div>
+            <div className="text-xs text-slate-100">
               {new Date(ride.date).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -255,20 +247,20 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
             </div>
           </div>
           <div>
-            <div className="text-sm">{ride.toCity}</div>
+            <div className="text-sm text-white">{ride.toCity}</div>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+      <div className="flex items-center justify-between pt-3 border-t border-white/30">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
             {ride.driver.name.slice(0, 1).toUpperCase()}
           </div>
-          <div className="text-sm">{ride.driver.name}</div>
+          <div className="text-sm text-white">{ride.driver.name}</div>
         </div>
-        <div className="flex items-center gap-3 text-sm text-gray-600">
+        <div className="flex items-center gap-3 text-sm text-slate-100">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
             <span>{trip.seatsRequested || trip.seatsBooked}</span>
@@ -278,7 +270,7 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
       </div>
 
       {ride.driver.maskedCnic ? (
-        <div className="mt-2 text-xs text-gray-500">Driver CNIC: {ride.driver.maskedCnic}</div>
+        <div className="mt-2 text-xs text-slate-100">Driver CNIC: {ride.driver.maskedCnic}</div>
       ) : null}
 
       {trip.status === 'completed' ? (
@@ -310,15 +302,15 @@ function DriverTripCard({
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white rounded-2xl p-4 shadow-sm cursor-pointer border border-gray-100"
+      className="glass-panel rounded-2xl p-4 cursor-pointer"
     >
       <div className="flex items-center justify-between mb-3">
         <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-600">Driver Ride</span>
-        <span className="text-sm text-gray-500">{ride.date} {ride.time}</span>
+        <span className="text-sm text-slate-100">{ride.date} {ride.time}</span>
       </div>
-      <div className="text-base mb-2">{ride.fromCity} → {ride.toCity}</div>
+      <div className="text-base mb-2 text-white">{ride.fromCity} → {ride.toCity}</div>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-600">{ride.availableSeats}/{ride.totalSeats} seats left</span>
+        <span className="text-slate-100">{ride.availableSeats}/{ride.totalSeats} seats left</span>
         <span className="text-blue-600">${ride.pricePerSeat}/seat</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -373,14 +365,14 @@ function DriverRequestCard({
   const passenger = request.passengerId || request.user;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+    <div className="glass-subtle rounded-2xl p-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm">{passenger?.name || 'Passenger'}</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-white">{passenger?.name || 'Passenger'}</p>
+          <p className="text-xs text-slate-100">
             {(request.ride?.fromCity || '')} → {(request.ride?.toCity || '')}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-100">
             {request.seatsRequested || request.seatsBooked} seat(s) · {request.status}
           </p>
         </div>
@@ -400,7 +392,7 @@ function DriverRequestCard({
             </button>
           </div>
         ) : (
-          <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-600">{request.status}</span>
+          <span className="rounded-lg bg-white/20 px-2 py-1 text-xs text-white">{request.status}</span>
         )}
       </div>
     </div>

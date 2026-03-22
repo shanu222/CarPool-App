@@ -15,7 +15,7 @@ export function RideCard({ ride }: RideCardProps) {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => navigate(`/ride/${ride._id}`)}
-      className="bg-white rounded-2xl p-4 shadow-sm cursor-pointer border border-gray-100"
+      className="glass-panel rounded-2xl p-4 cursor-pointer"
     >
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg">
@@ -23,19 +23,19 @@ export function RideCard({ ride }: RideCardProps) {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-base">{ride.driver.name}</h3>
+            <h3 className="text-base text-white">{ride.driver.name}</h3>
             {ride.driver.isVerified ? (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700">Verified ✓</span>
             ) : null}
           </div>
-          <div className="flex items-center gap-1 text-sm text-gray-600">
+          <div className="flex items-center gap-1 text-sm text-slate-100">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
             <span>{ride.driver.rating}</span>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xl text-blue-600">${ride.pricePerSeat}</div>
-          <div className="text-xs text-gray-500">per seat</div>
+          <div className="text-xl text-blue-200">${ride.pricePerSeat}</div>
+          <div className="text-xs text-slate-100">per seat</div>
         </div>
       </div>
 
@@ -47,18 +47,18 @@ export function RideCard({ ride }: RideCardProps) {
         </div>
         <div className="flex-1 space-y-3">
           <div>
-            <div className="text-sm">{ride.fromCity}</div>
-            <div className="text-xs text-gray-500">{ride.time}</div>
+            <div className="text-sm text-white">{ride.fromCity}</div>
+            <div className="text-xs text-slate-100">{ride.time}</div>
           </div>
           <div>
-            <div className="text-sm">{ride.toCity}</div>
-            <div className="text-xs text-gray-500">{ride.date}</div>
+            <div className="text-sm text-white">{ride.toCity}</div>
+            <div className="text-xs text-slate-100">{ride.date}</div>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <div className="flex items-center gap-4 text-sm text-gray-600">
+      <div className="flex items-center justify-between pt-3 border-t border-white/30">
+        <div className="flex items-center gap-4 text-sm text-slate-100">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
             <span>{ride.availableSeats}/{ride.totalSeats}</span>
@@ -68,7 +68,7 @@ export function RideCard({ ride }: RideCardProps) {
             <span>{ride.time}</span>
           </div>
         </div>
-        <div className="text-xs text-gray-500">Driver Ride</div>
+        <div className="text-xs text-slate-100">Driver Ride</div>
       </div>
     </motion.div>
   );
