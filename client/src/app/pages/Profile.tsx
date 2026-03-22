@@ -179,65 +179,109 @@ export function Profile() {
           className="glass-panel rounded-2xl p-4"
         >
           <h3 className="text-base mb-4 text-white">Verification</h3>
-          <div className="space-y-3 mb-4">
-            <input
-              value={cnic}
-              onChange={(event) => setCnic(event.target.value)}
-              placeholder="CNIC"
-              className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
-            />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setProfilePhoto(event.target.files?.[0] || null)}
-              className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
-            />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setCnicPhoto(event.target.files?.[0] || null)}
-              className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
-            />
+          <div className="space-y-4 mb-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm text-white">CNIC Number</label>
+              <input
+                value={cnic}
+                onChange={(event) => setCnic(event.target.value)}
+                placeholder="e.g. 45305-2339249-1"
+                className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+              />
+              <p className="text-xs text-slate-300">Enter your valid CNIC without spaces</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm text-white">Upload CNIC (Front Side)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setCnicPhoto(event.target.files?.[0] || null)}
+                className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
+              />
+              <p className="text-xs text-slate-300">Upload a clear image of the front side of your CNIC</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm text-white">Upload CNIC (Back Side)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setProfilePhoto(event.target.files?.[0] || null)}
+                className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
+              />
+              <p className="text-xs text-slate-300">Upload the back side of your CNIC</p>
+            </div>
+
             {user.role === 'driver' ? (
               <>
-                <input
-                  value={carMake}
-                  onChange={(event) => setCarMake(event.target.value)}
-                  placeholder="Car make"
-                  className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
-                />
-                <input
-                  value={carModel}
-                  onChange={(event) => setCarModel(event.target.value)}
-                  placeholder="Car model"
-                  className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
-                />
-                <input
-                  value={carPlateNumber}
-                  onChange={(event) => setCarPlateNumber(event.target.value)}
-                  placeholder="Car plate number"
-                  className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
-                />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <label className="block text-sm text-white">Car Make</label>
                   <input
-                    value={carColor}
-                    onChange={(event) => setCarColor(event.target.value)}
-                    placeholder="Car color"
+                    value={carMake}
+                    onChange={(event) => setCarMake(event.target.value)}
+                    placeholder="e.g. Toyota, Honda"
                     className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
                   />
-                  <input
-                    value={carYear}
-                    onChange={(event) => setCarYear(event.target.value)}
-                    placeholder="Year"
-                    className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
-                  />
+                  <p className="text-xs text-slate-300">Brand of your car</p>
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setCarPhoto(event.target.files?.[0] || null)}
-                  className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
-                />
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm text-white">Car Model</label>
+                  <input
+                    value={carModel}
+                    onChange={(event) => setCarModel(event.target.value)}
+                    placeholder="e.g. Corolla, Civic"
+                    className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                  />
+                  <p className="text-xs text-slate-300">Specific model of your car</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm text-white">Plate Number</label>
+                  <input
+                    value={carPlateNumber}
+                    onChange={(event) => setCarPlateNumber(event.target.value)}
+                    placeholder="e.g. ABC-123"
+                    className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                  />
+                  <p className="text-xs text-slate-300">Vehicle registration number</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm text-white">Car Color</label>
+                    <input
+                      value={carColor}
+                      onChange={(event) => setCarColor(event.target.value)}
+                      placeholder="e.g. White, Black"
+                      className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                    />
+                    <p className="text-xs text-slate-300">Color of your vehicle</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm text-white">Manufacturing Year</label>
+                    <input
+                      value={carYear}
+                      onChange={(event) => setCarYear(event.target.value)}
+                      placeholder="e.g. 2018"
+                      className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                    />
+                    <p className="text-xs text-slate-300">Year your car was manufactured</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm text-white">Upload Car Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setCarPhoto(event.target.files?.[0] || null)}
+                    className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
+                  />
+                  <p className="text-xs text-slate-300">Upload a clear photo of your car</p>
+                </div>
               </>
             ) : null}
             <button
@@ -248,6 +292,7 @@ export function Profile() {
             >
               {uploading ? 'Submitting...' : 'Submit Verification'}
             </button>
+            <p className="text-xs text-slate-300">Our team will review your details within 24 hours</p>
           </div>
 
           <h3 className="text-base mb-4 text-white">Recent Notifications</h3>
