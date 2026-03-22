@@ -83,19 +83,19 @@ export function PostRequest() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10">
-      <div className="bg-white px-6 py-4 border-b border-gray-200 sticky top-0 z-10">
+    <div className="min-h-screen bg-gray-50 pb-10 overflow-x-hidden">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-3 py-3 md:px-5 md:py-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl">Find Ride</h1>
+          <h1 className="text-lg md:text-xl">Find Ride</h1>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
-          <h3 className="text-base">Route Details</h3>
+      <form onSubmit={handleSubmit} className="px-3 py-4 md:px-5 md:py-5 space-y-4">
+        <div className="responsive-card bg-white rounded-xl shadow-md space-y-4">
+          <h3 className="text-sm md:text-base">Route Details</h3>
 
           <div>
             <CityAutocomplete
@@ -120,10 +120,10 @@ export function PostRequest() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
-          <h3 className="text-base">Departure</h3>
+        <div className="responsive-card bg-white rounded-xl shadow-md space-y-4">
+          <h3 className="text-sm md:text-base">Departure</h3>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div>
               <label className="block text-sm mb-2 text-gray-700">Date</label>
               <div className="relative">
@@ -133,7 +133,7 @@ export function PostRequest() {
                   value={formData.date}
                   onChange={(e) => updateField('date', e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+                  className="w-full pl-10 pr-3 py-3 md:py-3.5 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-xl"
                 />
               </div>
             </div>
@@ -146,7 +146,7 @@ export function PostRequest() {
                   type="time"
                   value={formData.time}
                   onChange={(e) => updateField('time', e.target.value)}
-                  className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+                  className="w-full pl-10 pr-3 py-3 md:py-3.5 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-xl"
                 />
               </div>
             </div>
@@ -159,7 +159,7 @@ export function PostRequest() {
               <select
                 value={formData.seatsNeeded}
                 onChange={(e) => updateField('seatsNeeded', e.target.value)}
-                className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+                className="w-full pl-10 pr-3 py-3 md:py-3.5 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-xl"
               >
                 <option value="1">1 seat</option>
                 <option value="2">2 seats</option>
@@ -175,7 +175,7 @@ export function PostRequest() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-2xl bg-blue-600 py-4 text-white shadow-lg shadow-blue-600/30 disabled:opacity-50"
+          className="responsive-action w-full rounded-2xl bg-blue-600 py-3 md:py-4 text-sm md:text-base text-white shadow-lg shadow-blue-600/30 disabled:opacity-50"
         >
           {loading ? 'Posting...' : 'Post Ride Request'}
         </button>

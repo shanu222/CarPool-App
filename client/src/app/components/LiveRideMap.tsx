@@ -287,17 +287,17 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-2 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
           {isDriver && isOngoing ? (
             <button
               type="button"
               onClick={sharing ? stopLocationSharing : startLocationSharing}
-              className={`rounded-xl px-3 py-2 text-sm ${sharing ? "bg-red-100 text-red-700" : "bg-blue-600 text-white"}`}
+              className={`min-h-12 rounded-xl px-3 py-2 text-sm md:text-base ${sharing ? "bg-red-100 text-red-700" : "bg-blue-600 text-white"}`}
             >
               {sharing ? "Stop Sharing" : "Share Live Location"}
             </button>
           ) : (
-            <div className="rounded-xl bg-blue-50 px-3 py-2 text-center text-sm text-blue-700">
+            <div className="min-h-12 rounded-xl bg-blue-50 px-3 py-2 text-center text-sm md:text-base text-blue-700 flex items-center justify-center">
               {isOngoing ? 'Watching driver live' : 'Ride not live yet'}
             </div>
           )}
@@ -305,7 +305,7 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
           <button
             type="button"
             onClick={emergencyShare}
-            className="rounded-xl bg-amber-100 px-3 py-2 text-sm text-amber-800"
+            className="min-h-12 rounded-xl bg-amber-100 px-3 py-2 text-sm md:text-base text-amber-800"
           >
             Emergency
           </button>

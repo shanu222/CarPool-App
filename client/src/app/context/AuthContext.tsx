@@ -1,8 +1,9 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "../types";
 import { clearSession, getStoredUser, getToken, setStoredUser, setToken } from "../lib/storage";
 import { disconnectSocket } from "../lib/socket";
+import { api } from "../lib/api";
 
 interface AuthContextValue {
   user: User | null;
@@ -30,6 +31,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setStoredUser(nextUser);
     setUser(nextUser);
   };
+
+  useEffect(() => {
+    if (!tokenState || !user || user.role !== "passenger") {
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          await api.post("/api/user/location", {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        } catch {
+          // no-op: location capture should not block login flow
+        }
+      },
+      () => {
+        // no-op when permission denied
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [tokenState, user]);
 
   const logout = () => {
     clearSession();

@@ -3,15 +3,33 @@ import { useNavigate } from 'react-router';
 import { MapPin, Calendar, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
-import type { Booking, Ride } from '../types';
+import type { Booking, MyRidesResponse, Ride } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
+
+type MyRidesTab = 'ongoing' | 'scheduled';
+
+const getRideStartDate = (ride?: Ride | null) => {
+  if (!ride) {
+    return null;
+  }
+
+  const candidate = ride.startTime || ride.dateTime || `${ride.date}T${ride.time}:00`;
+  const parsed = new Date(candidate as string);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+};
 
 export function MyTrips() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [driverRides, setDriverRides] = useState<Ride[]>([]);
+  const [driverOngoingRides, setDriverOngoingRides] = useState<Ride[]>([]);
+  const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
+  const [tab, setTab] = useState<MyRidesTab>('ongoing');
   const [loading, setLoading] = useState(true);
 
   const role = user?.role;
@@ -27,12 +45,14 @@ export function MyTrips() {
       if (role === 'passenger') {
         const response = await api.get<Booking[]>('/api/bookings/my');
         setBookings(response.data);
-        setDriverRides([]);
+        setDriverOngoingRides([]);
+        setDriverScheduledRides([]);
       }
 
       if (role === 'driver') {
-        const response = await api.get<Ride[]>('/api/rides/my');
-        setDriverRides(response.data);
+        const response = await api.get<MyRidesResponse>('/api/rides/my');
+        setDriverOngoingRides(response.data.ongoingRides || []);
+        setDriverScheduledRides(response.data.scheduledRides || []);
         setBookings([]);
       }
     } catch (error: any) {
@@ -94,20 +114,59 @@ export function MyTrips() {
   const showPassengerView = role === 'passenger';
   const showDriverView = role === 'driver';
 
+  const passengerOngoingBookings = bookings.filter((trip) => {
+    const start = getRideStartDate(trip.ride);
+    if (!start) {
+      return false;
+    }
+
+    return start <= new Date();
+  });
+
+  const passengerScheduledBookings = bookings.filter((trip) => {
+    const start = getRideStartDate(trip.ride);
+    if (!start) {
+      return true;
+    }
+
+    return start > new Date();
+  });
+
+  const activePassengerTrips = tab === 'ongoing' ? passengerOngoingBookings : passengerScheduledBookings;
+  const activeDriverTrips = tab === 'ongoing' ? driverOngoingRides : driverScheduledRides;
+
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="glass-panel mx-4 mt-4 px-6 pt-12 pb-6 rounded-3xl">
-        <h1 className="text-3xl mb-1 text-white">My Trips</h1>
-        <p className="text-slate-200">
+    <div className="min-h-screen bg-transparent overflow-x-hidden">
+      <div className="glass-panel mx-3 mt-3 rounded-3xl px-4 pb-4 pt-8 md:mx-4 md:mt-4 md:px-6 md:pb-6 md:pt-12">
+        <h1 className="mb-1 text-lg md:text-2xl text-white">My Trips</h1>
+        <p className="text-sm md:text-base text-slate-200">
           {showPassengerView ? 'Your booked rides' : showDriverView ? 'Your created rides' : 'View your rides'}
         </p>
+        {(showPassengerView || showDriverView) ? (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTab('ongoing')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'ongoing' ? 'active' : ''}`}
+            >
+              Ongoing
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('scheduled')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'scheduled' ? 'active' : ''}`}
+            >
+              Scheduled
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {loading && <div className="px-6 py-4 text-sm text-slate-100">Loading trips...</div>}
+      {loading && <div className="px-3 py-4 text-sm text-slate-100 md:px-5">Loading trips...</div>}
 
-      <div className="px-6 py-4 space-y-3">
-        {!loading && showPassengerView && bookings.length > 0
-          ? bookings.map((trip) => (
+      <div className="px-3 py-4 space-y-3 md:px-5">
+        {!loading && showPassengerView && activePassengerTrips.length > 0
+          ? activePassengerTrips.map((trip) => (
               <TripCard
                 key={trip._id}
                 trip={trip}
@@ -118,8 +177,8 @@ export function MyTrips() {
             ))
           : null}
 
-        {!loading && showDriverView && driverRides.length > 0
-          ? driverRides.map((ride) => (
+        {!loading && showDriverView && activeDriverTrips.length > 0
+          ? activeDriverTrips.map((ride) => (
               <DriverTripCard
                 key={ride._id}
                 ride={ride}
@@ -129,19 +188,19 @@ export function MyTrips() {
             ))
           : null}
 
-        {!loading && showPassengerView && bookings.length === 0 ? (
+        {!loading && showPassengerView && activePassengerTrips.length === 0 ? (
           <EmptyState
-            title="No bookings yet"
-            subtitle="Find your next ride and book a seat."
+            title={tab === 'ongoing' ? 'No ongoing rides' : 'No scheduled rides'}
+            subtitle={tab === 'ongoing' ? 'Your accepted rides will appear here after start time.' : 'Your upcoming bookings appear here.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
         ) : null}
 
-        {!loading && showDriverView && driverRides.length === 0 ? (
+        {!loading && showDriverView && activeDriverTrips.length === 0 ? (
           <EmptyState
-            title="No rides posted"
-            subtitle="Create your first ride and start driving."
+            title={tab === 'ongoing' ? 'No ongoing rides' : 'No scheduled rides'}
+            subtitle={tab === 'ongoing' ? 'Rides move here when start time arrives.' : 'Post a ride within 15 days to see it here.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -170,13 +229,13 @@ interface EmptyStateProps {
 
 function EmptyState({ title, subtitle, buttonText, onClick }: EmptyStateProps) {
   return (
-    <div className="glass-panel text-center py-12 rounded-3xl">
+    <div className="glass-panel text-center py-10 md:py-12 rounded-3xl px-3 md:px-5">
       <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
         <Calendar className="w-12 h-12 text-white/80" />
       </div>
-      <h2 className="text-xl mb-2 text-white">{title}</h2>
-      <p className="text-slate-100 mb-6">{subtitle}</p>
-      <button onClick={onClick} className="bg-blue-600 text-white px-6 py-3 rounded-2xl">
+      <h2 className="text-lg md:text-xl mb-2 text-white">{title}</h2>
+      <p className="text-sm md:text-base text-slate-100 mb-6">{subtitle}</p>
+      <button onClick={onClick} className="responsive-action bg-blue-600 text-white px-6 py-3 rounded-2xl">
         {buttonText}
       </button>
     </div>
@@ -213,7 +272,7 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="glass-panel rounded-2xl p-4 cursor-pointer"
+      className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer"
     >
       <div className="flex items-center justify-between mb-3">
         <span className={`px-3 py-1 rounded-full text-xs ${statusClass}`}>
@@ -254,7 +313,7 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-white/30">
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-white/30">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
             {ride.driver.name.slice(0, 1).toUpperCase()}
@@ -280,7 +339,7 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
             e.stopPropagation();
             onRate();
           }}
-          className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs text-green-700"
+          className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-green-100 px-3 py-2 text-xs md:text-sm text-green-700"
         >
           Rate Driver
         </button>
@@ -303,7 +362,7 @@ function DriverTripCard({
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="glass-panel rounded-2xl p-4 cursor-pointer"
+      className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer"
     >
       <div className="flex items-center justify-between mb-3">
         <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-600">Driver Ride</span>
@@ -320,13 +379,13 @@ function DriverTripCard({
         </span>
         <span className="text-blue-600">${ride.pricePerSeat}/seat</span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onStatusChange(ride._id, 'scheduled');
           }}
-          className="rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-700"
+          className="min-h-12 rounded-lg bg-slate-100 px-2 py-1 text-xs md:text-sm text-slate-700"
         >
           Set Scheduled
         </button>
@@ -335,7 +394,7 @@ function DriverTripCard({
             e.stopPropagation();
             onStatusChange(ride._id, 'ongoing');
           }}
-          className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700"
+          className="min-h-12 rounded-lg bg-blue-100 px-2 py-1 text-xs md:text-sm text-blue-700"
         >
           Start Ride
         </button>
@@ -344,7 +403,7 @@ function DriverTripCard({
             e.stopPropagation();
             onStatusChange(ride._id, 'completed');
           }}
-          className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700"
+          className="min-h-12 rounded-lg bg-green-100 px-2 py-1 text-xs md:text-sm text-green-700"
         >
           Complete
         </button>
@@ -353,7 +412,7 @@ function DriverTripCard({
             e.stopPropagation();
             onStatusChange(ride._id, 'cancelled');
           }}
-          className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700"
+          className="min-h-12 rounded-lg bg-red-100 px-2 py-1 text-xs md:text-sm text-red-700"
         >
           Cancel
         </button>

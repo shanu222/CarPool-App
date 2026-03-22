@@ -12,7 +12,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="mb-1.5 block text-sm md:text-base font-medium text-gray-700">
             {label}
           </label>
         )}
@@ -25,7 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             className={clsx(
-              'w-full px-4 py-3 border border-gray-300 rounded-xl',
+              'w-full min-h-12 px-4 py-3 text-sm md:text-base border border-gray-300 rounded-xl',
               'focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent',
               'placeholder:text-gray-400 transition-all',
               icon && 'pl-10',

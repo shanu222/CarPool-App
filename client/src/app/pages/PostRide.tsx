@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { PaymentModal } from '../components/PaymentModal';
 import { CityAutocomplete } from '../components/CityAutocomplete';
+import { Button } from '../components/Button';
 import { pakistanCities } from '../../data/pakistanCities';
 
 export function PostRide() {
@@ -80,25 +81,25 @@ export function PostRide() {
   const isFormValid = Object.values(formData).every((value) => value.trim() !== '');
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10">
+    <div className="min-h-screen bg-gray-50 pb-10 overflow-x-hidden">
       {/* Header */}
-      <div className="bg-white px-6 py-4 border-b border-gray-200 sticky top-0 z-10">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-3 py-3 md:px-5 md:py-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl">Offer Ride</h1>
+          <h1 className="text-lg md:text-xl">Offer Ride</h1>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
+      <form onSubmit={handleSubmit} className="px-3 py-4 md:px-5 md:py-5 space-y-4">
         {/* Route */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-4 shadow-sm space-y-4"
+          className="responsive-card bg-white rounded-2xl shadow-md space-y-4"
         >
-          <h3 className="text-base">Route Details</h3>
+          <h3 className="text-sm md:text-base">Route Details</h3>
 
           <div>
             <CityAutocomplete
@@ -128,11 +129,11 @@ export function PostRide() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-4 shadow-sm space-y-4"
+          className="responsive-card bg-white rounded-2xl shadow-md space-y-4"
         >
-          <h3 className="text-base">Departure</h3>
+          <h3 className="text-sm md:text-base">Departure</h3>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div>
               <label className="block text-sm mb-2 text-gray-700">Date</label>
               <div className="relative">
@@ -142,7 +143,7 @@ export function PostRide() {
                   value={formData.date}
                   onChange={(e) => updateField('date', e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-3 md:py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -155,7 +156,7 @@ export function PostRide() {
                   type="time"
                   value={formData.time}
                   onChange={(e) => updateField('time', e.target.value)}
-                  className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-3 md:py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -167,11 +168,11 @@ export function PostRide() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-4 shadow-sm space-y-4"
+          className="responsive-card bg-white rounded-2xl shadow-md space-y-4"
         >
-          <h3 className="text-base">Pricing & Capacity</h3>
+          <h3 className="text-sm md:text-base">Pricing & Capacity</h3>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div>
               <label className="block text-sm mb-2 text-gray-700">Price per seat</label>
               <div className="relative">
@@ -181,7 +182,7 @@ export function PostRide() {
                   value={formData.pricePerSeat}
                   onChange={(e) => updateField('pricePerSeat', e.target.value)}
                   placeholder="500"
-                  className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-3 md:py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -193,7 +194,7 @@ export function PostRide() {
                 <select
                   value={formData.totalSeats}
                   onChange={(e) => updateField('totalSeats', e.target.value)}
-                  className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-3 md:py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm md:text-base appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="1">1 seat</option>
                   <option value="2">2 seats</option>
@@ -207,22 +208,26 @@ export function PostRide() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
+        <Button
           type="submit"
-          disabled={!isFormValid || loading || user?.role !== 'driver' || user?.canPostRide !== true}
-          className="w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+          variant="success"
+          loading={loading}
+          loadingText="Processing..."
+          disabled={!isFormValid || user?.role !== 'driver' || user?.canPostRide !== true}
+          className="responsive-action"
         >
-          {loading ? 'Posting...' : 'Post Ride'}
-        </button>
+          Post Ride
+        </Button>
 
         {user?.role === 'driver' && user?.canPostRide !== true ? (
-          <button
+          <Button
             type="button"
             onClick={() => setShowPaymentModal(true)}
-            className="w-full rounded-2xl border border-green-300 bg-white py-3 text-sm text-green-700"
+            variant="secondary"
+            className="responsive-action border border-green-300 text-green-700"
           >
             Pay now to unlock ride posting
-          </button>
+          </Button>
         ) : null}
       </form>
 

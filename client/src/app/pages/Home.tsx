@@ -71,18 +71,18 @@ export function Home() {
   const nearbyTop = useMemo(() => nearbyRides.slice(0, 3), [nearbyRides]);
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="glass-panel mx-4 mt-4 px-6 pt-12 pb-6 rounded-3xl">
-        <h1 className="text-3xl mb-2 text-white">Welcome back! 👋</h1>
-        <p className="text-slate-200">Discover rides and routes near your location</p>
+    <div className="min-h-screen bg-transparent overflow-x-hidden">
+      <div className="glass-panel mx-3 mt-3 rounded-3xl px-4 pb-4 pt-8 md:mx-4 md:mt-4 md:px-6 md:pb-6 md:pt-12">
+        <h1 className="mb-2 text-lg md:text-2xl text-white">Welcome back! 👋</h1>
+        <p className="text-sm md:text-base text-slate-200">Discover rides and routes near your location</p>
       </div>
 
-      <div className="px-6 py-6">
+      <div className="px-3 py-4 md:px-5 md:py-5">
         <div className="mb-4 flex flex-wrap gap-2">
           {isPassenger ? (
             <button
               onClick={() => navigate('/post-request')}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm text-white"
+              className="rounded-xl bg-blue-600 px-4 py-3 text-sm text-white min-h-12"
             >
               Find Ride
             </button>
@@ -91,7 +91,7 @@ export function Home() {
           {isDriver ? (
             <button
               onClick={() => navigate('/post-ride')}
-              className="rounded-xl bg-green-600 px-4 py-2 text-sm text-white"
+              className="rounded-xl bg-green-600 px-4 py-3 text-sm text-white min-h-12"
             >
               Offer Ride
             </button>
@@ -100,7 +100,7 @@ export function Home() {
           {isDriver ? (
             <button
               onClick={() => navigate('/ride-requests')}
-              className="rounded-xl bg-white/20 px-4 py-2 text-sm text-white"
+              className="rounded-xl bg-white/20 px-4 py-3 text-sm text-white min-h-12"
             >
               Ride Requests
             </button>
@@ -110,7 +110,7 @@ export function Home() {
         {isDriver ? (
           <button
             onClick={() => navigate('/post-ride')}
-            className="mb-6 w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30"
+            className="responsive-action mb-5 w-full rounded-2xl bg-green-600 py-3 md:py-4 text-white shadow-lg shadow-green-600/30"
           >
             <Plus className="mr-2 inline-block h-5 w-5" />
             Offer a Ride
@@ -122,7 +122,7 @@ export function Home() {
             key="find"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-panel rounded-3xl p-6 space-y-4"
+            className="glass-panel rounded-3xl p-3 md:p-5 space-y-4"
           >
             <CityAutocomplete
               label="From"
@@ -143,7 +143,7 @@ export function Home() {
             />
 
             <div>
-              <label className="block text-sm mb-2 text-gray-700">Date</label>
+                <label className="block text-sm mb-2 text-gray-700">Date</label>
               <div className="relative">
                 <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -151,7 +151,7 @@ export function Home() {
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -159,21 +159,21 @@ export function Home() {
             <button
               onClick={handleSearch}
               disabled={!from || !to || !date}
-              className="w-full rounded-2xl bg-blue-600 py-4 text-white shadow-lg shadow-blue-600/30 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="responsive-action w-full rounded-2xl bg-blue-600 py-3 md:py-4 text-white shadow-lg shadow-blue-600/30 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Search className="mr-2 inline-block h-5 w-5" />
               Search Rides
             </button>
           </motion.div>
         ) : (
-          <div className="glass-panel rounded-3xl p-6 text-sm text-slate-100">
+          <div className="glass-panel rounded-3xl p-3 md:p-5 text-sm md:text-base text-slate-100">
             Nearby marketplace is active. Pay to unlock interaction when needed.
           </div>
         )}
 
         <div className="mt-6 space-y-6">
           <section>
-            <h2 className="mb-2 text-sm text-slate-200">Nearby Rides</h2>
+            <h2 className="mb-2 text-sm md:text-base text-slate-200">Nearby Rides</h2>
             {nearbyTop.length > 0 ? (
               <div className="space-y-3">
                 {nearbyTop.map((ride) => (
@@ -181,14 +181,14 @@ export function Home() {
                 ))}
               </div>
             ) : (
-              <div className="glass-subtle rounded-2xl p-3 text-xs text-slate-100">
+              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">
                 {nearbyError || 'No nearby rides in a 50km radius yet.'}
               </div>
             )}
           </section>
 
           <section>
-            <h2 className="mb-2 text-sm text-emerald-200">Live Rides</h2>
+            <h2 className="mb-2 text-sm md:text-base text-emerald-200">Live Rides</h2>
             {liveRides.length > 0 ? (
               <div className="space-y-3">
                 {liveRides.slice(0, 3).map((ride) => (
@@ -196,12 +196,12 @@ export function Home() {
                 ))}
               </div>
             ) : (
-              <div className="glass-subtle rounded-2xl p-3 text-xs text-slate-100">No live rides nearby.</div>
+              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">No live rides nearby.</div>
             )}
           </section>
 
           <section>
-            <h2 className="mb-2 text-sm text-sky-200">Scheduled Rides</h2>
+            <h2 className="mb-2 text-sm md:text-base text-sky-200">Scheduled Rides</h2>
             {scheduledRides.length > 0 ? (
               <div className="space-y-3">
                 {scheduledRides.slice(0, 3).map((ride) => (
@@ -209,14 +209,14 @@ export function Home() {
                 ))}
               </div>
             ) : (
-              <div className="glass-subtle rounded-2xl p-3 text-xs text-slate-100">No scheduled rides nearby.</div>
+              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">No scheduled rides nearby.</div>
             )}
           </section>
         </div>
 
         <button
           onClick={() => navigate('/map')}
-          className="mt-6 w-full rounded-2xl bg-white/20 px-5 py-4 text-white shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-white/30"
+          className="responsive-action mt-5 w-full rounded-2xl bg-white/20 px-5 py-3 md:py-4 text-sm md:text-base text-white shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-white/30"
         >
           Open Live Map
         </button>

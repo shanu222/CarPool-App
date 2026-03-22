@@ -18,7 +18,7 @@ export function RideCard({ ride }: RideCardProps) {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => navigate(`/ride/${ride._id}`)}
-      className="glass-panel rounded-2xl p-4 cursor-pointer"
+      className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer"
     >
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg">
@@ -26,7 +26,7 @@ export function RideCard({ ride }: RideCardProps) {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-base text-white">{ride.driver.name}</h3>
+            <h3 className="text-sm md:text-base text-white">{ride.driver.name}</h3>
             <VerifiedBadge isVerified={ride.driver.isVerified} />
           </div>
           <div className="flex items-center gap-1 text-sm text-slate-100">
@@ -35,7 +35,7 @@ export function RideCard({ ride }: RideCardProps) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xl text-blue-200">PKR {ride.pricePerSeat}</div>
+          <div className="text-base md:text-xl text-blue-200">PKR {ride.pricePerSeat}</div>
           <div className="text-xs text-slate-100">per seat</div>
         </div>
       </div>

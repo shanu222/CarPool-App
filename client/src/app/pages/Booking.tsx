@@ -84,17 +84,17 @@ export function Booking() {
 
   if (isRequested) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center px-3">
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="glass-panel rounded-3xl text-center px-8 py-10"
+          className="glass-panel rounded-3xl text-center px-4 py-8 md:px-8 md:py-10"
         >
           <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-16 h-16 text-white" />
           </div>
-          <h1 className="text-3xl mb-2">Request Sent!</h1>
-          <p className="text-slate-100">
+          <h1 className="text-lg md:text-3xl mb-2">Request Sent!</h1>
+          <p className="text-sm md:text-base text-slate-100">
             Your booking request is pending driver approval
           </p>
         </motion.div>
@@ -103,25 +103,25 @@ export function Booking() {
   }
 
   return (
-    <div className="relative min-h-screen bg-transparent pb-28">
+    <div className="relative min-h-screen bg-transparent pb-32 overflow-x-hidden">
       {/* Header */}
-      <div className="glass-panel mx-4 mt-4 px-6 py-4 rounded-3xl sticky top-2 z-10">
+      <div className="glass-panel sticky top-2 z-10 mx-3 mt-3 rounded-3xl px-4 py-3 md:mx-4 md:mt-4 md:px-6 md:py-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-white/90">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl text-white">Booking Summary</h1>
+          <h1 className="text-lg md:text-xl text-white">Booking Summary</h1>
         </div>
       </div>
 
-      <div className="px-6 py-6 space-y-4">
+      <div className="px-3 py-4 md:px-5 md:py-5 space-y-4">
         {/* Ride Summary */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-panel rounded-2xl p-4"
+          className="glass-panel rounded-xl shadow-md p-3 md:p-5"
         >
-          <h3 className="text-base mb-3 text-white">Trip Details</h3>
+          <h3 className="text-sm md:text-base mb-3 text-white">Trip Details</h3>
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-slate-100">Route</span>
@@ -158,9 +158,9 @@ export function Booking() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="glass-panel rounded-2xl p-4"
+          className="glass-panel rounded-xl shadow-md p-3 md:p-5"
         >
-          <h3 className="text-base mb-3 text-white">Payment Method</h3>
+          <h3 className="text-sm md:text-base mb-3 text-white">Payment Method</h3>
           <div className="space-y-2">
             <PaymentOption
               icon={CreditCard}
@@ -191,9 +191,9 @@ export function Booking() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="glass-panel rounded-2xl p-4"
+          className="glass-panel rounded-xl shadow-md p-3 md:p-5"
         >
-          <h3 className="text-base mb-3 text-white">Price Breakdown</h3>
+          <h3 className="text-sm md:text-base mb-3 text-white">Price Breakdown</h3>
           <div className="space-y-2">
             <div className="flex justify-between text-slate-100">
               <span>
@@ -207,7 +207,7 @@ export function Booking() {
             </div>
             <div className="border-t border-white/30 pt-2 mt-2 flex justify-between">
               <span className="text-white">Total</span>
-              <span className="text-xl text-blue-200">${total}</span>
+              <span className="text-lg md:text-xl text-blue-200">${total}</span>
             </div>
           </div>
         </motion.div>
@@ -217,7 +217,7 @@ export function Booking() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass-subtle rounded-2xl p-4"
+          className="glass-subtle rounded-xl shadow-md p-3 md:p-5"
         >
           <h4 className="text-sm mb-1 text-white">Cancellation Policy</h4>
           <p className="text-xs text-slate-100">
@@ -228,11 +228,12 @@ export function Booking() {
       </div>
 
       {/* Bottom CTA */}
-      <div className="absolute bottom-0 left-0 right-0 mx-3 mb-3 rounded-2xl glass-panel px-6 py-4">
+      <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto w-full max-w-[420px] px-3 pb-3">
+        <div className="rounded-2xl glass-panel px-3 py-3 md:px-5 md:py-4">
         <button
           onClick={handleBook}
           disabled={isProcessing || user?.role !== 'passenger' || passengerPaymentLocked}
-          className="w-full bg-blue-600 text-white py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="responsive-action w-full bg-blue-600 text-white py-3 md:py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base"
         >
           {isProcessing ? (
             <>
@@ -247,12 +248,13 @@ export function Booking() {
           <button
             type="button"
             onClick={() => setShowUnlockModal(true)}
-            className="mt-2 w-full rounded-2xl border border-blue-300 bg-white/10 py-3 text-sm text-blue-100"
+            className="mt-2 min-h-12 w-full rounded-2xl border border-blue-300 bg-white/10 py-3 text-sm md:text-base text-blue-100"
           >
             Submit payment proof to unlock booking
           </button>
         ) : null}
         {error && <p className="text-sm text-red-300 mt-2">{error}</p>}
+        </div>
       </div>
 
       <PaymentModal
@@ -276,12 +278,12 @@ function PaymentOption({ icon: Icon, label, selected, onSelect }: PaymentOptionP
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
+      className={`w-full min-h-12 flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
         selected ? 'border-white/70 bg-white/30' : 'border-white/30 bg-white/10 hover:bg-white/20'
       }`}
     >
       <Icon className={`w-5 h-5 ${selected ? 'text-white' : 'text-slate-100'}`} />
-      <span className="flex-1 text-left text-white">{label}</span>
+      <span className="flex-1 text-left text-sm md:text-base text-white">{label}</span>
       <div
         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
           selected ? 'border-white' : 'border-white/50'

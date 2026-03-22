@@ -11,15 +11,15 @@ export function SearchResults() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sortBy, setSortBy] = useState<'price' | 'time' | 'rating'>('price');
-  const [viewType, setViewType] = useState<'all' | 'live' | 'upcoming'>('all');
+  const [viewType, setViewType] = useState<'all' | 'ongoing' | 'scheduled'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [liveRides, setLiveRides] = useState<Ride[]>([]);
-  const [upcomingRides, setUpcomingRides] = useState<Ride[]>([]);
+  const [scheduledRides, setScheduledRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const from = searchParams.get('from') || '';
-  const to = searchParams.get('to') || '';
+  const from = searchParams.get('from') || searchParams.get('fromCity') || '';
+  const to = searchParams.get('to') || searchParams.get('toCity') || '';
   const date = searchParams.get('date') || '';
 
   useEffect(() => {
@@ -28,17 +28,26 @@ export function SearchResults() {
         setLoading(true);
         setError('');
 
+        const location = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        });
+
         const response = await api.get<RideSearchResponse>('/api/rides/search', {
           params: {
-            from,
-            to,
+            userLat: location.coords.latitude,
+            userLng: location.coords.longitude,
+            fromCity: from,
+            toCity: to,
             date,
             type: viewType === 'all' ? undefined : viewType,
           },
         });
 
-        setLiveRides(response.data.liveRides || []);
-        setUpcomingRides(response.data.upcomingRides || []);
+        setLiveRides(response.data.ongoingRides || response.data.liveRides || []);
+        setScheduledRides(response.data.scheduledRides || response.data.upcomingRides || []);
       } catch (requestError: any) {
         const apiMessage = requestError?.response?.data?.message;
         if (apiMessage === 'Passengers only') {
@@ -72,8 +81,8 @@ export function SearchResults() {
   }, [sortBy]);
 
   const sortedLiveRides = useMemo(() => sortRides(liveRides), [liveRides, sortRides]);
-  const sortedUpcomingRides = useMemo(() => sortRides(upcomingRides), [upcomingRides, sortRides]);
-  const totalRides = sortedLiveRides.length + sortedUpcomingRides.length;
+  const sortedScheduledRides = useMemo(() => sortRides(scheduledRides), [scheduledRides, sortRides]);
+  const totalRides = sortedLiveRides.length + sortedScheduledRides.length;
 
   return (
     <div className="min-h-screen bg-transparent pb-24">
@@ -129,16 +138,16 @@ export function SearchResults() {
               All
             </button>
             <button
-              onClick={() => setViewType('live')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'live' ? 'active' : ''}`}
+              onClick={() => setViewType('ongoing')}
+              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'ongoing' ? 'active' : ''}`}
             >
-              Live
+              Ongoing
             </button>
             <button
-              onClick={() => setViewType('upcoming')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'upcoming' ? 'active' : ''}`}
+              onClick={() => setViewType('scheduled')}
+              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'scheduled' ? 'active' : ''}`}
             >
-              Upcoming
+              Scheduled
             </button>
           </motion.div>
         )}
@@ -157,17 +166,17 @@ export function SearchResults() {
 
             {sortedLiveRides.length > 0 ? (
               <div className="space-y-2">
-                <h3 className="text-sm text-emerald-200">Live Rides</h3>
+                <h3 className="text-sm text-emerald-200">Ongoing Rides</h3>
                 {sortedLiveRides.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>
             ) : null}
 
-            {sortedUpcomingRides.length > 0 ? (
+            {sortedScheduledRides.length > 0 ? (
               <div className="space-y-2 pt-2">
-                <h3 className="text-sm text-sky-200">Upcoming Rides</h3>
-                {sortedUpcomingRides.map((ride) => (
+                <h3 className="text-sm text-sky-200">Scheduled Rides</h3>
+                {sortedScheduledRides.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>

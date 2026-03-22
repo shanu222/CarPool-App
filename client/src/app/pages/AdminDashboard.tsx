@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { Check, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { Button } from "../components/Button";
 import type { AdminAnalytics, Payment, PaymentSettings, Ride, User } from "../types";
 
 type TabKey = "overview" | "users" | "rides" | "payments" | "settings";
@@ -121,25 +123,28 @@ export function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent px-4 py-4 pb-10">
-      <div className="glass-panel rounded-3xl p-5">
+    <div className="min-h-screen bg-transparent px-3 py-3 pb-10 md:px-4 md:py-4 overflow-x-hidden">
+      <div className="glass-panel rounded-3xl p-3 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl text-white">Admin Dashboard</h1>
-            <p className="text-slate-100">Manage users, rides, payments, subscriptions, and safety.</p>
+            <h1 className="text-lg md:text-2xl text-white">Admin Dashboard</h1>
+            <p className="text-sm md:text-base text-slate-100">Manage users, rides, payments, subscriptions, and safety.</p>
           </div>
-          <button
+          <Button
             onClick={() => {
               logout();
               navigate("/auth", { replace: true });
             }}
-            className="rounded-xl bg-white/85 px-4 py-2 text-sm text-slate-900"
+            variant="secondary"
+            className="min-h-12 rounded-xl !bg-white/85 text-slate-900"
+            fullWidth={false}
           >
             Logout
-          </button>
+          </Button>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 overflow-x-auto">
+          <div className="flex w-max min-w-full gap-2 pb-1">
           {([
             { id: "overview", label: "Overview" },
             { id: "users", label: "Users" },
@@ -150,11 +155,12 @@ export function AdminDashboard() {
             <button
               key={item.id}
               onClick={() => setTab(item.id)}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === item.id ? "active" : ""}`}
+              className={`tab-pill min-h-12 whitespace-nowrap rounded-xl px-4 py-2 text-sm md:text-base ${tab === item.id ? "active" : ""}`}
             >
               {item.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 
@@ -162,7 +168,7 @@ export function AdminDashboard() {
       {loading ? <p className="mt-3 text-sm text-slate-100">Loading dashboard...</p> : null}
 
       {!loading && tab === "overview" ? (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total users" value={analytics.totalUsers} />
           <StatCard label="Total rides" value={analytics.totalRides} />
           <StatCard label="Active rides" value={analytics.activeRides} />
@@ -172,8 +178,8 @@ export function AdminDashboard() {
 
       {!loading && tab === "users" ? (
         <div className="mt-4 space-y-3">
-          <div className="glass-subtle rounded-2xl p-2">
-            <div className="flex flex-wrap gap-2">
+          <div className="glass-subtle rounded-2xl p-2 overflow-x-auto">
+            <div className="flex w-max min-w-full gap-2 pb-1">
               {([
                 { id: "pending", label: "New Requests" },
                 { id: "approved", label: "Approved Users" },
@@ -183,7 +189,7 @@ export function AdminDashboard() {
                 <button
                   key={statusItem.id}
                   onClick={() => setUserStatusTab(statusItem.id)}
-                  className={`tab-pill rounded-xl px-3 py-2 text-sm ${userStatusTab === statusItem.id ? "active" : ""}`}
+                  className={`tab-pill min-h-12 whitespace-nowrap rounded-xl px-3 py-2 text-sm md:text-base ${userStatusTab === statusItem.id ? "active" : ""}`}
                 >
                   {statusItem.label}
                 </button>
@@ -192,10 +198,10 @@ export function AdminDashboard() {
           </div>
 
           {filteredUsers.map((item) => (
-            <div key={item.id || item._id} className="glass-panel rounded-2xl p-4">
+            <div key={item.id || item._id} className="glass-panel rounded-xl shadow-md p-3 md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-white">{item.name}</p>
+                  <p className="text-sm md:text-base text-white">{item.name}</p>
                   <p className="text-xs text-slate-100">{item.email}</p>
                   <p className="text-xs text-slate-100">Role: {item.role}</p>
                   <p className="text-xs text-slate-100">Status: {resolveUserStatus(item)}</p>
@@ -204,18 +210,24 @@ export function AdminDashboard() {
                 <div className="flex flex-wrap gap-2">
                   {userStatusTab === "pending" ? (
                     <>
-                      <button
+                      <Button
                         onClick={() => updateUserStatus(String(item.id || item._id), "approved")}
-                        className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700"
+                        variant="success"
+                        className="min-h-12 w-full md:w-auto !bg-green-500 px-3 py-2 text-xs md:text-sm"
+                        fullWidth={false}
+                        leftIcon={<Check className="h-4 w-4" />}
                       >
                         Approve
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={() => updateUserStatus(String(item.id || item._id), "pending", "Verification rejected")}
-                        className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700"
+                        variant="danger"
+                        className="min-h-12 w-full md:w-auto px-3 py-2 text-xs md:text-sm"
+                        fullWidth={false}
+                        leftIcon={<X className="h-4 w-4" />}
                       >
                         Reject
-                      </button>
+                      </Button>
                     </>
                   ) : null}
 
@@ -223,13 +235,13 @@ export function AdminDashboard() {
                     <>
                       <button
                         onClick={() => updateUserStatus(String(item.id || item._id), "suspended", window.prompt("Suspend reason") || "")}
-                        className="rounded-lg bg-amber-100 px-2 py-1 text-xs text-amber-700"
+                        className="min-h-12 w-full md:w-auto rounded-lg bg-amber-100 px-3 py-2 text-xs md:text-sm text-amber-700"
                       >
                         Suspend
                       </button>
                       <button
                         onClick={() => updateUserStatus(String(item.id || item._id), "banned", window.prompt("Ban reason") || "")}
-                        className="rounded-lg bg-red-200 px-2 py-1 text-xs text-red-800"
+                        className="min-h-12 w-full md:w-auto rounded-lg bg-red-200 px-3 py-2 text-xs md:text-sm text-red-800"
                       >
                         Ban
                       </button>
@@ -240,13 +252,13 @@ export function AdminDashboard() {
                     <>
                       <button
                         onClick={() => updateUserStatus(String(item.id || item._id), "approved")}
-                        className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                        className="min-h-12 w-full md:w-auto rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
                       >
                         Activate
                       </button>
                       <button
                         onClick={() => updateUserStatus(String(item.id || item._id), "banned", window.prompt("Ban reason") || "")}
-                        className="rounded-lg bg-red-200 px-2 py-1 text-xs text-red-800"
+                        className="min-h-12 w-full md:w-auto rounded-lg bg-red-200 px-3 py-2 text-xs md:text-sm text-red-800"
                       >
                         Ban
                       </button>
@@ -256,7 +268,7 @@ export function AdminDashboard() {
                   {userStatusTab === "banned" ? (
                     <button
                       onClick={() => updateUserStatus(String(item.id || item._id), "approved")}
-                      className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                      className="min-h-12 w-full md:w-auto rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
                     >
                       Activate
                     </button>
@@ -281,7 +293,7 @@ export function AdminDashboard() {
       {!loading && tab === "rides" ? (
         <div className="mt-4 space-y-3">
           {rides.map((ride) => (
-            <div key={ride._id} className="glass-panel rounded-2xl p-4">
+            <div key={ride._id} className="glass-panel rounded-xl shadow-md p-3 md:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-white">{ride.fromCity} → {ride.toCity}</p>
@@ -289,11 +301,11 @@ export function AdminDashboard() {
                   <p className="text-xs text-slate-100">Status: {ride.status}</p>
                   <p className="text-xs text-slate-100">Featured: {ride.featured ? "Yes" : "No"}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => toggleFeatureRide(ride._id, Boolean(ride.featured))} className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700">
+                <div className="grid grid-cols-1 gap-2 md:flex">
+                  <button onClick={() => toggleFeatureRide(ride._id, Boolean(ride.featured))} className="min-h-12 rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700">
                     {ride.featured ? "Unfeature" : "Feature"}
                   </button>
-                  <button onClick={() => deleteRide(ride._id)} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Delete</button>
+                  <button onClick={() => deleteRide(ride._id)} className="min-h-12 rounded-lg bg-red-100 px-3 py-2 text-xs md:text-sm text-red-700">Delete</button>
                 </div>
               </div>
             </div>
@@ -303,23 +315,23 @@ export function AdminDashboard() {
 
       {!loading && tab === "payments" ? (
         <div className="mt-4 space-y-3">
-          <div className="glass-subtle rounded-2xl p-2">
-            <div className="flex flex-wrap gap-2">
+          <div className="glass-subtle rounded-2xl p-2 overflow-x-auto">
+            <div className="flex w-max min-w-full gap-2 pb-1">
               <button
                 onClick={() => setPaymentStatusTab("pending")}
-                className={`tab-pill rounded-xl px-3 py-2 text-sm ${paymentStatusTab === "pending" ? "active" : ""}`}
+                className={`tab-pill min-h-12 whitespace-nowrap rounded-xl px-3 py-2 text-sm md:text-base ${paymentStatusTab === "pending" ? "active" : ""}`}
               >
                 New Payments
               </button>
               <button
                 onClick={() => setPaymentStatusTab("approved")}
-                className={`tab-pill rounded-xl px-3 py-2 text-sm ${paymentStatusTab === "approved" ? "active" : ""}`}
+                className={`tab-pill min-h-12 whitespace-nowrap rounded-xl px-3 py-2 text-sm md:text-base ${paymentStatusTab === "approved" ? "active" : ""}`}
               >
                 Approved Payments
               </button>
               <button
                 onClick={() => setPaymentStatusTab("rejected")}
-                className={`tab-pill rounded-xl px-3 py-2 text-sm ${paymentStatusTab === "rejected" ? "active" : ""}`}
+                className={`tab-pill min-h-12 whitespace-nowrap rounded-xl px-3 py-2 text-sm md:text-base ${paymentStatusTab === "rejected" ? "active" : ""}`}
               >
                 Rejected Payments
               </button>
@@ -327,7 +339,7 @@ export function AdminDashboard() {
           </div>
 
           {filteredPayments.map((payment) => (
-            <div key={payment._id} className="glass-panel rounded-2xl p-4">
+            <div key={payment._id} className="glass-panel rounded-xl shadow-md p-3 md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-white">{payment.userId?.name || "User"}</p>
@@ -338,22 +350,38 @@ export function AdminDashboard() {
                     <StatusBadge status={payment.status} />
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 gap-2 md:flex">
                   {paymentStatusTab === "pending" ? (
                     <>
-                      <button onClick={() => reviewPayment(payment._id, "approved")} className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Approve</button>
-                      <button onClick={() => reviewPayment(payment._id, "rejected")} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Reject</button>
+                      <Button
+                        onClick={() => reviewPayment(payment._id, "approved")}
+                        variant="success"
+                        className="min-h-12 !bg-green-500 px-3 py-2 text-xs md:text-sm"
+                        fullWidth={false}
+                        leftIcon={<Check className="h-4 w-4" />}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => reviewPayment(payment._id, "rejected")}
+                        variant="danger"
+                        className="min-h-12 px-3 py-2 text-xs md:text-sm"
+                        fullWidth={false}
+                        leftIcon={<X className="h-4 w-4" />}
+                      >
+                        Reject
+                      </Button>
                     </>
                   ) : null}
 
                   {paymentStatusTab === "rejected" ? (
-                    <button onClick={() => reviewPayment(payment._id, "approved")} className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Approve Again</button>
+                    <button onClick={() => reviewPayment(payment._id, "approved")} className="min-h-12 rounded-lg bg-green-100 px-3 py-2 text-xs md:text-sm text-green-700">Approve Again</button>
                   ) : null}
                 </div>
               </div>
 
               {payment.screenshot ? (
-                <a href={payment.screenshot} target="_blank" rel="noreferrer" className="mt-3 inline-block rounded-lg bg-white/20 px-3 py-1 text-xs text-white">
+                <a href={payment.screenshot} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-12 items-center rounded-lg bg-white/20 px-3 py-2 text-xs md:text-sm text-white">
                   View Proof
                 </a>
               ) : null}
@@ -367,7 +395,7 @@ export function AdminDashboard() {
       ) : null}
 
       {!loading && tab === "settings" ? (
-        <div className="mt-4 glass-panel rounded-2xl p-4 space-y-3">
+        <div className="mt-4 glass-panel rounded-xl shadow-md p-3 md:p-5 space-y-3">
           <Field
             label="Easypaisa Number"
             value={paymentSettings.easypaisaNumber}
@@ -388,9 +416,9 @@ export function AdminDashboard() {
             value={paymentSettings.accountTitle}
             onChange={(value) => setPaymentSettings((prev) => ({ ...prev, accountTitle: value }))}
           />
-          <button onClick={savePaymentSettings} className="rounded-xl bg-white/90 px-4 py-2 text-sm text-slate-900">
+          <Button onClick={savePaymentSettings} variant="secondary" className="min-h-12 w-full !bg-white/90 text-slate-900">
             Save Payment Settings
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
@@ -411,19 +439,19 @@ function StatusBadge({ status }: { status: Payment["status"] }) {
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="glass-subtle rounded-2xl p-4">
+    <div className="glass-subtle rounded-xl shadow-md p-3 md:p-5">
       <p className="text-xs text-slate-100">{label}</p>
-      <p className="mt-1 text-xl text-white">{value}</p>
+      <p className="mt-1 text-lg md:text-xl text-white">{value}</p>
     </div>
   );
 }
 
 function ImageProof({ label, src }: { label: string; src?: string }) {
   return (
-    <div className="rounded-xl border border-white/30 bg-white/10 p-2">
+    <div className="rounded-xl border border-white/30 bg-white/10 p-3">
       <p className="text-[11px] text-slate-100 mb-1">{label}</p>
       {src ? (
-        <a href={src} target="_blank" rel="noreferrer" className="text-xs text-white underline">
+        <a href={src} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center text-xs md:text-sm text-white underline">
           Open image
         </a>
       ) : (
@@ -436,11 +464,11 @@ function ImageProof({ label, src }: { label: string; src?: string }) {
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div>
-      <label className="text-sm text-slate-100">{label}</label>
+      <label className="text-sm md:text-base text-slate-100">{label}</label>
       <input
         value={value || ""}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-xl border border-white/35 bg-white/20 px-3 py-2 text-white"
+        className="mt-1 w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm md:text-base text-white"
       />
     </div>
   );

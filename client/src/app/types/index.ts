@@ -40,6 +40,7 @@ export interface Ride {
   date: string;
   time: string;
   dateTime?: string;
+  startTime?: string;
   pricePerSeat: number;
   totalSeats: number;
   availableSeats: number;
@@ -174,8 +175,16 @@ export interface AdminAnalytics {
 }
 
 export interface RideSearchResponse {
+  ongoingRides: Ride[];
+  scheduledRides: Ride[];
   liveRides: Ride[];
   upcomingRides: Ride[];
+  rides: Ride[];
+}
+
+export interface MyRidesResponse {
+  ongoingRides: Ride[];
+  scheduledRides: Ride[];
   rides: Ride[];
 }
 

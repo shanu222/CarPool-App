@@ -6,6 +6,7 @@ import { Mail, Phone } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { Button } from '../components/Button';
 import type { AuthResponse } from '../types';
 
 export function Auth() {
@@ -155,18 +156,18 @@ export function Auth() {
       : Boolean(email && resetToken && newPassword);
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-x-hidden">
       <div className="relative z-10 min-h-screen flex flex-col">
-        <div className="flex-1 flex flex-col justify-center px-8 py-12">
-        <div className="text-center mb-12">
+        <div className="flex-1 flex flex-col justify-center px-4 py-8 md:px-6 md:py-10">
+        <div className="text-center mb-8 md:mb-10">
           <div className="glass-panel w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <Car className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl mb-2 text-white">RideShare</h1>
-          <p className="text-slate-200">Login or create your account</p>
+          <h1 className="text-lg md:text-2xl mb-2 text-white">RideShare</h1>
+          <p className="text-sm md:text-base text-slate-200">Login or create your account</p>
         </div>
 
-        <div className="glass-subtle p-1 rounded-xl mb-6 flex">
+        <div className="glass-subtle p-1 rounded-xl mb-4 md:mb-6 flex">
           <button
             onClick={() => setMode('login')}
             className={`tab-pill flex-1 py-2 rounded-lg ${mode === 'login' ? 'active' : ''}`}
@@ -185,7 +186,7 @@ export function Auth() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-3xl glass-panel p-6"
+          className="space-y-4 rounded-3xl glass-panel p-3 md:p-5"
         >
           {mode === 'signup' && (
             <input
@@ -193,7 +194,7 @@ export function Auth() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Full name"
-              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
 
@@ -205,7 +206,7 @@ export function Auth() {
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
                 placeholder="Email or phone"
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -217,7 +218,7 @@ export function Auth() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={mode === 'forgot' || mode === 'otp' ? 'Email (optional if using phone)' : 'Email'}
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required={mode === 'signup' || mode === 'reset'}
               />
             </div>
@@ -231,7 +232,7 @@ export function Auth() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder={mode === 'forgot' || mode === 'otp' ? 'Phone (optional if email is set)' : 'Phone (optional)'}
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           ) : null}
@@ -242,7 +243,7 @@ export function Auth() {
               value={mode === 'reset' || mode === 'otp' ? newPassword : password}
               onChange={(e) => (mode === 'reset' || mode === 'otp' ? setNewPassword(e.target.value) : setPassword(e.target.value))}
               placeholder={mode === 'reset' || mode === 'otp' ? 'New password' : 'Password'}
-              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
 
@@ -252,7 +253,7 @@ export function Auth() {
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               placeholder="6-digit OTP"
-              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
 
@@ -262,7 +263,7 @@ export function Auth() {
               value={resetToken}
               onChange={(e) => setResetToken(e.target.value)}
               placeholder="Reset token"
-              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
 
@@ -326,14 +327,15 @@ export function Auth() {
             </button>
           ) : null}
 
-          <button
+          <Button
             type="submit"
-            disabled={!canSubmit || loading}
-            className="w-full bg-blue-600 text-white py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50"
+            variant="primary"
+            loading={loading}
+            loadingText="Processing..."
+            disabled={!canSubmit}
+            className="responsive-action"
           >
-            {loading
-              ? 'Please wait...'
-              : mode === 'signup'
+            {mode === 'signup'
               ? 'Create account'
               : mode === 'forgot'
               ? 'Send reset'
@@ -342,7 +344,7 @@ export function Auth() {
               : mode === 'reset'
               ? 'Reset password'
               : 'Login'}
-          </button>
+          </Button>
         </motion.form>
         </div>
       </div>

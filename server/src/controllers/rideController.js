@@ -13,6 +13,7 @@ import {
 } from "../utils/pakistanLocation.js";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
+const RIDE_POSTING_WINDOW_DAYS = 15;
 
 const parseRideDateTime = (date, time) => {
   const value = new Date(`${date}T${time}:00`);
@@ -44,6 +45,39 @@ const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusKm * c;
+};
+
+const distancePointToSegmentKm = (point, start, end) => {
+  const ax = start.lng;
+  const ay = start.lat;
+  const bx = end.lng;
+  const by = end.lat;
+  const px = point.lng;
+  const py = point.lat;
+
+  const abx = bx - ax;
+  const aby = by - ay;
+  const apx = px - ax;
+  const apy = py - ay;
+  const abSquared = abx * abx + aby * aby;
+
+  if (abSquared === 0) {
+    return calculateDistanceKm(point.lat, point.lng, start.lat, start.lng);
+  }
+
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abSquared));
+  const nearest = {
+    lng: ax + abx * t,
+    lat: ay + aby * t,
+  };
+
+  return calculateDistanceKm(point.lat, point.lng, nearest.lat, nearest.lng);
+};
+
+const startOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
 const resolvePakistanCity = async (city) => {
@@ -140,6 +174,15 @@ export const createRide = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid ride date/time" });
     }
 
+    const todayStart = startOfDay(new Date());
+    const maxAllowedDate = new Date(todayStart);
+    maxAllowedDate.setDate(maxAllowedDate.getDate() + RIDE_POSTING_WINDOW_DAYS);
+    maxAllowedDate.setHours(23, 59, 59, 999);
+
+    if (rideDateTime > maxAllowedDate) {
+      return res.status(400).json({ message: "You can only post rides within 15 days" });
+    }
+
     if (fromCity.trim().toLowerCase() === toCity.trim().toLowerCase()) {
       return res.status(400).json({ message: "fromCity and toCity cannot be same" });
     }
@@ -169,6 +212,7 @@ export const createRide = async (req, res, next) => {
       date,
       time,
       dateTime: rideDateTime,
+      startTime: rideDateTime,
       pricePerSeat: Number(pricePerSeat),
       totalSeats: requestedSeats,
       availableSeats: requestedSeats,
@@ -218,7 +262,18 @@ export const createRide = async (req, res, next) => {
 
 export const searchRides = async (req, res, next) => {
   try {
-    const { from, to, date, sort = "time", type, route } = req.query;
+    const {
+      from,
+      to,
+      fromCity,
+      toCity,
+      date,
+      sort = "time",
+      type,
+      route,
+      userLat,
+      userLng,
+    } = req.query;
     await refreshRideLifecycleStatuses();
 
     if (!req.user) {
@@ -229,18 +284,31 @@ export const searchRides = async (req, res, next) => {
       return res.status(403).json({ message: "Please submit CNIC in profile verification before viewing rides" });
     }
 
-    if (from && !isKnownPakistanCity(String(from).trim())) {
-      const validFrom = await searchNominatimCity(String(from).trim());
-      if (!validFrom || validFrom.country.toLowerCase() !== "pakistan") {
-        return res.status(400).json({ message: "Only Pakistani cities allowed" });
-      }
+    const requestedFrom = String(fromCity || from || "").trim();
+    const requestedTo = String(toCity || to || "").trim();
+    const queryLat = Number(userLat);
+    const queryLng = Number(userLng);
+    const hasUserLocation = Number.isFinite(queryLat) && Number.isFinite(queryLng);
+
+    if (!hasUserLocation) {
+      return res.status(400).json({ message: "userLat and userLng are required" });
     }
 
-    if (to && !isKnownPakistanCity(String(to).trim())) {
-      const validTo = await searchNominatimCity(String(to).trim());
-      if (!validTo || validTo.country.toLowerCase() !== "pakistan") {
-        return res.status(400).json({ message: "Only Pakistani cities allowed" });
-      }
+    if (!isWithinPakistanBounds({ lat: queryLat, lng: queryLng })) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
+    }
+
+    const [fromResolved, toResolved] = await Promise.all([
+      requestedFrom ? resolvePakistanCity(requestedFrom) : Promise.resolve(null),
+      requestedTo ? resolvePakistanCity(requestedTo) : Promise.resolve(null),
+    ]);
+
+    if (requestedFrom && !fromResolved) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
+    }
+
+    if (requestedTo && !toResolved) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
     }
 
     const now = new Date();
@@ -248,8 +316,7 @@ export const searchRides = async (req, res, next) => {
     const nowTime = now.toTimeString().slice(0, 5);
 
     const andConditions = [
-      ...(from ? [{ fromCity: new RegExp(from.trim(), "i") }] : []),
-      ...(to ? [{ toCity: new RegExp(to.trim(), "i") }] : []),
+      { driver: { $ne: req.user._id } },
       ...(date ? [{ date }] : []),
       { availableSeats: { $gt: 0 } },
       { status: { $in: ["scheduled", "ongoing"] } },
@@ -264,11 +331,11 @@ export const searchRides = async (req, res, next) => {
       andConditions.push({ $or: [{ fromCity: routeRegex }, { toCity: routeRegex }] });
     }
 
-    if (type === "live") {
+    if (type === "live" || type === "ongoing") {
       andConditions.push({ status: "ongoing" });
     }
 
-    if (type === "upcoming") {
+    if (type === "upcoming" || type === "scheduled") {
       andConditions.push({ status: "scheduled" });
       andConditions.push({
         $or: [{ dateTime: { $gt: now } }, { date: { $gt: nowDate } }, { date: nowDate, time: { $gte: nowTime } }],
@@ -289,8 +356,72 @@ export const searchRides = async (req, res, next) => {
       )
       .sort(sortOption);
 
-    const liveRides = rides.filter((ride) => ride.status === "ongoing");
-    const upcomingRides = rides.filter((ride) => {
+    const smartMatched = rides
+      .map((ride) => {
+        const rideFromLat = Number(ride.fromCoordinates?.lat);
+        const rideFromLng = Number(ride.fromCoordinates?.lng);
+        const rideToLat = Number(ride.toCoordinates?.lat);
+        const rideToLng = Number(ride.toCoordinates?.lng);
+
+        if (!Number.isFinite(rideFromLat) || !Number.isFinite(rideFromLng)) {
+          return null;
+        }
+
+        const distanceKm = calculateDistanceKm(queryLat, queryLng, rideFromLat, rideFromLng);
+        if (distanceKm >= 50) {
+          return null;
+        }
+
+        const fromCityMatch = requestedFrom
+          ? String(ride.fromCity || "").toLowerCase() === requestedFrom.toLowerCase()
+          : true;
+
+        const routeNearPassenger =
+          Number.isFinite(rideToLat) && Number.isFinite(rideToLng)
+            ? distancePointToSegmentKm(
+                { lat: queryLat, lng: queryLng },
+                { lat: rideFromLat, lng: rideFromLng },
+                { lat: rideToLat, lng: rideToLng }
+              ) <= 15
+            : false;
+
+        if (!fromCityMatch && !routeNearPassenger) {
+          return null;
+        }
+
+        if (requestedTo) {
+          const exactToMatch = String(ride.toCity || "").toLowerCase() === requestedTo.toLowerCase();
+
+          if (!exactToMatch) {
+            const passengerToCoords = toResolved?.coords;
+            if (!passengerToCoords || !Number.isFinite(rideToLat) || !Number.isFinite(rideToLng)) {
+              return null;
+            }
+
+            const rideSpan = calculateDistanceKm(rideFromLat, rideFromLng, rideToLat, rideToLng);
+            const requestedSpan = calculateDistanceKm(
+              rideFromLat,
+              rideFromLng,
+              passengerToCoords.lat,
+              passengerToCoords.lng
+            );
+
+            if (rideSpan + 5 < requestedSpan) {
+              return null;
+            }
+          }
+        }
+
+        return {
+          ...ride.toObject(),
+          distanceKm: Number(distanceKm.toFixed(2)),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    const ongoingRides = smartMatched.filter((ride) => ride.status === "ongoing");
+    const scheduledRides = smartMatched.filter((ride) => {
       if (ride.status !== "scheduled") {
         return false;
       }
@@ -307,9 +438,11 @@ export const searchRides = async (req, res, next) => {
     });
 
     return res.json({
-      liveRides,
-      upcomingRides,
-      rides: [...liveRides, ...upcomingRides],
+      ongoingRides,
+      scheduledRides,
+      liveRides: ongoingRides,
+      upcomingRides: scheduledRides,
+      rides: [...ongoingRides, ...scheduledRides],
     });
   } catch (error) {
     return next(error);
@@ -349,6 +482,7 @@ export const getNearbyRides = async (req, res, next) => {
     }
 
     const baseQuery = {
+      driver: { $ne: req.user?._id },
       status: { $in: ["scheduled", "ongoing"] },
       "fromCoordinates.lat": { $exists: true },
       "fromCoordinates.lng": { $exists: true },
@@ -396,6 +530,7 @@ export const getNearbyRides = async (req, res, next) => {
 export const getMyRides = async (req, res, next) => {
   try {
     await refreshRideLifecycleStatuses();
+    const now = new Date();
     const rides = await Ride.find({ driver: req.user._id })
       .populate(
         "driver",
@@ -403,7 +538,21 @@ export const getMyRides = async (req, res, next) => {
       )
       .sort({ dateTime: 1, createdAt: -1 });
 
-    return res.json(rides);
+    const ongoingRides = rides.filter((ride) => {
+      const start = ride.startTime || ride.dateTime;
+      return start ? new Date(start) <= now : false;
+    });
+
+    const scheduledRides = rides.filter((ride) => {
+      const start = ride.startTime || ride.dateTime;
+      return start ? new Date(start) > now : true;
+    });
+
+    return res.json({
+      ongoingRides,
+      scheduledRides,
+      rides,
+    });
   } catch (error) {
     return next(error);
   }

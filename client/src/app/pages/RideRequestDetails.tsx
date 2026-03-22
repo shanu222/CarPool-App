@@ -64,32 +64,32 @@ export function RideRequestDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent pb-24 px-6 pt-4">
-      <div className="glass-panel rounded-3xl p-4">
+    <div className="min-h-screen bg-transparent pb-24 px-3 pt-3 md:px-5 md:pt-4 overflow-x-hidden">
+      <div className="glass-panel rounded-3xl p-3 md:p-5">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="rounded-xl bg-white/20 p-2 text-white">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-xl text-white">Request Details</h1>
+          <h1 className="text-lg md:text-xl text-white">Request Details</h1>
         </div>
       </div>
 
       <div className="mt-4 space-y-3">
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="text-white">{request.fromCity} → {request.toCity}</p>
+        <div className="glass-panel rounded-xl shadow-md p-3 md:p-5">
+          <p className="text-sm md:text-base text-white">{request.fromCity} → {request.toCity}</p>
           <p className="mt-1 text-xs text-slate-100">{new Date(request.dateTime).toLocaleString()} · {request.seatsNeeded} seats</p>
           <a
             href={mapLink}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm text-white"
+            className="mt-3 inline-flex min-h-12 items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm md:text-base text-white"
           >
             Open Route in Google Maps
             <ExternalLink className="h-4 w-4" />
           </a>
         </div>
 
-        <div className="glass-panel rounded-2xl p-4">
+        <div className="glass-panel rounded-xl shadow-md p-3 md:p-5">
           <h2 className="text-sm text-slate-100">Passenger Profile</h2>
           <div className="mt-2 flex items-center gap-2">
             <p className="text-white">{request.passengerId?.name || 'Passenger'}</p>
@@ -106,7 +106,7 @@ export function RideRequestDetails() {
 
         <button
           onClick={acceptRequest}
-          className="w-full rounded-2xl bg-green-600 py-3 text-white"
+          className="responsive-action w-full rounded-2xl bg-green-600 py-3 text-sm md:text-base text-white"
         >
           Accept Request
         </button>

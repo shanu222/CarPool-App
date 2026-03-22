@@ -9,6 +9,7 @@ import { getSocket } from '../lib/socket';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { PaymentModal } from '../components/PaymentModal';
+import { Button } from '../components/Button';
 
 const getUserId = (value: { id?: string; _id?: string } | null | undefined) => value?.id || value?._id || '';
 
@@ -312,8 +313,8 @@ export function Chat() {
   };
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col max-w-md mx-auto relative">
-      <div className="bg-white px-6 py-4 border-b border-gray-200">
+    <div className="relative mx-auto flex h-screen max-w-[420px] flex-col overflow-x-hidden bg-gray-50">
+      <div className="sticky top-0 z-40 border-b border-gray-200 bg-white px-3 py-3 md:px-4 md:py-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2">
             <ArrowLeft className="w-6 h-6" />
@@ -325,78 +326,83 @@ export function Chat() {
           />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-base">{receiverProfile?.name || ride.driver.name}</h2>
+              <h2 className="text-sm md:text-base">{receiverProfile?.name || ride.driver.name}</h2>
               <VerifiedBadge isVerified={Boolean(receiverProfile?.isVerified ?? ride.driver.isVerified)} />
             </div>
-            <p className="text-xs text-gray-600">{ride.fromCity} → {ride.toCity}</p>
+            <p className="text-xs text-gray-600 truncate">{ride.fromCity} → {ride.toCity}</p>
             {(receiverProfile?.phone || ride.driver.phone) ? (
               <p className="text-[11px] text-gray-500">{maskPhone(receiverProfile?.phone || ride.driver.phone)}</p>
             ) : null}
           </div>
-          <button className="p-2" onClick={handleCall}>
-            <Phone className="w-5 h-5 text-gray-600" />
-          </button>
+          <Button type="button" variant="secondary" onClick={handleCall} className="min-h-12 w-12 p-0" leftIcon={<Phone className="w-5 h-5 text-gray-600" />}>
+            
+          </Button>
           <div className="relative">
             <button className="p-2" onClick={() => setIsMenuOpen((prev) => !prev)}>
               <MoreVertical className="w-5 h-5 text-gray-600" />
             </button>
             {isMenuOpen ? (
               <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border border-gray-200 bg-white shadow-lg">
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     setIsMenuOpen(false);
                     navigate(`/profile?user=${receiverId || ''}`);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+                  variant="secondary"
+                  className="!justify-start !rounded-none !bg-transparent hover:!bg-gray-50 !shadow-none"
+                  leftIcon={<User className="h-4 w-4" />}
                 >
-                  <User className="h-4 w-4" />
                   View Profile
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     setIsMenuOpen(false);
                     navigate(`/ride/${id}`);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+                  variant="secondary"
+                  className="!justify-start !rounded-none !bg-transparent hover:!bg-gray-50 !shadow-none"
+                  leftIcon={<ArrowLeft className="h-4 w-4 rotate-180" />}
                 >
-                  <ArrowLeft className="h-4 w-4 rotate-180" />
                   View Ride Details
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     setShowReportModal(true);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+                  variant="secondary"
+                  className="!justify-start !rounded-none !bg-transparent hover:!bg-gray-50 !shadow-none"
+                  leftIcon={<Flag className="h-4 w-4" />}
                 >
-                  <Flag className="h-4 w-4" />
                   Report User
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={handleBlockUser}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  variant="danger"
+                  className="!justify-start !rounded-none !bg-transparent !text-red-600 hover:!bg-red-50 !shadow-none"
+                  leftIcon={<Ban className="h-4 w-4" />}
                 >
-                  <Ban className="h-4 w-4" />
                   Block User
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={handleShareRide}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+                  variant="secondary"
+                  className="!justify-start !rounded-none !bg-transparent hover:!bg-gray-50 !shadow-none"
+                  leftIcon={<Share2 className="h-4 w-4" />}
                 >
-                  <Share2 className="h-4 w-4" />
                   Share Ride
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-3 pb-36 pt-3 md:px-4 md:pb-40 md:pt-4">
         {isConversationBlocked ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">User blocked</div>
         ) : null}
@@ -416,13 +422,13 @@ export function Chat() {
                 className={`flex ${getSenderId(msg) === getUserId(user) ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[70%] rounded-2xl px-4 py-3 ${
+                  className={`max-w-[85%] md:max-w-[70%] rounded-2xl px-3 py-2.5 md:px-4 md:py-3 ${
                     getSenderId(msg) === getUserId(user)
                       ? 'bg-blue-600 text-white rounded-br-sm'
                       : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
                   }`}
                 >
-                  <p className="text-sm">{getMessageText(msg)}</p>
+                  <p className="text-sm md:text-base">{getMessageText(msg)}</p>
                   <p
                     className={`text-xs mt-1 ${
                       getSenderId(msg) === getUserId(user) ? 'text-blue-100' : 'text-gray-500'
@@ -439,7 +445,7 @@ export function Chat() {
           : null}
       </div>
 
-      <div className="bg-white border-t border-gray-200 px-6 py-4">
+      <div className="absolute inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white px-3 py-3 md:px-4 md:py-4">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -448,25 +454,28 @@ export function Chat() {
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Type a message..."
             disabled={isConversationBlocked}
-            className="flex-1 px-4 py-3 bg-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 rounded-2xl bg-gray-100 px-4 py-3 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
-          <button
+          <Button
             onClick={handleSend}
             disabled={!message.trim() || passengerChatLocked || !user?.canChat || isConversationBlocked}
-            className="p-3 bg-blue-600 text-white rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="primary"
+            className="min-h-12 w-12 rounded-2xl p-0"
+            leftIcon={<Send className="w-5 h-5" />}
           >
-            <Send className="w-5 h-5" />
-          </button>
+            
+          </Button>
         </div>
 
         {passengerChatLocked ? (
-          <button
+          <Button
             type="button"
             onClick={() => setShowUnlockModal(true)}
-            className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50 py-2 text-sm text-blue-700"
+            variant="secondary"
+            className="mt-2 min-h-12 w-full border border-blue-200 !bg-blue-50 !text-blue-700"
           >
             Submit payment proof to unlock chat
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -487,20 +496,22 @@ export function Chat() {
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
             />
             <div className="mt-3 flex gap-2">
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowReportModal(false)}
-                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                variant="secondary"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleReportUser}
-                className="flex-1 rounded-xl bg-blue-600 px-3 py-2 text-sm text-white"
+                variant="primary"
+                className="flex-1"
               >
                 Submit Report
-              </button>
+              </Button>
             </div>
           </div>
         </div>
