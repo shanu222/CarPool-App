@@ -18,6 +18,8 @@ import userRoutes from "./routes/userRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
+import changeRequestRoutes from "./routes/changeRequestRoutes.js";
+import supportRoutes from "./routes/supportRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { initializeSocket } from "./socket/setupSocket.js";
 
@@ -161,6 +163,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/requests", requestRoutes);
+app.use("/api/change-request", changeRequestRoutes);
+app.use("/api/support", supportRoutes);
 app.use("/admin", adminRoutes);
 
 app.use(notFound);

@@ -1,32 +1,9 @@
 import { Booking } from "../models/Booking.js";
 import { Ride } from "../models/Ride.js";
-import { Notification } from "../models/Notification.js";
-import { sendPushNotification } from "../services/pushService.js";
-import { User } from "../models/User.js";
-import { getIo } from "../socket/io.js";
+import { createUserNotification } from "../services/notificationService.js";
 
-const notifyUser = async ({ userId, type = "generic", title, body, data }) => {
-  const notification = await Notification.create({
-    user: userId,
-    type,
-    title,
-    body,
-    data,
-  });
-
-  const io = getIo();
-  if (io) {
-    io.to(`user:${String(userId)}`).emit("new_notification", notification);
-  }
-
-  const user = await User.findById(userId).select("fcmToken");
-  await sendPushNotification({
-    token: user?.fcmToken,
-    title,
-    body,
-    data,
-  });
-};
+const notifyUser = async ({ userId, type = "message", title, body, data }) =>
+  createUserNotification({ userId, type, title, body, data, pushFallback: true });
 
 const maskCnic = (cnic) => {
   if (!cnic || cnic.length < 4) {
@@ -44,20 +21,15 @@ const sanitizeDriverForBooking = (booking, includeSensitive) => {
   }
 
   const driver = plain.ride.driver;
-  const cnicValue = driver.cnicNumber || driver.cnic;
+  driver.email = undefined;
+  driver.phone = undefined;
+  driver.cnicNumber = undefined;
+  driver.cnic = undefined;
+  driver.cnicPhoto = undefined;
+  driver.licensePhoto = undefined;
 
   if (!includeSensitive) {
-    driver.cnicNumber = undefined;
-    driver.cnic = undefined;
     driver.profilePhoto = undefined;
-    driver.cnicPhoto = undefined;
-    driver.licensePhoto = undefined;
-    driver.maskedCnic = cnicValue ? maskCnic(cnicValue) : undefined;
-    return plain;
-  }
-
-  if (cnicValue) {
-    driver.maskedCnic = maskCnic(cnicValue);
   }
 
   return plain;
@@ -117,7 +89,7 @@ export const createBooking = async (req, res, next) => {
 
     await notifyUser({
       userId: ride.driver,
-      type: "ride_booked",
+      type: "ride_request",
       title: "New booking request",
       body: `${req.user.name} requested ${seats} seat(s) from ${ride.fromCity} to ${ride.toCity}`,
       data: { rideId: ride._id, bookingId: booking._id },
@@ -128,10 +100,10 @@ export const createBooking = async (req, res, next) => {
         path: "ride",
         populate: {
           path: "driver",
-          select: "name email phone role rating isVerified cnicNumber cnic profilePhoto cnicPhoto licensePhoto",
+          select: "name role rating isVerified profilePhoto",
         },
       })
-      .populate("passengerId", "name email phone role rating isVerified");
+      .populate("passengerId", "name role rating isVerified");
 
     return res.status(201).json(sanitizeDriverForBooking(populatedBooking, false));
   } catch (error) {
@@ -186,6 +158,7 @@ export const respondToBookingRequest = async (req, res, next) => {
 
     await notifyUser({
       userId: booking.passengerId._id,
+      type: "ride_request",
       title: action === "accepted" ? "Booking request accepted" : "Booking request rejected",
       body:
         action === "accepted"
@@ -199,10 +172,10 @@ export const respondToBookingRequest = async (req, res, next) => {
         path: "ride",
         populate: {
           path: "driver",
-          select: "name email phone role rating isVerified cnicNumber cnic profilePhoto cnicPhoto licensePhoto",
+          select: "name role rating isVerified profilePhoto",
         },
       })
-      .populate("passengerId", "name email phone role rating isVerified");
+      .populate("passengerId", "name role rating isVerified");
 
     return res.json(sanitizeDriverForBooking(populated, action === "accepted"));
   } catch (error) {
@@ -223,10 +196,10 @@ export const getDriverBookingRequests = async (req, res, next) => {
         path: "ride",
         populate: {
           path: "driver",
-          select: "name email phone role rating isVerified cnicNumber cnic profilePhoto cnicPhoto licensePhoto",
+          select: "name role rating isVerified profilePhoto",
         },
       })
-      .populate("passengerId", "name email phone role rating isVerified")
+      .populate("passengerId", "name role rating isVerified")
       .sort({ createdAt: -1 });
 
     return res.json(requests.map((booking) => sanitizeDriverForBooking(booking, true)));
@@ -242,7 +215,7 @@ export const getMyBookings = async (req, res, next) => {
         path: "ride",
         populate: {
           path: "driver",
-          select: "name email phone role rating isVerified cnicNumber cnic profilePhoto cnicPhoto licensePhoto",
+          select: "name role rating isVerified profilePhoto",
         },
       })
       .sort({ createdAt: -1 });

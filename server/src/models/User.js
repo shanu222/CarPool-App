@@ -62,6 +62,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isFeatured: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     verificationStatus: {
       type: String,
       enum: ["none", "pending", "approved", "rejected"],
@@ -141,6 +146,24 @@ const userSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    notificationSettings: {
+      messages: {
+        type: Boolean,
+        default: true,
+      },
+      rides: {
+        type: Boolean,
+        default: true,
+      },
+      payments: {
+        type: Boolean,
+        default: true,
+      },
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     resetToken: {
       type: String,
       select: false,

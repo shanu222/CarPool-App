@@ -3,6 +3,8 @@ import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
 import { Payment } from "../models/Payment.js";
 import { PaymentSettings } from "../models/PaymentSettings.js";
+import { ChangeRequest } from "../models/ChangeRequest.js";
+import { createUserNotification } from "../services/notificationService.js";
 
 const getOrCreatePaymentSettings = async () => {
   let settings = await PaymentSettings.findOne().sort({ updatedAt: -1 });
@@ -256,6 +258,15 @@ export const approvePaymentByAdmin = async (req, res, next) => {
         }
 
         await user.save();
+
+        await createUserNotification({
+          userId: user._id,
+          type: "payment_update",
+          title: "Payment approved",
+          body: "Your payment has been approved and account access has been updated.",
+          data: { paymentId: payment._id, paymentType: payment.type },
+          pushFallback: true,
+        });
       }
     }
 
@@ -316,6 +327,78 @@ export const getAdminAnalytics = async (_req, res, next) => {
       totalEarnings,
       activeRides: activeRidesAgg,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAdminChangeRequests = async (_req, res, next) => {
+  try {
+    const requests = await ChangeRequest.find({})
+      .populate("userId", "name role isVerified")
+      .populate("reviewedBy", "name role")
+      .sort({ createdAt: -1 });
+
+    return res.json(requests);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const reviewAdminChangeRequest = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+
+    if (!status || !["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "status must be approved or rejected" });
+    }
+
+    const request = await ChangeRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: "Change request not found" });
+    }
+
+    if (request.status !== "pending") {
+      return res.status(400).json({ message: "Only pending requests can be reviewed" });
+    }
+
+    if (status === "approved") {
+      const user = await User.findById(request.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (request.type === "cnic_update") {
+        const nextCnic = String(request.requestedData?.cnicNumber || "").trim();
+        if (nextCnic) {
+          user.cnic = nextCnic;
+          user.cnicNumber = nextCnic;
+        }
+      }
+
+      if (request.type === "car_update") {
+        user.carMake = String(request.requestedData?.carMake || "").trim();
+        user.carModel = String(request.requestedData?.carModel || "").trim();
+        user.carColor = String(request.requestedData?.carColor || "").trim();
+        user.carPlateNumber = String(request.requestedData?.carPlateNumber || "").trim();
+        if (request.requestedData?.carYear) {
+          user.carYear = Number(request.requestedData.carYear);
+        }
+      }
+
+      await user.save();
+    }
+
+    request.status = status;
+    request.reviewedBy = req.user._id;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    const populated = await ChangeRequest.findById(request._id)
+      .populate("userId", "name role isVerified")
+      .populate("reviewedBy", "name role");
+
+    return res.json(populated);
   } catch (error) {
     return next(error);
   }

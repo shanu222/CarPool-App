@@ -8,6 +8,7 @@ import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
 import { Notification } from "../models/Notification.js";
 import { sendPushNotification } from "../services/pushService.js";
+import { createUserNotification } from "../services/notificationService.js";
 
 const mapMessagePayload = (messageDoc) => {
   const messageObj = typeof messageDoc.toObject === "function" ? messageDoc.toObject() : messageDoc;
@@ -159,12 +160,13 @@ export const initializeSocket = (httpServer) => {
       io.to(`ride:${rideId}`).emit("new_message", messagePayload);
       io.to(`user:${String(receiverId)}`).emit("receive_message", messagePayload);
 
-      await Notification.create({
-        user: receiverId,
+      await createUserNotification({
+        userId: receiverId,
         type: "message",
         title: "New message",
         body: `${socket.user.name} sent you a message`,
         data: { rideId, messageId: String(createdMessage._id) },
+        pushFallback: false,
       });
 
       if (!isUserOnline(receiverId)) {

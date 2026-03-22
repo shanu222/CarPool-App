@@ -9,6 +9,19 @@ import { UserReport } from "../models/UserReport.js";
 
 const router = Router();
 
+const maskPhone = (value) => {
+  const phone = String(value || "").trim();
+  if (!phone) {
+    return "";
+  }
+
+  if (phone.length <= 7) {
+    return `${phone.slice(0, 2)}****`;
+  }
+
+  return `${phone.slice(0, 4)}****${phone.slice(-3)}`;
+};
+
 router.post("/location", protect, async (req, res, next) => {
   try {
     const lat = Number(req.body?.lat);
@@ -56,6 +69,44 @@ router.post("/block", protect, async (req, res, next) => {
   }
 });
 
+router.get("/blocked", protect, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).populate("blockedUsers", "name role profilePhoto isVerified");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const blocked = (user.blockedUsers || []).map((item) => ({
+      _id: item._id,
+      name: item.name,
+      role: item.role,
+      profilePhoto: item.profilePhoto,
+      isVerified: Boolean(item.isVerified),
+    }));
+
+    return res.json(blocked);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete("/block/:targetUserId", protect, async (req, res, next) => {
+  try {
+    const targetUserId = req.params.targetUserId;
+    if (!targetUserId) {
+      return res.status(400).json({ message: "targetUserId is required" });
+    }
+
+    await User.findByIdAndUpdate(req.user._id, {
+      $pull: { blockedUsers: targetUserId },
+    });
+
+    return res.json({ message: "User unblocked" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post("/report", protect, async (req, res, next) => {
   try {
     const { targetUserId, rideId, reason } = req.body;
@@ -77,6 +128,70 @@ router.post("/report", protect, async (req, res, next) => {
   }
 });
 
+router.patch(
+  "/profile",
+  protect,
+  upload.fields([{ name: "profilePhoto", maxCount: 1 }]),
+  async (req, res, next) => {
+    try {
+      const user = await User.findById(req.user._id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const nextName = String(req.body?.name || "").trim();
+      const nextPhone = String(req.body?.phone || "").trim();
+      const profileFile = req.files?.profilePhoto?.[0];
+
+      if (nextName) {
+        user.name = nextName;
+      }
+
+      if (nextPhone && nextPhone !== user.phone) {
+        const duplicate = await User.findOne({
+          _id: { $ne: user._id },
+          role: user.role,
+          phone: nextPhone,
+        });
+
+        if (duplicate) {
+          return res.status(409).json({ message: "Phone already in use for this role" });
+        }
+
+        user.phone = nextPhone;
+      }
+
+      if (profileFile) {
+        user.profilePhoto = `${req.protocol}://${req.get("host")}/uploads/${profileFile.filename}`;
+      }
+
+      await user.save();
+
+      return res.json({
+        id: user._id,
+        _id: user._id,
+        name: user.name,
+        phone: user.phone,
+        maskedPhone: maskPhone(user.phone),
+        role: user.role,
+        rating: user.rating,
+        isVerified: Boolean(user.isVerified),
+        isFeatured: Boolean(user.isFeatured),
+        verificationStatus: user.verificationStatus,
+        profilePhoto: user.profilePhoto,
+        carMake: user.carMake,
+        carModel: user.carModel,
+        carColor: user.carColor,
+        carPlateNumber: user.carPlateNumber,
+        carYear: user.carYear,
+        cnicNumber: user.cnicNumber || user.cnic,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
+
 router.get("/:id", protect, async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id).select(
@@ -90,9 +205,10 @@ router.get("/:id", protect, async (req, res, next) => {
     return res.json({
       _id: user._id,
       name: user.name,
-      phone: user.phone,
+      maskedPhone: maskPhone(user.phone),
       profilePhoto: user.profilePhoto,
       isVerified: Boolean(user.isVerified),
+      isFeatured: String(user._id) === String(req.user._id) ? Boolean(user.isFeatured) : false,
       paymentApproved: Boolean(user.paymentApproved),
       canPostRide: Boolean(user.canPostRide),
       canBookRide: Boolean(user.canBookRide),

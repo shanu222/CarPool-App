@@ -169,7 +169,7 @@ const signToken = (user, expiresIn = "7d") => {
     throw new Error("JWT_SECRET is not configured");
   }
 
-  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+  return jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 }, process.env.JWT_SECRET, {
     expiresIn,
   });
 };
@@ -177,8 +177,8 @@ const signToken = (user, expiresIn = "7d") => {
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
-  email: user.email,
   phone: user.phone,
+  maskedPhone: user.phone ? `${String(user.phone).slice(0, 4)}****${String(user.phone).slice(-3)}` : undefined,
   role: user.role,
   status: user.status,
   isBlocked: user.isBlocked,
@@ -186,10 +186,8 @@ const sanitizeUser = (user) => ({
   suspensionReason: user.suspensionReason,
   rating: user.rating,
   isVerified: user.isVerified,
+  isFeatured: Boolean(user.isFeatured),
   verificationStatus: user.verificationStatus,
-  cnicNumber: user.cnicNumber || user.cnic,
-  cnic: user.cnic,
-  cnicPhoto: user.cnicPhoto || user.licensePhoto,
   profilePhoto: user.profilePhoto,
   carPhoto: user.carPhoto,
   carMake: user.carMake,
@@ -204,7 +202,59 @@ const sanitizeUser = (user) => ({
   canChat: user.canChat,
   paymentApproved: user.paymentApproved,
   blockedUsers: user.blockedUsers || [],
+  notificationSettings: {
+    messages: user.notificationSettings?.messages !== false,
+    rides: user.notificationSettings?.rides !== false,
+    payments: user.notificationSettings?.payments !== false,
+  },
 });
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: "old password and new password are required" });
+    }
+
+    if (String(newPassword).trim().length < 6) {
+      return res.status(400).json({ message: "new password must be at least 6 characters" });
+    }
+
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const passwordMatch = await bcrypt.compare(String(oldPassword), user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ message: "Old password is incorrect" });
+    }
+
+    user.password = await bcrypt.hash(String(newPassword).trim(), 10);
+    await user.save();
+
+    return res.json({ message: "Password changed successfully" });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const logoutAllDevices = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.tokenVersion = Number(user.tokenVersion || 0) + 1;
+    await user.save();
+
+    return res.json({ message: "Logged out from all devices" });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 export const register = async (req, res, next) => {
   try {

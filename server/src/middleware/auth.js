@@ -17,6 +17,10 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    if (Number(decoded.tokenVersion || 0) !== Number(user.tokenVersion || 0)) {
+      return res.status(401).json({ message: "Session expired. Please login again" });
+    }
+
     if (user.accountStatus === "banned") {
       return res.status(403).json({ message: "Account is banned" });
     }

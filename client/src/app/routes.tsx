@@ -18,6 +18,10 @@ import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 import { RideRequests } from "./pages/RideRequests";
 import { RideRequestDetails } from "./pages/RideRequestDetails";
 import { PostRequest } from "./pages/PostRequest";
+import { Notifications } from "./pages/Notifications";
+import { PaymentMethods } from "./pages/PaymentMethods";
+import { Privacy } from "./pages/Privacy";
+import { Support } from "./pages/Support";
 
 const isAdminApp = import.meta.env.VITE_APP_MODE === "admin";
 
@@ -104,6 +108,22 @@ export const router = createBrowserRouter(
                 {
                   path: "/profile",
                   element: <Profile />,
+                },
+                {
+                  path: "/notifications",
+                  element: <Notifications />,
+                },
+                {
+                  path: "/payment-methods",
+                  element: <PaymentMethods />,
+                },
+                {
+                  path: "/privacy",
+                  element: <Privacy />,
+                },
+                {
+                  path: "/support",
+                  element: <Support />,
                 },
               ],
             },

@@ -4,9 +4,11 @@ import {
   deleteRideByAdmin,
   featureRideByAdmin,
   getAdminAnalytics,
+  getAdminChangeRequests,
   getAdminPayments,
   getAdminRides,
   getAdminUsers,
+  reviewAdminChangeRequest,
   getPaymentSettingsAdmin,
   updatePaymentSettingsAdmin,
   updateUserStatusByAdmin,
@@ -35,5 +37,7 @@ router.get("/payment-settings", getPaymentSettingsAdmin);
 router.post("/payment-settings", updatePaymentSettingsAdmin);
 
 router.get("/analytics", getAdminAnalytics);
+router.get("/change-requests", getAdminChangeRequests);
+router.post("/change-requests/:id/review", reviewAdminChangeRequest);
 
 export default router;

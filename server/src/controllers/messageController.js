@@ -6,6 +6,7 @@ import { User } from "../models/User.js";
 import { Booking } from "../models/Booking.js";
 import { getIo } from "../socket/io.js";
 import { isUserOnline } from "../socket/io.js";
+import { createUserNotification } from "../services/notificationService.js";
 
 const ensureRideParticipant = (ride, userId) => {
   const isDriver = String(ride.driver) === String(userId);
@@ -184,12 +185,13 @@ export const sendMessage = async (req, res, next) => {
       io.to(`user:${String(receiverId)}`).emit("receive_message", payload);
     }
 
-    await Notification.create({
-      user: receiverId,
+    await createUserNotification({
+      userId: receiverId,
       type: "message",
       title: "New message",
       body: `${req.user.name} sent you a message`,
       data: { rideId, messageId: createdMessage._id },
+      pushFallback: false,
     });
 
     if (!isUserOnline(receiverId)) {

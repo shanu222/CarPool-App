@@ -4,9 +4,9 @@ import { Check, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/Button";
-import type { AdminAnalytics, Payment, PaymentSettings, Ride, User } from "../types";
+import type { AdminAnalytics, ChangeRequest, Payment, PaymentSettings, Ride, User } from "../types";
 
-type TabKey = "overview" | "users" | "rides" | "payments" | "settings";
+type TabKey = "overview" | "users" | "rides" | "payments" | "change-requests" | "settings";
 type UserStatusTab = "pending" | "approved" | "suspended" | "banned";
 type PaymentStatusTab = "pending" | "approved" | "rejected";
 
@@ -20,6 +20,7 @@ export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [rides, setRides] = useState<Ride[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [analytics, setAnalytics] = useState<AdminAnalytics>({
     totalUsers: 0,
     totalRides: 0,
@@ -61,11 +62,12 @@ export function AdminDashboard() {
     try {
       setLoading(true);
       setError("");
-      const [analyticsResponse, usersResponse, ridesResponse, paymentsResponse, settingsResponse] = await Promise.all([
+      const [analyticsResponse, usersResponse, ridesResponse, paymentsResponse, changeRequestsResponse, settingsResponse] = await Promise.all([
         api.get<AdminAnalytics>("/admin/analytics"),
         api.get<User[]>("/admin/users"),
         api.get<Ride[]>("/admin/rides"),
         api.get<Payment[]>("/admin/payments"),
+        api.get<ChangeRequest[]>("/admin/change-requests"),
         api.get<PaymentSettings>("/admin/payment-settings"),
       ]);
 
@@ -73,6 +75,7 @@ export function AdminDashboard() {
       setUsers(usersResponse.data);
       setRides(ridesResponse.data);
       setPayments(paymentsResponse.data);
+      setChangeRequests(changeRequestsResponse.data);
       setPaymentSettings(settingsResponse.data);
     } catch (requestError: any) {
       const status = requestError?.response?.status;
@@ -122,6 +125,11 @@ export function AdminDashboard() {
     await loadDashboard();
   };
 
+  const reviewChangeRequest = async (id: string, status: "approved" | "rejected") => {
+    await api.post(`/admin/change-requests/${id}/review`, { status });
+    await loadDashboard();
+  };
+
   return (
     <div className="min-h-screen bg-transparent px-3 py-3 pb-10 md:px-4 md:py-4 overflow-x-hidden">
       <div className="glass-panel rounded-3xl p-3 md:p-5">
@@ -150,6 +158,7 @@ export function AdminDashboard() {
             { id: "users", label: "Users" },
             { id: "rides", label: "Rides" },
             { id: "payments", label: "Payments" },
+            { id: "change-requests", label: "Change Requests" },
             { id: "settings", label: "Payment Settings" },
           ] as Array<{ id: TabKey; label: string }>).map((item) => (
             <button
@@ -419,6 +428,51 @@ export function AdminDashboard() {
           <Button onClick={savePaymentSettings} variant="secondary" className="min-h-12 w-full !bg-white/90 text-slate-900">
             Save Payment Settings
           </Button>
+        </div>
+      ) : null}
+
+      {!loading && tab === "change-requests" ? (
+        <div className="mt-4 space-y-3">
+          {changeRequests.map((item) => (
+            <div key={item._id} className="glass-panel rounded-xl shadow-md p-3 md:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm md:text-base text-white">{item.userId?.name || "User"}</p>
+                  <p className="text-xs text-slate-100">Type: {item.type}</p>
+                  <p className="text-xs text-slate-100">Reason: {item.reason}</p>
+                  <p className="text-xs text-slate-100">Status: {item.status}</p>
+                  <p className="mt-2 text-xs text-slate-100">Current: {JSON.stringify(item.currentData || {})}</p>
+                  <p className="text-xs text-slate-100">Requested: {JSON.stringify(item.requestedData || {})}</p>
+                </div>
+                {item.status === "pending" ? (
+                  <div className="grid grid-cols-1 gap-2 md:flex">
+                    <Button
+                      onClick={() => reviewChangeRequest(item._id, "approved")}
+                      variant="success"
+                      className="min-h-12 !bg-green-500 px-3 py-2 text-xs md:text-sm"
+                      fullWidth={false}
+                      leftIcon={<Check className="h-4 w-4" />}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => reviewChangeRequest(item._id, "rejected")}
+                      variant="danger"
+                      className="min-h-12 px-3 py-2 text-xs md:text-sm"
+                      fullWidth={false}
+                      leftIcon={<X className="h-4 w-4" />}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
+          {changeRequests.length === 0 ? (
+            <div className="glass-panel rounded-2xl p-6 text-sm text-slate-100">No change requests found.</div>
+          ) : null}
         </div>
       ) : null}
     </div>

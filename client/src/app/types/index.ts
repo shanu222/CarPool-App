@@ -4,6 +4,7 @@ export interface User {
   name: string;
   email?: string;
   phone?: string;
+  maskedPhone?: string;
   role: "admin" | "passenger" | "driver";
   status?: "pending" | "approved" | "suspended" | "banned";
   isBlocked?: boolean;
@@ -12,6 +13,7 @@ export interface User {
   rating: number;
   ratingCount?: number;
   isVerified?: boolean;
+  isFeatured?: boolean;
   verificationStatus?: "none" | "pending" | "approved" | "rejected";
   cnicNumber?: string;
   cnicPhoto?: string;
@@ -30,6 +32,24 @@ export interface User {
   canChat?: boolean;
   paymentApproved?: boolean;
   blockedUsers?: string[];
+  notificationSettings?: {
+    messages: boolean;
+    rides: boolean;
+    payments: boolean;
+  };
+}
+
+export interface ChangeRequest {
+  _id: string;
+  userId: User;
+  type: "cnic_update" | "car_update";
+  currentData: Record<string, unknown>;
+  requestedData: Record<string, unknown>;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  reviewedBy?: Pick<User, "id" | "_id" | "name" | "role">;
+  reviewedAt?: string;
+  createdAt: string;
 }
 
 export interface Ride {
@@ -81,12 +101,36 @@ export interface AuthResponse {
 
 export interface NotificationItem {
   _id: string;
-  type: "ride_posted" | "ride_booked" | "message" | "generic";
+  userId?: string;
+  type: "message" | "ride_request" | "payment_update" | "ride_posted" | "ride_booked" | "generic";
   title: string;
   body: string;
+  isRead: boolean;
   read: boolean;
   createdAt: string;
   data?: Record<string, unknown>;
+}
+
+export interface NotificationSettings {
+  messages: boolean;
+  rides: boolean;
+  payments: boolean;
+}
+
+export interface BlockedUser {
+  _id: string;
+  name: string;
+  role: "admin" | "passenger" | "driver";
+  profilePhoto?: string;
+  isVerified?: boolean;
+}
+
+export interface SupportRequest {
+  _id: string;
+  userId: string;
+  message: string;
+  status: "open" | "closed";
+  createdAt: string;
 }
 
 export interface Message {

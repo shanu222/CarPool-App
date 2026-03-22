@@ -252,7 +252,7 @@ export const createRide = async (req, res, next) => {
 
     const populatedRide = await Ride.findById(ride._id).populate(
       "driver",
-      "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+      "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
     );
     return res.status(201).json(populatedRide);
   } catch (error) {
@@ -352,7 +352,7 @@ export const searchRides = async (req, res, next) => {
     const rides = await Ride.find(query)
       .populate(
         "driver",
-        "name email phone role rating isVerified profilePhoto cnicNumber cnic carMake carModel carColor carPlateNumber carYear carPhoto"
+        "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
       .sort(sortOption);
 
@@ -454,7 +454,7 @@ export const getRideById = async (req, res, next) => {
     await refreshRideLifecycleStatuses();
     const ride = await Ride.findById(req.params.id).populate(
       "driver",
-      "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+      "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
     );
 
     if (!ride) {
@@ -495,7 +495,7 @@ export const getNearbyRides = async (req, res, next) => {
     const rides = await Ride.find(rideQuery)
       .populate(
         "driver",
-        "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+        "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
       .sort({ featured: -1, dateTime: 1, createdAt: -1 });
 
@@ -534,7 +534,7 @@ export const getMyRides = async (req, res, next) => {
     const rides = await Ride.find({ driver: req.user._id })
       .populate(
         "driver",
-        "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+        "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
       .sort({ dateTime: 1, createdAt: -1 });
 
@@ -570,7 +570,7 @@ export const updateRideStatus = async (req, res, next) => {
       { _id: req.params.id, driver: req.user._id },
       { status },
       { new: true }
-    ).populate("driver", "name email phone role rating isVerified");
+    ).populate("driver", "name role rating isVerified");
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
