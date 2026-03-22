@@ -13,6 +13,7 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || "0.0.0.0";
+let isDbConnected = false;
 
 app.use(
   cors({
@@ -24,15 +25,23 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  res.status(200).json({ ok: true, service: "carpool-server" });
+  res.status(200).json({ ok: true, service: "carpool-server", dbConnected: isDbConnected });
 });
 
 app.get("/health", (req, res) => {
-  res.status(200).json({ ok: true, service: "carpool-server" });
+  res.status(200).json({ ok: true, service: "carpool-server", dbConnected: isDbConnected });
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "carpool-server" });
+  res.status(200).json({ ok: true, service: "carpool-server", dbConnected: isDbConnected });
+});
+
+app.get("/ready", (req, res) => {
+  if (!isDbConnected) {
+    return res.status(503).json({ ok: false, service: "carpool-server", dbConnected: false });
+  }
+
+  return res.status(200).json({ ok: true, service: "carpool-server", dbConnected: true });
 });
 
 app.use("/api/auth", authRoutes);
@@ -43,15 +52,23 @@ app.use(notFound);
 app.use(errorHandler);
 
 const startServer = async () => {
-  try {
-    await connectDb();
-    app.listen(port, host, () => {
-      console.log(`Server listening on ${host}:${port}`);
-    });
-  } catch (error) {
-    console.error("Failed to start server:", error.message);
-    process.exit(1);
-  }
+  app.listen(port, host, () => {
+    console.log(`Server listening on ${host}:${port}`);
+  });
+
+  const connectWithRetry = async () => {
+    try {
+      await connectDb();
+      isDbConnected = true;
+      console.log("MongoDB connected");
+    } catch (error) {
+      isDbConnected = false;
+      console.error(`MongoDB connection failed: ${error.message}`);
+      setTimeout(connectWithRetry, 5000);
+    }
+  };
+
+  await connectWithRetry();
 };
 
 startServer();
