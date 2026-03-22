@@ -3,6 +3,26 @@ import jwt from "jsonwebtoken";
 import { Message } from "../models/Message.js";
 import { User } from "../models/User.js";
 import { setIo } from "./io.js";
+import { Location } from "../models/Location.js";
+import { Ride } from "../models/Ride.js";
+import { Booking } from "../models/Booking.js";
+import { Notification } from "../models/Notification.js";
+
+const toRad = (value) => (value * Math.PI) / 180;
+
+const calculateDistanceKm = (a, b) => {
+  const earthRadiusKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+
+  const x =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
+
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)));
+};
 
 export const initializeSocket = (httpServer) => {
   const origins = (process.env.CLIENT_ORIGIN || "")
@@ -68,6 +88,71 @@ export const initializeSocket = (httpServer) => {
         .populate("receiver", "name role");
 
       io.to(`ride:${rideId}`).emit("new_message", populated);
+    });
+
+    socket.on("share_location", async (payload) => {
+      const { rideId, latitude, longitude } = payload || {};
+
+      if (!rideId || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return;
+      }
+
+      const now = new Date();
+      const existing = await Location.findOne({ rideId, userId: socket.user._id }).sort({ updatedAt: -1 });
+
+      if (existing && now.getTime() - new Date(existing.updatedAt).getTime() < 3000) {
+        return;
+      }
+
+      const location = await Location.findOneAndUpdate(
+        { rideId, userId: socket.user._id },
+        { latitude, longitude, updatedAt: now },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      io.to(`ride:${rideId}`).emit("location_update", {
+        rideId,
+        userId: String(socket.user._id),
+        latitude,
+        longitude,
+        updatedAt: location.updatedAt,
+      });
+
+      const ride = await Ride.findById(rideId).select("driver fromCoordinates status");
+      if (!ride || String(ride.driver) !== String(socket.user._id) || !ride.fromCoordinates || ride.status === "cancelled") {
+        return;
+      }
+
+      const distanceKm = calculateDistanceKm(
+        { lat: latitude, lng: longitude },
+        { lat: ride.fromCoordinates.lat, lng: ride.fromCoordinates.lng }
+      );
+
+      if (distanceKm > 2) {
+        return;
+      }
+
+      const pendingBookings = await Booking.find({ ride: rideId, driverNearNotified: false, status: { $in: ["booked", "ongoing"] } })
+        .select("_id user");
+
+      if (!pendingBookings.length) {
+        return;
+      }
+
+      await Booking.updateMany(
+        { _id: { $in: pendingBookings.map((item) => item._id) } },
+        { driverNearNotified: true }
+      );
+
+      const notifications = pendingBookings.map((booking) => ({
+        user: booking.user,
+        type: "generic",
+        title: "Driver near your pickup",
+        body: "Your driver is approaching the pickup point.",
+        data: { rideId },
+      }));
+
+      await Notification.insertMany(notifications);
     });
   });
 

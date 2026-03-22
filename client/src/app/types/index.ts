@@ -6,6 +6,11 @@ export interface User {
   phone?: string;
   role: "passenger" | "driver";
   rating: number;
+  ratingCount?: number;
+  isVerified?: boolean;
+  cnic?: string;
+  profilePhoto?: string;
+  licensePhoto?: string;
 }
 
 export interface Ride {
@@ -28,6 +33,7 @@ export interface Ride {
   };
   distanceText?: string;
   durationText?: string;
+  status?: "pending" | "ongoing" | "completed" | "cancelled";
 }
 
 export interface Booking {
@@ -36,8 +42,9 @@ export interface Booking {
   ride: Ride;
   seatsBooked: number;
   totalPrice: number;
-  status: "booked" | "cancelled";
+  status: "booked" | "ongoing" | "completed" | "cancelled";
   createdAt: string;
+  driverNearNotified?: boolean;
 }
 
 export interface AuthResponse {
@@ -69,5 +76,29 @@ export interface Message {
     role: "passenger" | "driver";
   };
   text: string;
+  createdAt: string;
+}
+
+export interface LiveLocation {
+  _id?: string;
+  rideId: string;
+  userId: string;
+  latitude: number;
+  longitude: number;
+  updatedAt: string;
+}
+
+export interface Review {
+  _id: string;
+  reviewerId: {
+    _id: string;
+    name: string;
+    rating: number;
+    isVerified?: boolean;
+  };
+  targetUserId: string;
+  rideId: string;
+  rating: number;
+  reviewText?: string;
   createdAt: string;
 }

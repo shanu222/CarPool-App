@@ -1,6 +1,7 @@
 import { Ride } from "../models/Ride.js";
 import { User } from "../models/User.js";
 import { Notification } from "../models/Notification.js";
+import { Booking } from "../models/Booking.js";
 import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
 import { sendPushNotification } from "../services/pushService.js";
 
@@ -66,7 +67,7 @@ export const createRide = async (req, res, next) => {
       );
     }
 
-    const populatedRide = await Ride.findById(ride._id).populate("driver", "name email phone role rating");
+    const populatedRide = await Ride.findById(ride._id).populate("driver", "name email phone role rating isVerified");
     return res.status(201).json(populatedRide);
   } catch (error) {
     return next(error);
@@ -82,11 +83,12 @@ export const searchRides = async (req, res, next) => {
       ...(to ? { toCity: new RegExp(`^${to.trim()}$`, "i") } : {}),
       ...(date ? { date } : {}),
       availableSeats: { $gt: 0 },
+      status: { $in: ["pending", "ongoing"] },
     };
 
     const sortOption = sort === "price" ? { pricePerSeat: 1, createdAt: -1 } : { date: 1, time: 1, createdAt: -1 };
 
-    const rides = await Ride.find(query).populate("driver", "name email phone role rating").sort(sortOption);
+    const rides = await Ride.find(query).populate("driver", "name email phone role rating isVerified").sort(sortOption);
 
     return res.json(rides);
   } catch (error) {
@@ -96,10 +98,14 @@ export const searchRides = async (req, res, next) => {
 
 export const getRideById = async (req, res, next) => {
   try {
-    const ride = await Ride.findById(req.params.id).populate("driver", "name email phone role rating");
+    const ride = await Ride.findById(req.params.id).populate("driver", "name email phone role rating isVerified");
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
+    }
+
+    if (["ongoing", "completed", "cancelled"].includes(status)) {
+      await Booking.updateMany({ ride: ride._id, status: { $ne: "cancelled" } }, { status });
     }
 
     return res.json(ride);
@@ -111,10 +117,34 @@ export const getRideById = async (req, res, next) => {
 export const getMyRides = async (req, res, next) => {
   try {
     const rides = await Ride.find({ driver: req.user._id })
-      .populate("driver", "name email phone role rating")
+      .populate("driver", "name email phone role rating isVerified")
       .sort({ date: 1, time: 1, createdAt: -1 });
 
     return res.json(rides);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const updateRideStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+
+    if (!status || !["pending", "ongoing", "completed", "cancelled"].includes(status)) {
+      return res.status(400).json({ message: "Valid ride status is required" });
+    }
+
+    const ride = await Ride.findOneAndUpdate(
+      { _id: req.params.id, driver: req.user._id },
+      { status },
+      { new: true }
+    ).populate("driver", "name email phone role rating isVerified");
+
+    if (!ride) {
+      return res.status(404).json({ message: "Ride not found" });
+    }
+
+    return res.json(ride);
   } catch (error) {
     return next(error);
   }

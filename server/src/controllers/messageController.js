@@ -52,6 +52,13 @@ export const sendMessage = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
+    const isDriver = String(ride.driver._id) === String(req.user._id);
+    const hasBooking = await Booking.exists({ ride: rideId, user: req.user._id, status: { $in: ["booked", "ongoing", "completed"] } });
+
+    if (!isDriver && !hasBooking) {
+      return res.status(403).json({ message: "Only ride participants can chat" });
+    }
+
     const message = await Message.create({
       ride: rideId,
       sender: req.user._id,

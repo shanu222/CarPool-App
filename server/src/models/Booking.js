@@ -24,8 +24,12 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["booked", "cancelled"],
+      enum: ["booked", "ongoing", "completed", "cancelled"],
       default: "booked",
+    },
+    driverNearNotified: {
+      type: Boolean,
+      default: false,
     },
   },
   {

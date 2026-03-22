@@ -16,11 +16,16 @@ import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import type { NotificationItem } from '../types';
+import { toast } from 'sonner';
 
 export function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [cnic, setCnic] = useState(user?.cnic || '');
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+  const [licensePhoto, setLicensePhoto] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -43,6 +48,32 @@ export function Profile() {
   if (!user) {
     return <div className="p-6">No user data available</div>;
   }
+
+  const submitVerification = async () => {
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('cnic', cnic);
+      if (profilePhoto) {
+        formData.append('profilePhoto', profilePhoto);
+      }
+      if (licensePhoto) {
+        formData.append('licensePhoto', licensePhoto);
+      }
+
+      await api.post('/api/verification/submit', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      toast.success('Verification submitted');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Verification upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -73,6 +104,11 @@ export function Profile() {
                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                   <span className="text-sm">{user.rating}</span>
                 </div>
+                {user.isVerified ? (
+                  <div className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Verified ✓</div>
+                ) : (
+                  <div className="rounded-lg bg-amber-100 px-2 py-1 text-xs text-amber-700">Not verified</div>
+                )}
               </div>
             </div>
           </div>
@@ -124,6 +160,36 @@ export function Profile() {
           transition={{ delay: 0.3 }}
           className="bg-white rounded-2xl p-4 shadow-sm"
         >
+          <h3 className="text-base mb-4">Verification</h3>
+          <div className="space-y-3 mb-4">
+            <input
+              value={cnic}
+              onChange={(event) => setCnic(event.target.value)}
+              placeholder="CNIC"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setProfilePhoto(event.target.files?.[0] || null)}
+              className="w-full text-sm"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setLicensePhoto(event.target.files?.[0] || null)}
+              className="w-full text-sm"
+            />
+            <button
+              type="button"
+              onClick={submitVerification}
+              disabled={!cnic || uploading}
+              className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {uploading ? 'Submitting...' : 'Submit Verification'}
+            </button>
+          </div>
+
           <h3 className="text-base mb-4">Recent Notifications</h3>
           <div className="space-y-3">
             {notifications.length > 0 ? (

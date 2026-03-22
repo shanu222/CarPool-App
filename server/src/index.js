@@ -2,6 +2,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import { createServer } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import morgan from "morgan";
 import { connectDb } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -9,6 +11,9 @@ import rideRoutes from "./routes/rideRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
+import verificationRoutes from "./routes/verificationRoutes.js";
+import locationRoutes from "./routes/locationRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { initializeSocket } from "./socket/setupSocket.js";
 
@@ -16,6 +21,8 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || "0.0.0.0";
 let isDbConnected = false;
@@ -50,6 +57,7 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan("dev"));
+app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 
 app.get("/", (req, res) => {
   res.status(200).send("Backend is LIVE");
@@ -76,6 +84,9 @@ app.use("/api/rides", rideRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/verification", verificationRoutes);
+app.use("/api/locations", locationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

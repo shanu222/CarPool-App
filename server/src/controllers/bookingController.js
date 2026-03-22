@@ -13,7 +13,7 @@ export const createBooking = async (req, res, next) => {
     }
 
     const ride = await Ride.findOneAndUpdate(
-      { _id: rideId, availableSeats: { $gte: seats } },
+      { _id: rideId, availableSeats: { $gte: seats }, status: { $in: ["pending", "ongoing"] } },
       { $inc: { availableSeats: -seats } },
       { new: true }
     );
@@ -49,7 +49,7 @@ export const createBooking = async (req, res, next) => {
 
     const populatedBooking = await Booking.findById(booking._id)
       .populate("ride")
-      .populate("user", "name email phone role rating");
+      .populate("user", "name email phone role rating isVerified");
 
     return res.status(201).json(populatedBooking);
   } catch (error) {
@@ -64,7 +64,7 @@ export const getMyBookings = async (req, res, next) => {
         path: "ride",
         populate: {
           path: "driver",
-          select: "name email phone role rating",
+          select: "name email phone role rating isVerified",
         },
       })
       .sort({ createdAt: -1 });

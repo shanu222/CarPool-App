@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Star, MapPin, Navigation, Users, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Star, MapPin, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import type { Ride } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { LiveRideMap } from '../components/LiveRideMap';
 
 export function RideDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedSeats, setSelectedSeats] = useState(1);
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,12 +44,9 @@ export function RideDetails() {
   }
 
   const totalPrice = ride.pricePerSeat * selectedSeats;
-  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const routePreviewUrl = mapsApiKey
-    ? `https://www.google.com/maps/embed/v1/directions?key=${encodeURIComponent(mapsApiKey)}&origin=${encodeURIComponent(
-        ride.fromCity
-      )}&destination=${encodeURIComponent(ride.toCity)}`
-    : null;
+  const currentUserId = user?.id || user?._id || '';
+  const driverUserId = ride.driver.id || ride.driver._id || '';
+  const isDriverOwner = Boolean(currentUserId && driverUserId && currentUserId === driverUserId);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -60,24 +60,8 @@ export function RideDetails() {
         </div>
       </div>
 
-      {/* Map Preview */}
-      <div className="relative h-48 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
-        {routePreviewUrl ? (
-          <iframe
-            title="Route preview"
-            src={routePreviewUrl}
-            className="w-full h-full border-0"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <Navigation className="w-12 h-12 text-blue-600 mx-auto mb-2" />
-              <div className="text-sm text-gray-600">{ride.fromCity} to {ride.toCity}</div>
-            </div>
-          </div>
-        )}
+      <div className="px-6 pt-4">
+        <LiveRideMap ride={ride} currentUserId={currentUserId} isDriver={isDriverOwner} />
       </div>
 
       <div className="px-6 py-6 space-y-4">
@@ -93,6 +77,9 @@ export function RideDetails() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-lg">{ride.driver.name}</h2>
+                {ride.driver.isVerified ? (
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Verified ✓</span>
+                ) : null}
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />

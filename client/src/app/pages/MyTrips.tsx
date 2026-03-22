@@ -4,6 +4,7 @@ import { MapPin, Calendar, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import type { Booking, Ride } from '../types';
+import { toast } from 'sonner';
 
 export function MyTrips() {
   const navigate = useNavigate();
@@ -30,6 +31,49 @@ export function MyTrips() {
 
     loadTrips();
   }, []);
+
+  const refreshTrips = async () => {
+    const [bookingResponse, rideResponse] = await Promise.all([
+      api.get<Booking[]>('/api/bookings/my'),
+      api.get<Ride[]>('/api/rides/my').catch(() => ({ data: [] as Ride[] })),
+    ]);
+    setBookings(bookingResponse.data);
+    setDriverRides(rideResponse.data);
+  };
+
+  const updateRideStatus = async (rideId: string, status: 'pending' | 'ongoing' | 'completed' | 'cancelled') => {
+    try {
+      await api.patch(`/api/rides/${rideId}/status`, { status });
+      toast.success(`Ride marked as ${status}`);
+      await refreshTrips();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to update ride status');
+    }
+  };
+
+  const submitReview = async (trip: Booking) => {
+    const ratingRaw = window.prompt('Rate driver (1-5)');
+    const rating = Number(ratingRaw);
+
+    if (!rating || rating < 1 || rating > 5) {
+      toast.error('Please provide a rating between 1 and 5');
+      return;
+    }
+
+    const reviewText = window.prompt('Optional review text') || '';
+
+    try {
+      await api.post('/api/reviews', {
+        rideId: trip.ride._id,
+        targetUserId: trip.ride.driver.id || trip.ride.driver._id,
+        rating,
+        reviewText,
+      });
+      toast.success('Review submitted');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Could not submit review');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -73,6 +117,7 @@ export function MyTrips() {
               <TripCard
                 key={trip._id}
                 trip={trip}
+                onRate={() => submitReview(trip)}
                 onClick={() => navigate(`/ride/${trip.ride._id}`)}
               />
             ))
@@ -80,7 +125,12 @@ export function MyTrips() {
 
         {!loading && activeTab === 'driver' && driverRides.length > 0
           ? driverRides.map((ride) => (
-              <DriverTripCard key={ride._id} ride={ride} onClick={() => navigate(`/ride/${ride._id}`)} />
+              <DriverTripCard
+                key={ride._id}
+                ride={ride}
+                onClick={() => navigate(`/ride/${ride._id}`)}
+                onStatusChange={updateRideStatus}
+              />
             ))
           : null}
 
@@ -111,9 +161,10 @@ export function MyTrips() {
 interface TripCardProps {
   trip: Booking;
   onClick: () => void;
+  onRate: () => void;
 }
 
-function TripCard({ trip, onClick }: TripCardProps) {
+function TripCard({ trip, onClick, onRate }: TripCardProps) {
   const navigate = useNavigate();
   const { ride } = trip;
 
@@ -186,11 +237,31 @@ function TripCard({ trip, onClick }: TripCardProps) {
           <div className="text-blue-600">${trip.totalPrice}</div>
         </div>
       </div>
+
+      {trip.status === 'completed' ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRate();
+          }}
+          className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs text-green-700"
+        >
+          Rate Driver
+        </button>
+      ) : null}
     </motion.div>
   );
 }
 
-function DriverTripCard({ ride, onClick }: { ride: Ride; onClick: () => void }) {
+function DriverTripCard({
+  ride,
+  onClick,
+  onStatusChange,
+}: {
+  ride: Ride;
+  onClick: () => void;
+  onStatusChange: (rideId: string, status: 'pending' | 'ongoing' | 'completed' | 'cancelled') => void;
+}) {
   return (
     <motion.div
       whileHover={{ scale: 1.02 }}
@@ -206,6 +277,35 @@ function DriverTripCard({ ride, onClick }: { ride: Ride; onClick: () => void }) 
       <div className="flex items-center justify-between text-sm">
         <span className="text-gray-600">{ride.availableSeats}/{ride.totalSeats} seats left</span>
         <span className="text-blue-600">${ride.pricePerSeat}/seat</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onStatusChange(ride._id, 'ongoing');
+          }}
+          className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700"
+        >
+          Start Ride
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onStatusChange(ride._id, 'completed');
+          }}
+          className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700"
+        >
+          Complete
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onStatusChange(ride._id, 'cancelled');
+          }}
+          className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700"
+        >
+          Cancel
+        </button>
       </div>
     </motion.div>
   );

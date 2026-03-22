@@ -37,6 +37,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    cnic: {
+      type: String,
+      trim: true,
+    },
+    profilePhoto: {
+      type: String,
+      trim: true,
+    },
+    licensePhoto: {
+      type: String,
+      trim: true,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,

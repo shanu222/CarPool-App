@@ -31,3 +31,16 @@ export const requireRole = (...roles) => (req, res, next) => {
 
   return next();
 };
+
+export const requireAdmin = (req, res, next) => {
+  const allowedEmails = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (!req.user?.email || !allowedEmails.includes(req.user.email.toLowerCase())) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+
+  return next();
+};

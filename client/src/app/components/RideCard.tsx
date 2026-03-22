@@ -24,6 +24,9 @@ export function RideCard({ ride }: RideCardProps) {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base">{ride.driver.name}</h3>
+            {ride.driver.isVerified ? (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700">Verified ✓</span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1 text-sm text-gray-600">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />

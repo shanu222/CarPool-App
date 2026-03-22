@@ -19,6 +19,11 @@ const sanitizeUser = (user) => ({
   phone: user.phone,
   role: user.role,
   rating: user.rating,
+  isVerified: user.isVerified,
+  cnic: user.cnic,
+  profilePhoto: user.profilePhoto,
+  licensePhoto: user.licensePhoto,
+  ratingCount: user.ratingCount,
 });
 
 export const register = async (req, res, next) => {
