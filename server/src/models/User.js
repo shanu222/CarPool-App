@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "passenger", "driver"],
       default: "passenger",
     },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     accountStatus: {
       type: String,
       enum: ["active", "suspended", "banned"],
@@ -170,7 +175,13 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
   return next();
 });
 
-userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $exists: true, $ne: "" } } });
-userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: "" } } });
+userSchema.index(
+  { email: 1, role: 1 },
+  { unique: true, partialFilterExpression: { email: { $exists: true, $ne: "" } } }
+);
+userSchema.index(
+  { phone: 1, role: 1 },
+  { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: "" } } }
+);
 
 export const User = mongoose.model("User", userSchema);

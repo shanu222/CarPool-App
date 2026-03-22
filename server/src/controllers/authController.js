@@ -180,6 +180,7 @@ const sanitizeUser = (user) => ({
   email: user.email,
   phone: user.phone,
   role: user.role,
+  isBlocked: user.isBlocked,
   accountStatus: user.accountStatus,
   suspensionReason: user.suspensionReason,
   rating: user.rating,
@@ -214,25 +215,32 @@ export const register = async (req, res, next) => {
       return res.status(400).json({ message: "password must be at least 6 characters" });
     }
 
-    const existingUser = await User.findOne({
-      $or: [
-        { email: email.toLowerCase().trim() },
-        ...(phone ? [{ phone: phone.trim() }] : []),
-      ],
-    });
-
-    if (existingUser) {
-      return res.status(409).json({ message: "User already exists" });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const normalizedEmail = email.toLowerCase().trim();
-    const finalRole = isAdminEmail(normalizedEmail) ? "admin" : role === "driver" ? "driver" : "passenger";
+    const normalizedPhone = phone ? phone.trim() : "";
+    const selectedRole = String(role || "").trim();
+    const finalRole = isAdminEmail(normalizedEmail) ? "admin" : selectedRole;
+
+    if (finalRole !== "admin" && !["passenger", "driver"].includes(selectedRole)) {
+      return res.status(400).json({ message: "role must be passenger or driver" });
+    }
+
+    const existingEmailRole = await User.findOne({ email: normalizedEmail, role: finalRole });
+    if (existingEmailRole) {
+      return res.status(409).json({ message: "Account already exists for this role" });
+    }
+
+    if (normalizedPhone) {
+      const existingPhoneRole = await User.findOne({ phone: normalizedPhone, role: finalRole });
+      if (existingPhoneRole) {
+        return res.status(409).json({ message: "Account already exists for this role" });
+      }
+    }
 
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
-      phone: phone ? phone.trim() : undefined,
+      phone: normalizedPhone || undefined,
       password: hashedPassword,
       role: finalRole,
       canPostRide: finalRole === "admin",
@@ -252,35 +260,54 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, phone, identifier, password, role } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "email and password are required" });
+    if (!password || !role) {
+      return res.status(400).json({ message: "identifier, password and role are required" });
     }
 
-    const normalizedEmail = normalizeEmail(email);
+    if (!["passenger", "driver"].includes(role)) {
+      return res.status(400).json({ message: "role must be passenger or driver" });
+    }
+
+    const rawIdentifier = String(identifier || email || phone || "").trim();
+    const explicitEmail = String(email || "").trim();
+    const explicitPhone = String(phone || "").trim();
+
+    const emailCandidate = normalizeEmail(explicitEmail || (rawIdentifier.includes("@") ? rawIdentifier : ""));
+    const phoneCandidate = explicitPhone || (!rawIdentifier.includes("@") ? rawIdentifier : "");
+
+    const identifierConditions = [
+      ...(emailCandidate ? [{ email: emailCandidate }] : []),
+      ...(phoneCandidate ? [{ phone: phoneCandidate }] : []),
+    ];
+
+    if (identifierConditions.length === 0) {
+      return res.status(400).json({ message: "email or phone is required" });
+    }
+
+    const normalizedEmail = emailCandidate;
     const configuredAdmin = getConfiguredAdminCredential();
 
-    if (configuredAdmin.emails.includes(normalizedEmail)) {
+    if (normalizedEmail && configuredAdmin.emails.includes(normalizedEmail)) {
       await sleep(ADMIN_FAIL_DELAY_MS);
       return res.status(403).json({ message: "Use the admin login portal" });
     }
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ role, $or: identifierConditions });
 
     if (!user) {
-      return res.status(401).json({ message: "Authentication failed" });
-    }
-
-    if (user.role === "admin") {
-      await sleep(ADMIN_FAIL_DELAY_MS);
-      return res.status(403).json({ message: "Use the admin login portal" });
+      return res.status(404).json({ message: "No account found for selected role" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
       return res.status(401).json({ message: "Authentication failed" });
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({ message: "This account is blocked for selected role" });
     }
 
     if (user.accountStatus === "banned") {

@@ -12,6 +12,7 @@ export function Auth() {
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset' | 'otp'>('login');
   const [name, setName] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -113,8 +114,9 @@ export function Auth() {
         return;
       } else {
         const response = await api.post<AuthResponse>('/api/auth/login', {
-          email,
+          identifier: loginIdentifier,
           password,
+          role,
         });
 
         setAuth(response.data.token, response.data.user);
@@ -129,8 +131,10 @@ export function Auth() {
         setError('Unable to reach server. Please try again.');
       } else if (status >= 500) {
         setError('Server unavailable. Please try again in a moment.');
+      } else if (apiMessage === 'No account found for selected role') {
+        setError('No account found for selected role');
       } else if (apiMessage === 'Authentication failed') {
-        setError('Invalid email or password');
+        setError('Invalid credentials for selected role');
       } else {
         setError(apiMessage || 'Authentication failed');
       }
@@ -143,7 +147,7 @@ export function Auth() {
     mode === 'signup'
       ? Boolean(email && password && name)
       : mode === 'login'
-      ? Boolean(email && password)
+      ? Boolean(loginIdentifier && password)
       : mode === 'forgot'
       ? Boolean(email || phone)
       : mode === 'otp'
@@ -193,28 +197,44 @@ export function Auth() {
             />
           )}
 
-          <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={mode === 'forgot' || mode === 'otp' ? 'Email (optional if using phone)' : 'Email'}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required={mode === 'login' || mode === 'signup' || mode === 'reset'}
-            />
-          </div>
+          {mode === 'login' ? (
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={loginIdentifier}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
+                placeholder="Email or phone"
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+          ) : (
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={mode === 'forgot' || mode === 'otp' ? 'Email (optional if using phone)' : 'Email'}
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required={mode === 'signup' || mode === 'reset'}
+              />
+            </div>
+          )}
 
-          <div className="relative">
-            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={mode === 'forgot' || mode === 'otp' ? 'Phone (optional if email is set)' : 'Phone (optional)'}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {mode !== 'login' ? (
+            <div className="relative">
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder={mode === 'forgot' || mode === 'otp' ? 'Phone (optional if email is set)' : 'Phone (optional)'}
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          ) : null}
 
           {mode !== 'forgot' && (
             <input
@@ -246,21 +266,21 @@ export function Auth() {
             />
           )}
 
-          {mode === 'signup' && (
+          {(mode === 'signup' || mode === 'login') && (
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setRole('passenger')}
                   className={`tab-pill py-3 rounded-xl ${role === 'passenger' ? 'active' : ''}`}
               >
-                Passenger
+                {mode === 'login' ? 'Login as Passenger' : 'Passenger'}
               </button>
               <button
                 type="button"
                 onClick={() => setRole('driver')}
                   className={`tab-pill py-3 rounded-xl ${role === 'driver' ? 'active' : ''}`}
               >
-                Driver
+                {mode === 'login' ? 'Login as Driver' : 'Driver'}
               </button>
             </div>
           )}
