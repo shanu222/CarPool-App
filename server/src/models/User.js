@@ -27,6 +27,12 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "passenger", "driver"],
       default: "passenger",
     },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "suspended", "banned"],
+      default: "pending",
+      index: true,
+    },
     isBlocked: {
       type: Boolean,
       default: false,
@@ -164,6 +170,8 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
   }
 
   if (this.role === "admin") {
+    this.status = "approved";
+    this.isBlocked = false;
     this.canPostRide = true;
     this.canBookRide = true;
     this.canChat = true;

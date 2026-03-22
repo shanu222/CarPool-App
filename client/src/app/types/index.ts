@@ -5,6 +5,7 @@ export interface User {
   email?: string;
   phone?: string;
   role: "admin" | "passenger" | "driver";
+  status?: "pending" | "approved" | "suspended" | "banned";
   isBlocked?: boolean;
   accountStatus?: "active" | "suspended" | "banned";
   suspensionReason?: string;

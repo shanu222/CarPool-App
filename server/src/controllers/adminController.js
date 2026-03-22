@@ -16,20 +16,38 @@ const getOrCreatePaymentSettings = async () => {
 
 export const getAdminUsers = async (req, res, next) => {
   try {
-    const { role, accountStatus } = req.query;
+    const { role, status } = req.query;
 
     const query = {
       ...(role ? { role } : {}),
-      ...(accountStatus ? { accountStatus } : {}),
+      ...(status ? { status } : {}),
     };
 
     const users = await User.find(query)
       .select(
-        "name email phone role rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason canPostRide canBookRide canChat createdAt"
+        "name email phone role status rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason isBlocked canPostRide canBookRide canChat createdAt"
       )
       .sort({ createdAt: -1 });
 
-    return res.json(users);
+    const normalized = users.map((userDoc) => {
+      const user = userDoc.toObject();
+
+      if (!user.status) {
+        if (user.accountStatus === "banned") {
+          user.status = "banned";
+        } else if (user.accountStatus === "suspended") {
+          user.status = "suspended";
+        } else if (user.verificationStatus === "approved") {
+          user.status = "approved";
+        } else {
+          user.status = "pending";
+        }
+      }
+
+      return user;
+    });
+
+    return res.json(normalized);
   } catch (error) {
     return next(error);
   }
@@ -50,6 +68,14 @@ export const verifyUserByAdmin = async (req, res, next) => {
 
     user.isVerified = action === "approve";
     user.verificationStatus = action === "approve" ? "approved" : "rejected";
+    user.status = action === "approve" ? "approved" : "pending";
+    user.accountStatus = action === "approve" ? "active" : "active";
+    user.isBlocked = false;
+
+    if (action === "approve") {
+      user.suspensionReason = "";
+    }
+
     await user.save();
 
     return res.json({
@@ -63,10 +89,10 @@ export const verifyUserByAdmin = async (req, res, next) => {
 
 export const updateUserStatusByAdmin = async (req, res, next) => {
   try {
-    const { userId, accountStatus, reason } = req.body;
+    const { userId, status, reason } = req.body;
 
-    if (!userId || !["active", "suspended", "banned"].includes(accountStatus)) {
-      return res.status(400).json({ message: "userId and valid accountStatus are required" });
+    if (!userId || !["pending", "approved", "suspended", "banned"].includes(status)) {
+      return res.status(400).json({ message: "userId and valid status are required" });
     }
 
     const user = await User.findById(userId);
@@ -74,10 +100,37 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    user.accountStatus = accountStatus;
-    user.suspensionReason = accountStatus === "active" ? "" : (reason || "").trim();
+    user.status = status;
 
-    if (accountStatus !== "active") {
+    if (status === "approved") {
+      user.accountStatus = "active";
+      user.isBlocked = false;
+      user.isVerified = true;
+      user.verificationStatus = "approved";
+      user.suspensionReason = "";
+    }
+
+    if (status === "pending") {
+      user.accountStatus = "active";
+      user.isBlocked = false;
+      user.isVerified = false;
+      user.verificationStatus = "rejected";
+      user.suspensionReason = (reason || "").trim();
+    }
+
+    if (status === "suspended") {
+      user.accountStatus = "suspended";
+      user.isBlocked = true;
+      user.suspensionReason = (reason || "").trim();
+      user.canPostRide = false;
+      user.canBookRide = false;
+      user.canChat = false;
+    }
+
+    if (status === "banned") {
+      user.accountStatus = "banned";
+      user.isBlocked = true;
+      user.suspensionReason = (reason || "").trim();
       user.canPostRide = false;
       user.canBookRide = false;
       user.canChat = false;

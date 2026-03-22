@@ -180,6 +180,7 @@ const sanitizeUser = (user) => ({
   email: user.email,
   phone: user.phone,
   role: user.role,
+  status: user.status,
   isBlocked: user.isBlocked,
   accountStatus: user.accountStatus,
   suspensionReason: user.suspensionReason,
@@ -243,6 +244,8 @@ export const register = async (req, res, next) => {
       phone: normalizedPhone || undefined,
       password: hashedPassword,
       role: finalRole,
+      status: finalRole === "admin" ? "approved" : "pending",
+      isBlocked: false,
       canPostRide: finalRole === "admin",
       canBookRide: finalRole === "admin",
       canChat: finalRole === "admin",
@@ -308,6 +311,18 @@ export const login = async (req, res, next) => {
 
     if (user.isBlocked) {
       return res.status(403).json({ message: "This account is blocked for selected role" });
+    }
+
+    if (user.status === "pending") {
+      return res.status(403).json({ message: "Your account is pending admin approval" });
+    }
+
+    if (user.status === "suspended") {
+      return res.status(403).json({ message: user.suspensionReason || "Account is suspended" });
+    }
+
+    if (user.status === "banned") {
+      return res.status(403).json({ message: "Account is banned" });
     }
 
     if (user.accountStatus === "banned") {

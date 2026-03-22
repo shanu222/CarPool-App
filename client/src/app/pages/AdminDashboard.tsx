@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import type { AdminAnalytics, Payment, PaymentSettings, Ride, User } from "../types";
 
 type TabKey = "overview" | "users" | "rides" | "payments" | "settings";
+type UserStatusTab = "pending" | "approved" | "suspended" | "banned";
 
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [tab, setTab] = useState<TabKey>("overview");
   const [loading, setLoading] = useState(true);
-  const [roleFilter, setRoleFilter] = useState<"all" | "driver" | "passenger">("all");
+  const [userStatusTab, setUserStatusTab] = useState<UserStatusTab>("pending");
   const [users, setUsers] = useState<User[]>([]);
   const [rides, setRides] = useState<Ride[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -29,13 +30,27 @@ export function AdminDashboard() {
   });
   const [error, setError] = useState("");
 
-  const filteredUsers = useMemo(() => {
-    if (roleFilter === "all") {
-      return users;
+  const resolveUserStatus = (item: User): UserStatusTab => {
+    if (item.status) {
+      return item.status;
     }
 
-    return users.filter((item) => item.role === roleFilter);
-  }, [roleFilter, users]);
+    if (item.accountStatus === "banned") {
+      return "banned";
+    }
+
+    if (item.accountStatus === "suspended") {
+      return "suspended";
+    }
+
+    if (item.verificationStatus === "approved") {
+      return "approved";
+    }
+
+    return "pending";
+  };
+
+  const filteredUsers = users.filter((item) => resolveUserStatus(item) === userStatusTab);
 
   const loadDashboard = async () => {
     try {
@@ -72,14 +87,8 @@ export function AdminDashboard() {
     loadDashboard();
   }, []);
 
-  const verifyUser = async (userId: string, action: "approve" | "reject") => {
-    await api.post("/admin/verify-user", { userId, action });
-    await loadDashboard();
-  };
-
-  const updateUserStatus = async (userId: string, accountStatus: "active" | "suspended" | "banned") => {
-    const reason = accountStatus === "active" ? "" : window.prompt("Reason") || "";
-    await api.post("/admin/user-status", { userId, accountStatus, reason });
+  const updateUserStatus = async (userId: string, status: UserStatusTab, reason = "") => {
+    await api.post("/admin/user-status", { userId, status, reason });
     await loadDashboard();
   };
 
@@ -160,17 +169,23 @@ export function AdminDashboard() {
 
       {!loading && tab === "users" ? (
         <div className="mt-4 space-y-3">
-          <div className="glass-subtle rounded-2xl p-3">
-            <label className="text-sm text-slate-100">Filter role</label>
-            <select
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value as "all" | "driver" | "passenger")}
-              className="mt-2 w-full rounded-xl border border-white/35 bg-white/20 px-3 py-2 text-white"
-            >
-              <option value="all">All</option>
-              <option value="driver">Drivers</option>
-              <option value="passenger">Passengers</option>
-            </select>
+          <div className="glass-subtle rounded-2xl p-2">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: "pending", label: "New Requests" },
+                { id: "approved", label: "Approved Users" },
+                { id: "suspended", label: "Suspended Users" },
+                { id: "banned", label: "Banned Users" },
+              ] as Array<{ id: UserStatusTab; label: string }>).map((statusItem) => (
+                <button
+                  key={statusItem.id}
+                  onClick={() => setUserStatusTab(statusItem.id)}
+                  className={`tab-pill rounded-xl px-3 py-2 text-sm ${userStatusTab === statusItem.id ? "active" : ""}`}
+                >
+                  {statusItem.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {filteredUsers.map((item) => (
@@ -180,15 +195,69 @@ export function AdminDashboard() {
                   <p className="text-white">{item.name}</p>
                   <p className="text-xs text-slate-100">{item.email}</p>
                   <p className="text-xs text-slate-100">Role: {item.role}</p>
-                  <p className="text-xs text-slate-100">Status: {item.accountStatus || "active"}</p>
+                  <p className="text-xs text-slate-100">Status: {resolveUserStatus(item)}</p>
                   <p className="text-xs text-slate-100">CNIC: {item.cnicNumber || item.cnic || "-"}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => verifyUser(String(item.id || item._id), "approve")} className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Approve</button>
-                  <button onClick={() => verifyUser(String(item.id || item._id), "reject")} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Reject</button>
-                  <button onClick={() => updateUserStatus(String(item.id || item._id), "suspended")} className="rounded-lg bg-amber-100 px-2 py-1 text-xs text-amber-700">Suspend</button>
-                  <button onClick={() => updateUserStatus(String(item.id || item._id), "banned")} className="rounded-lg bg-red-200 px-2 py-1 text-xs text-red-800">Ban</button>
-                  <button onClick={() => updateUserStatus(String(item.id || item._id), "active")} className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700">Activate</button>
+                  {userStatusTab === "pending" ? (
+                    <>
+                      <button
+                        onClick={() => updateUserStatus(String(item.id || item._id), "approved")}
+                        className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => updateUserStatus(String(item.id || item._id), "pending", "Verification rejected")}
+                        className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  ) : null}
+
+                  {userStatusTab === "approved" ? (
+                    <>
+                      <button
+                        onClick={() => updateUserStatus(String(item.id || item._id), "suspended", window.prompt("Suspend reason") || "")}
+                        className="rounded-lg bg-amber-100 px-2 py-1 text-xs text-amber-700"
+                      >
+                        Suspend
+                      </button>
+                      <button
+                        onClick={() => updateUserStatus(String(item.id || item._id), "banned", window.prompt("Ban reason") || "")}
+                        className="rounded-lg bg-red-200 px-2 py-1 text-xs text-red-800"
+                      >
+                        Ban
+                      </button>
+                    </>
+                  ) : null}
+
+                  {userStatusTab === "suspended" ? (
+                    <>
+                      <button
+                        onClick={() => updateUserStatus(String(item.id || item._id), "approved")}
+                        className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                      >
+                        Activate
+                      </button>
+                      <button
+                        onClick={() => updateUserStatus(String(item.id || item._id), "banned", window.prompt("Ban reason") || "")}
+                        className="rounded-lg bg-red-200 px-2 py-1 text-xs text-red-800"
+                      >
+                        Ban
+                      </button>
+                    </>
+                  ) : null}
+
+                  {userStatusTab === "banned" ? (
+                    <button
+                      onClick={() => updateUserStatus(String(item.id || item._id), "approved")}
+                      className="rounded-lg bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                    >
+                      Activate
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -199,6 +268,10 @@ export function AdminDashboard() {
               </div>
             </div>
           ))}
+
+          {filteredUsers.length === 0 ? (
+            <div className="glass-panel rounded-2xl p-6 text-sm text-slate-100">No users in this category.</div>
+          ) : null}
         </div>
       ) : null}
 
