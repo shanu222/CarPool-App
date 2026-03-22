@@ -121,10 +121,10 @@ const verifyAdminSecret = async (inputPassword, configuredPassword, configuredPa
 };
 
 const getResetEmailTransport = () => {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT || 465);
+  const user = process.env.EMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
     return null;
@@ -133,7 +133,7 @@ const getResetEmailTransport = () => {
   return nodemailer.createTransport({
     host,
     port,
-    secure: Number(process.env.SMTP_PORT || 587) === 465,
+    secure: port === 465,
     auth: {
       user,
       pass,
@@ -143,7 +143,7 @@ const getResetEmailTransport = () => {
 
 const sendResetEmail = async ({ to, resetUrl, token }) => {
   const transport = getResetEmailTransport();
-  const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.SMTP_USER;
 
   if (!transport || !from) {
     return false;
@@ -401,27 +401,40 @@ export const adminLogin = async (req, res, next) => {
 
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const { email, phone } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ message: "email is required" });
+    if (!email && !phone) {
+      return res.status(400).json({ message: "email or phone is required" });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const user = await User.findOne({ email: normalizedEmail });
+    const normalizedEmail = email ? normalizeEmail(email) : "";
+    const normalizedPhone = phone ? String(phone).trim() : "";
+    const user = await User.findOne(
+      normalizedEmail ? { email: normalizedEmail } : { phone: normalizedPhone }
+    );
 
-    // Always return the same response to avoid account enumeration.
+    const channel = normalizedEmail ? "email" : "phone";
+    const genericMessage =
+      channel === "email"
+        ? "If that email exists, a reset link has been sent"
+        : "If that phone exists, an OTP has been sent";
+
+    // Always return generic response to avoid account enumeration.
     if (!user) {
-      return res.json({ message: "If that email exists, a reset link has been sent" });
+      return res.json({ message: genericMessage, channel });
     }
 
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const resetMinutes = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES || 20);
-    const expiresAt = new Date(Date.now() + resetMinutes * 60 * 1000);
+    const rawOtp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpHash = crypto.createHash("sha256").update(rawOtp).digest("hex");
+    const tokenExpiryMinutes = 10;
+    const otpExpiryMinutes = 5;
 
-    user.passwordResetToken = tokenHash;
-    user.passwordResetExpires = expiresAt;
+    user.resetToken = tokenHash;
+    user.resetTokenExpiry = new Date(Date.now() + tokenExpiryMinutes * 60 * 1000);
+    user.otp = otpHash;
+    user.otpExpiry = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
     await user.save();
 
     const frontendBase = (process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "")
@@ -430,22 +443,26 @@ export const forgotPassword = async (req, res, next) => {
       .filter(Boolean)[0];
     const resetUrl = frontendBase
       ? `${frontendBase.replace(/\/$/, "")}/auth?mode=reset&token=${rawToken}&email=${encodeURIComponent(
-          normalizedEmail
+          user.email
         )}`
       : "";
 
-    const emailSent = await sendResetEmail({ to: normalizedEmail, resetUrl, token: rawToken });
+    let emailSent = false;
+    if (channel === "email") {
+      emailSent = await sendResetEmail({ to: user.email, resetUrl, token: rawToken });
+    } else {
+      console.log(`Mock SMS OTP for ${user.phone}: ${rawOtp}`);
+    }
 
     if (process.env.NODE_ENV !== "production") {
       return res.json({
-        message: "If that email exists, a reset link has been sent",
-        resetToken: rawToken,
-        resetUrl,
-        emailSent,
+        message: genericMessage,
+        channel,
+        ...(channel === "email" ? { resetToken: rawToken, resetUrl, emailSent } : { otp: rawOtp }),
       });
     }
 
-    return res.json({ message: "If that email exists, a reset link has been sent" });
+    return res.json({ message: genericMessage, channel });
   } catch (error) {
     return next(error);
   }
@@ -453,32 +470,57 @@ export const forgotPassword = async (req, res, next) => {
 
 export const resetPassword = async (req, res, next) => {
   try {
-    const { email, token, newPassword } = req.body;
+    const { email, phone, token, otp, newPassword } = req.body;
 
-    if (!email || !token || !newPassword) {
-      return res.status(400).json({ message: "email, token and newPassword are required" });
+    if ((!token && !otp) || !newPassword) {
+      return res.status(400).json({ message: "token or otp and newPassword are required" });
     }
 
     if (String(newPassword).length < 6) {
       return res.status(400).json({ message: "password must be at least 6 characters" });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
+    let user = null;
 
-    const user = await User.findOne({
-      email: normalizedEmail,
-      passwordResetToken: tokenHash,
-      passwordResetExpires: { $gt: new Date() },
-    });
+    if (token) {
+      const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
+      const normalizedEmail = email ? normalizeEmail(email) : null;
+
+      user = await User.findOne({
+        ...(normalizedEmail ? { email: normalizedEmail } : {}),
+        resetToken: tokenHash,
+        resetTokenExpiry: { $gt: new Date() },
+      });
+    }
+
+    if (!user && otp) {
+      const otpHash = crypto.createHash("sha256").update(String(otp)).digest("hex");
+      const normalizedEmail = email ? normalizeEmail(email) : null;
+      const normalizedPhone = phone ? String(phone).trim() : null;
+
+      const candidates = await User.find({
+        ...(normalizedEmail ? { email: normalizedEmail } : {}),
+        ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+        otp: otpHash,
+        otpExpiry: { $gt: new Date() },
+      }).limit(2);
+
+      if (candidates.length > 1 && !normalizedEmail && !normalizedPhone) {
+        return res.status(400).json({ message: "Provide email or phone with OTP" });
+      }
+
+      user = candidates[0] || null;
+    }
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid or expired reset token" });
+      return res.status(400).json({ message: "Invalid or expired reset credential" });
     }
 
     user.password = await bcrypt.hash(String(newPassword), 10);
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    user.otp = undefined;
+    user.otpExpiry = undefined;
     await user.save();
 
     return res.json({ message: "Password reset successful" });

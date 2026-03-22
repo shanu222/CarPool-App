@@ -10,12 +10,13 @@ import type { AuthResponse } from '../types';
 
 export function Auth() {
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset' | 'otp'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
+  const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [role, setRole] = useState<'passenger' | 'driver'>('passenger');
   const [loading, setLoading] = useState(false);
@@ -63,8 +64,39 @@ export function Auth() {
 
         setAuth(response.data.token, response.data.user);
       } else if (mode === 'forgot') {
-        await api.post('/api/auth/forgot-password', { email });
-        setError('Reset link/token sent. Check your email or backend logs.');
+        const payload: Record<string, string> = {};
+        if (email.trim()) {
+          payload.email = email.trim();
+        }
+        if (phone.trim()) {
+          payload.phone = phone.trim();
+        }
+
+        if (!payload.email && !payload.phone) {
+          setError('Enter email or phone');
+          return;
+        }
+
+        const response = await api.post('/api/auth/forgot-password', payload);
+        if (response?.data?.channel === 'phone') {
+          setMode('otp');
+          setError('OTP sent to phone. Enter OTP and new password.');
+        } else {
+          setError('Check your email for reset link/token.');
+        }
+        return;
+      } else if (mode === 'otp') {
+        await api.post('/api/auth/reset-password', {
+          email: email || undefined,
+          phone: phone || undefined,
+          otp,
+          newPassword,
+        });
+        setError('Password reset successful. Please login.');
+        setMode('login');
+        setOtp('');
+        setNewPassword('');
+        setPassword('');
         return;
       } else if (mode === 'reset') {
         await api.post('/api/auth/reset-password', {
@@ -76,6 +108,7 @@ export function Auth() {
         setMode('login');
         setPassword('');
         setResetToken('');
+        setOtp('');
         setNewPassword('');
         return;
       } else {
@@ -112,7 +145,9 @@ export function Auth() {
       : mode === 'login'
       ? Boolean(email && password)
       : mode === 'forgot'
-      ? Boolean(email)
+      ? Boolean(email || phone)
+      : mode === 'otp'
+      ? Boolean((email || phone) && otp && newPassword)
       : Boolean(email && resetToken && newPassword);
 
   return (
@@ -164,9 +199,9 @@ export function Auth() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
+              placeholder={mode === 'forgot' || mode === 'otp' ? 'Email (optional if using phone)' : 'Email'}
               className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
+              required={mode === 'login' || mode === 'signup' || mode === 'reset'}
             />
           </div>
 
@@ -176,7 +211,7 @@ export function Auth() {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone (optional if email is set)"
+              placeholder={mode === 'forgot' || mode === 'otp' ? 'Phone (optional if email is set)' : 'Phone (optional)'}
               className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -184,9 +219,19 @@ export function Auth() {
           {mode !== 'forgot' && (
             <input
               type="password"
-              value={mode === 'reset' ? newPassword : password}
-              onChange={(e) => (mode === 'reset' ? setNewPassword(e.target.value) : setPassword(e.target.value))}
-              placeholder={mode === 'reset' ? 'New password' : 'Password'}
+              value={mode === 'reset' || mode === 'otp' ? newPassword : password}
+              onChange={(e) => (mode === 'reset' || mode === 'otp' ? setNewPassword(e.target.value) : setPassword(e.target.value))}
+              placeholder={mode === 'reset' || mode === 'otp' ? 'New password' : 'Password'}
+              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
+
+          {mode === 'otp' && (
+            <input
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="6-digit OTP"
               className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
@@ -233,16 +278,25 @@ export function Auth() {
           ) : null}
 
           {mode === 'forgot' ? (
-            <button
-              type="button"
-              onClick={() => setMode('reset')}
-              className="text-left text-sm text-blue-100"
-            >
-              Already have a token? Reset now
-            </button>
+            <div className="flex gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() => setMode('reset')}
+                className="text-left text-blue-100"
+              >
+                Have email token?
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('otp')}
+                className="text-left text-blue-100"
+              >
+                Have OTP?
+              </button>
+            </div>
           ) : null}
 
-          {(mode === 'forgot' || mode === 'reset') ? (
+          {(mode === 'forgot' || mode === 'reset' || mode === 'otp') ? (
             <button
               type="button"
               onClick={() => setMode('login')}
@@ -263,6 +317,8 @@ export function Auth() {
               ? 'Create account'
               : mode === 'forgot'
               ? 'Send reset'
+              : mode === 'otp'
+              ? 'Verify OTP & Reset'
               : mode === 'reset'
               ? 'Reset password'
               : 'Login'}

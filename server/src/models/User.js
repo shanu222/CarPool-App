@@ -119,11 +119,19 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    passwordResetToken: {
+    resetToken: {
       type: String,
       select: false,
     },
-    passwordResetExpires: {
+    resetTokenExpiry: {
+      type: Date,
+      select: false,
+    },
+    otp: {
+      type: String,
+      select: false,
+    },
+    otpExpiry: {
       type: Date,
       select: false,
     },
