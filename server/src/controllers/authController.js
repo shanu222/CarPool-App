@@ -202,6 +202,7 @@ const sanitizeUser = (user) => ({
   canPostRide: user.canPostRide,
   canBookRide: user.canBookRide,
   canChat: user.canChat,
+  paymentApproved: user.paymentApproved,
 });
 
 export const register = async (req, res, next) => {
@@ -338,6 +339,7 @@ export const login = async (req, res, next) => {
       user.canPostRide = true;
       user.canBookRide = true;
       user.canChat = true;
+      user.paymentApproved = true;
       user.isVerified = true;
       user.verificationStatus = "approved";
       await user.save();
@@ -425,6 +427,7 @@ export const adminLogin = async (req, res, next) => {
         user.canPostRide = true;
         user.canBookRide = true;
         user.canChat = true;
+        user.paymentApproved = true;
         changed = true;
       }
 

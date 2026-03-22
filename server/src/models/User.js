@@ -130,6 +130,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    paymentApproved: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     resetToken: {
       type: String,
       select: false,
@@ -175,6 +180,7 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
     this.canPostRide = true;
     this.canBookRide = true;
     this.canChat = true;
+    this.paymentApproved = true;
     this.accountStatus = "active";
     this.isVerified = true;
     this.verificationStatus = "approved";

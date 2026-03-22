@@ -19,13 +19,13 @@ export function UnlockInteractionModal({ open, onClose, onSubmitted }: UnlockInt
 
   const unlockType = useMemo(() => {
     if (user?.role === 'driver') {
-      return 'driver_unlock';
+      return 'ride_post';
     }
 
-    return 'passenger_unlock';
+    return 'booking_unlock';
   }, [user?.role]);
 
-  const amount = unlockType === 'driver_unlock' ? 200 : 100;
+  const amount = unlockType === 'ride_post' ? 200 : 100;
 
   useEffect(() => {
     if (!open) {
@@ -60,9 +60,9 @@ export function UnlockInteractionModal({ open, onClose, onSubmitted }: UnlockInt
       formData.append('type', unlockType);
       formData.append('method', method);
       formData.append('amount', String(amount));
-      formData.append('screenshot', screenshot);
+      formData.append('proof', screenshot);
 
-      await api.post('/api/payments/submit', formData, {
+      await api.post('/api/payments/create', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -83,7 +83,7 @@ export function UnlockInteractionModal({ open, onClose, onSubmitted }: UnlockInt
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
         <h3 className="text-lg font-semibold text-slate-900">Pay to unlock interaction</h3>
         <p className="mt-1 text-sm text-slate-600">
-          {unlockType === 'driver_unlock'
+          {unlockType === 'ride_post'
             ? 'Driver interaction unlock is PKR 200.'
             : 'Passenger interaction unlock is PKR 100.'}
         </p>

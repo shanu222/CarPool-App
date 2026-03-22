@@ -6,23 +6,15 @@ const buildFilePath = (req, file) => {
     return undefined;
   }
 
-  return `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+  return `${req.protocol}://${req.get("host")}/uploads/payments/${file.filename}`;
 };
 
 const getDefaultAmount = (type) => {
-  if (type === "driver_unlock") {
-    return 200;
-  }
-
-  if (type === "passenger_unlock") {
-    return 100;
-  }
-
   if (type === "ride_post") {
     return 200;
   }
 
-  if (type === "booking" || type === "subscription") {
+  if (type === "booking_unlock") {
     return 100;
   }
 
@@ -33,7 +25,7 @@ export const submitPaymentProof = async (req, res, next) => {
   try {
     const { type, method, amount } = req.body;
 
-    if (!type || !method || !["ride_post", "booking", "subscription", "passenger_unlock", "driver_unlock"].includes(type)) {
+    if (!type || !method || !["ride_post", "booking_unlock"].includes(type)) {
       return res.status(400).json({ message: "Valid payment type and method are required" });
     }
 
@@ -41,17 +33,17 @@ export const submitPaymentProof = async (req, res, next) => {
       return res.status(400).json({ message: "Valid payment method is required" });
     }
 
-    const screenshot = buildFilePath(req, req.files?.screenshot?.[0]);
+    const screenshot = buildFilePath(req, req.file);
     if (!screenshot) {
       return res.status(400).json({ message: "Payment screenshot is required" });
     }
 
-    if (type === "passenger_unlock" && req.user.role !== "passenger") {
-      return res.status(403).json({ message: "passenger unlock is only for passenger accounts" });
+    if (type === "ride_post" && req.user.role !== "driver") {
+      return res.status(403).json({ message: "ride_post payment is only for driver accounts" });
     }
 
-    if (type === "driver_unlock" && req.user.role !== "driver") {
-      return res.status(403).json({ message: "driver unlock is only for driver accounts" });
+    if (type === "booking_unlock" && req.user.role !== "passenger") {
+      return res.status(403).json({ message: "booking_unlock payment is only for passenger accounts" });
     }
 
     const payment = await Payment.create({

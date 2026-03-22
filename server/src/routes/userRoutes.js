@@ -30,7 +30,7 @@ router.post("/location", protect, async (req, res, next) => {
 
 router.get("/:id", protect, async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id).select("name profilePhoto isVerified");
+    const user = await User.findById(req.params.id).select("name profilePhoto isVerified paymentApproved canPostRide canBookRide canChat");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -41,6 +41,10 @@ router.get("/:id", protect, async (req, res, next) => {
       name: user.name,
       profilePhoto: user.profilePhoto,
       isVerified: Boolean(user.isVerified),
+      paymentApproved: Boolean(user.paymentApproved),
+      canPostRide: Boolean(user.canPostRide),
+      canBookRide: Boolean(user.canBookRide),
+      canChat: Boolean(user.canChat),
     });
   } catch (error) {
     return next(error);
@@ -96,6 +100,7 @@ router.patch("/role", protect, async (req, res, next) => {
         canPostRide: user.canPostRide,
         canBookRide: user.canBookRide,
         canChat: user.canChat,
+        paymentApproved: user.paymentApproved,
       },
     });
   } catch (error) {

@@ -8,7 +8,7 @@ import type { Message, Ride } from '../types';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
+import { PaymentModal } from '../components/PaymentModal';
 
 const getUserId = (value: { id?: string; _id?: string } | null | undefined) =>
   value?.id || value?._id || '';
@@ -23,6 +23,7 @@ export function Chat() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const passengerPaymentLocked = user?.role === 'passenger' && user?.paymentApproved !== true;
 
   const receiverId = useMemo(() => {
     if (!ride || !user) {
@@ -107,8 +108,13 @@ export function Chat() {
   }
 
   const handleSend = async () => {
-    if (!user?.canChat) {
+    if (passengerPaymentLocked) {
       setShowUnlockModal(true);
+      return;
+    }
+
+    if (!user?.canChat) {
+      toast.error('Chat is currently disabled for your account');
       return;
     }
 
@@ -167,9 +173,9 @@ export function Chat() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {!user?.canChat ? (
+        {passengerPaymentLocked ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            Pay to unlock interaction before opening chat.
+            Payment approval is required before passenger chat.
           </div>
         ) : null}
 
@@ -216,25 +222,29 @@ export function Chat() {
           />
           <button
             onClick={handleSend}
-            disabled={!message.trim() || !user?.canChat}
+            disabled={!message.trim() || passengerPaymentLocked || !user?.canChat}
             className="p-3 bg-blue-600 text-white rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-5 h-5" />
           </button>
         </div>
 
-        {!user?.canChat ? (
+        {passengerPaymentLocked ? (
           <button
             type="button"
             onClick={() => setShowUnlockModal(true)}
             className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50 py-2 text-sm text-blue-700"
           >
-            Pay to unlock interaction
+            Submit payment proof to unlock chat
           </button>
         ) : null}
       </div>
 
-      <UnlockInteractionModal open={showUnlockModal} onClose={() => setShowUnlockModal(false)} />
+      <PaymentModal
+        open={showUnlockModal}
+        onClose={() => setShowUnlockModal(false)}
+        paymentType="booking_unlock"
+      />
     </div>
   );
 }

@@ -28,6 +28,7 @@ export interface User {
   canPostRide?: boolean;
   canBookRide?: boolean;
   canChat?: boolean;
+  paymentApproved?: boolean;
 }
 
 export interface Ride {
@@ -130,8 +131,8 @@ export interface Review {
 export interface Payment {
   _id: string;
   userId: User;
-  role?: "passenger" | "driver" | "admin";
-  type: "ride_post" | "booking" | "subscription" | "passenger_unlock" | "driver_unlock";
+  role?: "passenger" | "driver";
+  type: "ride_post" | "booking_unlock";
   amount: number;
   method: "easypaisa" | "jazzcash" | "bank";
   screenshot?: string;

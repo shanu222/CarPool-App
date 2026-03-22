@@ -6,12 +6,14 @@ import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { PaymentModal } from '../components/PaymentModal';
 
 export function PostRide() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [formData, setFormData] = useState({
     fromCity: '',
     toCity: '',
@@ -37,6 +39,12 @@ export function PostRide() {
 
     if (!user?.isVerified) {
       setError('Driver verification is required before posting rides. Upload your CNIC and profile in Profile.');
+      return;
+    }
+
+    if (user?.paymentApproved !== true) {
+      setError('Payment approval is required before posting rides.');
+      setShowPaymentModal(true);
       return;
     }
 
@@ -203,12 +211,28 @@ export function PostRide() {
 
         <button
           type="submit"
-          disabled={!isFormValid || loading || user?.role !== 'driver'}
+          disabled={!isFormValid || loading || user?.role !== 'driver' || user?.paymentApproved !== true}
           className="w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Posting...' : 'Post Ride'}
         </button>
+
+        {user?.role === 'driver' && user?.paymentApproved !== true ? (
+          <button
+            type="button"
+            onClick={() => setShowPaymentModal(true)}
+            className="w-full rounded-2xl border border-green-300 bg-white py-3 text-sm text-green-700"
+          >
+            Pay now to unlock ride posting
+          </button>
+        ) : null}
       </form>
+
+      <PaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        paymentType="ride_post"
+      />
     </div>
   );
 }

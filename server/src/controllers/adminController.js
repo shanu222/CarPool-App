@@ -25,7 +25,7 @@ export const getAdminUsers = async (req, res, next) => {
 
     const users = await User.find(query)
       .select(
-        "name email phone role status rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason isBlocked canPostRide canBookRide canChat createdAt"
+        "name email phone role status rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason isBlocked canPostRide canBookRide canChat paymentApproved createdAt"
       )
       .sort({ createdAt: -1 });
 
@@ -125,6 +125,7 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       user.canPostRide = false;
       user.canBookRide = false;
       user.canChat = false;
+      user.paymentApproved = false;
     }
 
     if (status === "banned") {
@@ -134,6 +135,7 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       user.canPostRide = false;
       user.canBookRide = false;
       user.canChat = false;
+      user.paymentApproved = false;
     }
 
     await user.save();
@@ -238,21 +240,14 @@ export const approvePaymentByAdmin = async (req, res, next) => {
     if (status === "approved") {
       const user = await User.findById(payment.userId);
       if (user) {
+        user.paymentApproved = true;
+
         if (payment.type === "ride_post") {
           user.canPostRide = true;
-        }
-
-        if (payment.type === "driver_unlock") {
-          user.canPostRide = true;
           user.canChat = true;
         }
 
-        if (payment.type === "passenger_unlock") {
-          user.canBookRide = true;
-          user.canChat = true;
-        }
-
-        if (payment.type === "booking" || payment.type === "subscription") {
+        if (payment.type === "booking_unlock") {
           user.canBookRide = true;
           user.canChat = true;
         }

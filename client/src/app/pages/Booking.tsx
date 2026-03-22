@@ -8,7 +8,7 @@ import type { Ride } from '../types';
 import { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
+import { PaymentModal } from '../components/PaymentModal';
 
 export function Booking() {
   const { id } = useParams();
@@ -23,6 +23,7 @@ export function Booking() {
   const { user } = useAuth();
 
   const seats = parseInt(searchParams.get('seats') || '1');
+  const passengerPaymentLocked = user?.role === 'passenger' && user?.paymentApproved !== true;
 
   useEffect(() => {
     const loadRide = async () => {
@@ -48,8 +49,8 @@ export function Booking() {
   const total = subtotal + serviceFee;
 
   const handleBook = async () => {
-    if (!user?.canBookRide || !user?.canChat) {
-      setError('Pay to unlock interaction');
+    if (passengerPaymentLocked) {
+      setError('Payment approval is required before booking and chat.');
       setShowUnlockModal(true);
       return;
     }
@@ -230,7 +231,7 @@ export function Booking() {
       <div className="absolute bottom-0 left-0 right-0 mx-3 mb-3 rounded-2xl glass-panel px-6 py-4">
         <button
           onClick={handleBook}
-          disabled={isProcessing || user?.role !== 'passenger' || !user?.canBookRide || !user?.canChat}
+          disabled={isProcessing || user?.role !== 'passenger' || passengerPaymentLocked}
           className="w-full bg-blue-600 text-white py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {isProcessing ? (
@@ -242,19 +243,23 @@ export function Booking() {
             <>Send Request · ${total}</>
           )}
         </button>
-        {!user?.canBookRide || !user?.canChat ? (
+        {passengerPaymentLocked ? (
           <button
             type="button"
             onClick={() => setShowUnlockModal(true)}
             className="mt-2 w-full rounded-2xl border border-blue-300 bg-white/10 py-3 text-sm text-blue-100"
           >
-            Pay to unlock interaction
+            Submit payment proof to unlock booking
           </button>
         ) : null}
         {error && <p className="text-sm text-red-300 mt-2">{error}</p>}
       </div>
 
-      <UnlockInteractionModal open={showUnlockModal} onClose={() => setShowUnlockModal(false)} />
+      <PaymentModal
+        open={showUnlockModal}
+        onClose={() => setShowUnlockModal(false)}
+        paymentType="booking_unlock"
+      />
     </div>
   );
 }
