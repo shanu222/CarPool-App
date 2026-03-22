@@ -53,8 +53,14 @@ export function Auth() {
 
       navigate('/home');
     } catch (requestError: any) {
+      const status = requestError?.response?.status;
       const apiMessage = requestError?.response?.data?.message;
-      if (apiMessage === 'Authentication failed') {
+
+      if (!requestError?.response) {
+        setError('Unable to reach server. Please try again.');
+      } else if (status >= 500) {
+        setError('Server unavailable. Please try again in a moment.');
+      } else if (apiMessage === 'Authentication failed') {
         setError('Invalid email or password');
       } else {
         setError(apiMessage || 'Authentication failed');
