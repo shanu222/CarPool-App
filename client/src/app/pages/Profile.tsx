@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import type { NotificationItem } from '../types';
 import { toast } from 'sonner';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 
 export function Profile() {
   const navigate = useNavigate();
@@ -115,7 +116,10 @@ export function Profile() {
               {user.name.slice(0, 1).toUpperCase()}
             </div>
             <div className="flex-1">
-              <h2 className="text-xl mb-1 text-white">{user.name}</h2>
+              <div className="mb-1 flex items-center gap-2">
+                <h2 className="text-xl text-white">{user.name}</h2>
+                <VerifiedBadge isVerified={user.isVerified} />
+              </div>
               <p className="text-sm text-slate-100 mb-2">{user.email || user.phone || 'No contact info'}</p>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 bg-white/20 px-2 py-1 rounded-lg">

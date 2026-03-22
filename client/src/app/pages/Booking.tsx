@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import type { Ride } from '../types';
 import { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 
 export function Booking() {
   const { id } = useParams();
@@ -131,7 +132,10 @@ export function Booking() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-100">Driver</span>
-              <span className="text-white">{ride.driver.name}</span>
+              <span className="inline-flex items-center gap-2 text-white">
+                {ride.driver.name}
+                <VerifiedBadge isVerified={ride.driver.isVerified} />
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-100">Seats</span>

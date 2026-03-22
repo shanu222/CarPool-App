@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import type { Message, Ride } from '../types';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../context/AuthContext';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 
 const getUserId = (value: { id?: string; _id?: string } | null | undefined) =>
   value?.id || value?._id || '';
@@ -140,7 +141,10 @@ export function Chat() {
             className="w-10 h-10 rounded-full object-cover"
           />
           <div className="flex-1">
-            <h2 className="text-base">{ride.driver.name}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base">{ride.driver.name}</h2>
+              <VerifiedBadge isVerified={ride.driver.isVerified} />
+            </div>
             <p className="text-xs text-gray-600">
               {ride.fromCity} → {ride.toCity}
             </p>

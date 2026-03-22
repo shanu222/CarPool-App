@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import type { Ride } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LiveRideMap } from '../components/LiveRideMap';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 
 export function RideDetails() {
   const { id } = useParams();
@@ -78,9 +79,7 @@ export function RideDetails() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-lg text-white">{ride.driver.name}</h2>
-                {ride.driver.isVerified ? (
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Verified ✓</span>
-                ) : null}
+                <VerifiedBadge isVerified={ride.driver.isVerified} className="text-xs" />
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-100">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />

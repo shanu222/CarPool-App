@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router';
 import { Star, Users, MapPin, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Ride } from '../types';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface RideCardProps {
   ride: Ride;
@@ -26,9 +27,7 @@ export function RideCard({ ride }: RideCardProps) {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base text-white">{ride.driver.name}</h3>
-            {ride.driver.isVerified ? (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700">Verified ✓</span>
-            ) : null}
+            <VerifiedBadge isVerified={ride.driver.isVerified} />
           </div>
           <div className="flex items-center gap-1 text-sm text-slate-100">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />

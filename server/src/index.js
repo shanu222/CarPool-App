@@ -156,6 +156,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/admin", adminRoutes);
