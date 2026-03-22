@@ -1,0 +1,72 @@
+import { useNavigate } from 'react-router';
+import { Star, Users, MapPin, Clock } from 'lucide-react';
+import { motion } from 'motion/react';
+import type { Ride } from '../types';
+
+interface RideCardProps {
+  ride: Ride;
+}
+
+export function RideCard({ ride }: RideCardProps) {
+  const navigate = useNavigate();
+
+  return (
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => navigate(`/ride/${ride.id}`)}
+      className="bg-white rounded-2xl p-4 shadow-sm cursor-pointer border border-gray-100"
+    >
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg">
+          {ride.driver.name.slice(0, 1).toUpperCase()}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base">{ride.driver.name}</h3>
+          </div>
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+            <span>{ride.driver.rating}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xl text-blue-600">${ride.pricePerSeat}</div>
+          <div className="text-xs text-gray-500">per seat</div>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-2 mb-3">
+        <div className="flex flex-col items-center gap-1 pt-1">
+          <div className="w-3 h-3 rounded-full bg-green-500" />
+          <div className="w-0.5 h-8 bg-gray-300" />
+          <MapPin className="w-3 h-3 text-blue-600" />
+        </div>
+        <div className="flex-1 space-y-3">
+          <div>
+            <div className="text-sm">{ride.fromCity}</div>
+            <div className="text-xs text-gray-500">{ride.time}</div>
+          </div>
+          <div>
+            <div className="text-sm">{ride.toCity}</div>
+            <div className="text-xs text-gray-500">{ride.date}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-4 text-sm text-gray-600">
+          <div className="flex items-center gap-1">
+            <Users className="w-4 h-4" />
+            <span>{ride.availableSeats}/{ride.totalSeats}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Clock className="w-4 h-4" />
+            <span>{ride.time}</span>
+          </div>
+        </div>
+        <div className="text-xs text-gray-500">Driver Ride</div>
+      </div>
+    </motion.div>
+  );
+}
