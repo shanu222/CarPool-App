@@ -530,7 +530,6 @@ export const getNearbyRides = async (req, res, next) => {
 export const getMyRides = async (req, res, next) => {
   try {
     await refreshRideLifecycleStatuses();
-    const now = new Date();
     const rides = await Ride.find({ driver: req.user._id })
       .populate(
         "driver",
@@ -538,19 +537,14 @@ export const getMyRides = async (req, res, next) => {
       )
       .sort({ dateTime: 1, createdAt: -1 });
 
-    const ongoingRides = rides.filter((ride) => {
-      const start = ride.startTime || ride.dateTime;
-      return start ? new Date(start) <= now : false;
-    });
-
-    const scheduledRides = rides.filter((ride) => {
-      const start = ride.startTime || ride.dateTime;
-      return start ? new Date(start) > now : true;
-    });
+    const ongoingRides = rides.filter((ride) => ride.status === "ongoing");
+    const scheduledRides = rides.filter((ride) => ride.status === "scheduled");
+    const completedRides = rides.filter((ride) => ride.status === "completed");
 
     return res.json({
       ongoingRides,
       scheduledRides,
+      completedRides,
       rides,
     });
   } catch (error) {
@@ -566,11 +560,20 @@ export const updateRideStatus = async (req, res, next) => {
       return res.status(400).json({ message: "Valid ride status is required" });
     }
 
-    const ride = await Ride.findOneAndUpdate(
-      { _id: req.params.id, driver: req.user._id },
-      { status },
-      { new: true }
-    ).populate("driver", "name role rating isVerified");
+    const currentRide = await Ride.findOne({ _id: req.params.id, driver: req.user._id });
+
+    if (!currentRide) {
+      return res.status(404).json({ message: "Ride not found" });
+    }
+
+    if (["completed", "cancelled"].includes(currentRide.status) && currentRide.status !== status) {
+      return res.status(400).json({ message: "Completed or cancelled rides cannot be edited" });
+    }
+
+    currentRide.status = status;
+    await currentRide.save();
+
+    const ride = await Ride.findById(currentRide._id).populate("driver", "name role rating isVerified");
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/Button";
+import { PasswordInput } from "../components/PasswordInput";
 import type { BlockedUser } from "../types";
 
 export function Privacy() {
@@ -99,19 +100,17 @@ export function Privacy() {
         <div className="mt-4 space-y-3">
           <section className="rounded-2xl border border-white/25 bg-white/10 p-4 space-y-2">
             <p className="text-sm text-white">Change Password</p>
-            <input
-              type="password"
+            <PasswordInput
               value={oldPassword}
               onChange={(event) => setOldPassword(event.target.value)}
               placeholder="Old password"
-              className="w-full rounded-xl border border-white/30 bg-white/20 px-3 py-3 text-sm text-white"
+              inputClassName="w-full rounded-xl border border-white/30 bg-white/20 px-3 py-3 text-sm text-white"
             />
-            <input
-              type="password"
+            <PasswordInput
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               placeholder="New password"
-              className="w-full rounded-xl border border-white/30 bg-white/20 px-3 py-3 text-sm text-white"
+              inputClassName="w-full rounded-xl border border-white/30 bg-white/20 px-3 py-3 text-sm text-white"
             />
             <Button onClick={changePassword} loading={changingPassword} loadingText="Processing..." variant="primary">
               Update Password

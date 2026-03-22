@@ -48,6 +48,7 @@ export function Chat() {
   const [isConversationBlocked, setIsConversationBlocked] = useState(false);
 
   const passengerChatLocked = user?.role === 'passenger' && user?.canChat !== true;
+  const isChatClosedByRide = ride?.status === 'completed' || ride?.status === 'cancelled';
 
   const receiverId = useMemo(() => {
     if (!ride || !user) {
@@ -142,14 +143,22 @@ export function Chat() {
       toast.error('User blocked');
     };
 
+    const handleChatClosed = (payload: { rideId?: string; message?: string }) => {
+      if (!payload?.rideId || payload.rideId === id) {
+        toast.error(payload?.message || 'This ride is completed. Chat is disabled.');
+      }
+    };
+
     socket.on('receive_message', handleNewMessage);
     socket.on('new_message', handleNewMessage);
     socket.on('chat_blocked', handleBlocked);
+    socket.on('chat_closed', handleChatClosed);
 
     return () => {
       socket.off('receive_message', handleNewMessage);
       socket.off('new_message', handleNewMessage);
       socket.off('chat_blocked', handleBlocked);
+      socket.off('chat_closed', handleChatClosed);
     };
   }, [id]);
 
@@ -162,6 +171,11 @@ export function Chat() {
   }
 
   const handleSend = async () => {
+    if (isChatClosedByRide) {
+      toast.error('This ride is completed. Chat is disabled.');
+      return;
+    }
+
     if (isConversationBlocked) {
       toast.error('User blocked');
       return;
@@ -243,11 +257,6 @@ export function Chat() {
 
   const handleCall = () => {
     const phone = receiverProfile?.phone || ride.driver.phone;
-
-    if (!user?.canChat || !user?.isVerified || receiverProfile?.isVerified === false) {
-      toast.error('Complete verification/payment to call');
-      return;
-    }
 
     if (!phone) {
       toast.error('Phone number not available');
@@ -407,6 +416,10 @@ export function Chat() {
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">User blocked</div>
         ) : null}
 
+        {isChatClosedByRide ? (
+          <div className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-xs text-slate-700">Ride completed - chat closed</div>
+        ) : null}
+
         {passengerChatLocked ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Payment approval is required before passenger chat.
@@ -453,12 +466,12 @@ export function Chat() {
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Type a message..."
-            disabled={isConversationBlocked}
+            disabled={isConversationBlocked || isChatClosedByRide}
             className="flex-1 rounded-2xl bg-gray-100 px-4 py-3 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
           <Button
             onClick={handleSend}
-            disabled={!message.trim() || passengerChatLocked || !user?.canChat || isConversationBlocked}
+            disabled={!message.trim() || passengerChatLocked || !user?.canChat || isConversationBlocked || isChatClosedByRide}
             variant="primary"
             className="min-h-12 w-12 rounded-2xl p-0"
             leftIcon={<Send className="w-5 h-5" />}

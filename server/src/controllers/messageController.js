@@ -8,6 +8,36 @@ import { getIo } from "../socket/io.js";
 import { isUserOnline } from "../socket/io.js";
 import { createUserNotification } from "../services/notificationService.js";
 
+const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
+
+const resolveRideStatusForChat = async (ride) => {
+  if (!ride) {
+    return null;
+  }
+
+  if (["completed", "cancelled"].includes(String(ride.status))) {
+    return ride.status;
+  }
+
+  const start = ride.startTime || ride.dateTime;
+  if (!start) {
+    return ride.status;
+  }
+
+  const completedBefore = new Date(Date.now() - RIDE_AUTO_COMPLETE_HOURS * 60 * 60 * 1000);
+  if (new Date(start) <= completedBefore) {
+    ride.status = "completed";
+    await ride.save();
+    await Booking.updateMany(
+      { rideId: ride._id, status: { $in: ["accepted", "ongoing"] } },
+      { status: "completed" }
+    );
+    return "completed";
+  }
+
+  return ride.status;
+};
+
 const ensureRideParticipant = (ride, userId) => {
   const isDriver = String(ride.driver) === String(userId);
   return isDriver;
@@ -137,6 +167,12 @@ export const sendMessage = async (req, res, next) => {
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
+    }
+
+    const chatStatus = await resolveRideStatusForChat(ride);
+
+    if (["completed", "cancelled"].includes(String(chatStatus))) {
+      return res.status(403).json({ message: "This ride is completed. Chat is disabled." });
     }
 
     const isDriver = String(ride.driver._id) === String(req.user._id);

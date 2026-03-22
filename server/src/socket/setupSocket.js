@@ -54,6 +54,36 @@ const calculateDistanceKm = (a, b) => {
   return earthRadiusKm * (2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)));
 };
 
+const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
+
+const resolveRideStatusForChat = async (ride) => {
+  if (!ride) {
+    return null;
+  }
+
+  if (["completed", "cancelled"].includes(String(ride.status))) {
+    return ride.status;
+  }
+
+  const start = ride.startTime || ride.dateTime;
+  if (!start) {
+    return ride.status;
+  }
+
+  const completedBefore = new Date(Date.now() - RIDE_AUTO_COMPLETE_HOURS * 60 * 60 * 1000);
+  if (new Date(start) <= completedBefore) {
+    ride.status = "completed";
+    await ride.save();
+    await Booking.updateMany(
+      { rideId: ride._id, status: { $in: ["accepted", "ongoing"] } },
+      { status: "completed" }
+    );
+    return "completed";
+  }
+
+  return ride.status;
+};
+
 export const initializeSocket = (httpServer) => {
   const origins = (process.env.CLIENT_ORIGIN || "")
     .split(",")
@@ -114,8 +144,18 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const ride = await Ride.findById(rideId).select("driver");
+      const ride = await Ride.findById(rideId).select("driver status dateTime startTime");
       if (!ride) {
+        return;
+      }
+
+      const chatStatus = await resolveRideStatusForChat(ride);
+
+      if (["completed", "cancelled"].includes(String(chatStatus))) {
+        socket.emit("chat_closed", {
+          rideId,
+          message: "This ride is completed. Chat is disabled.",
+        });
         return;
       }
 

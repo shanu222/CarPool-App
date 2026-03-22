@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { ShieldCheck } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { PasswordInput } from "../components/PasswordInput";
 import type { AuthResponse } from "../types";
 
 export function AdminLogin() {
@@ -67,12 +68,11 @@ export function AdminLogin() {
           className="w-full min-h-12 rounded-2xl border border-white/35 bg-white/20 px-4 py-3 text-sm md:text-base text-white placeholder:text-slate-200"
           required
         />
-        <input
-          type="password"
+        <PasswordInput
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Password"
-          className="w-full min-h-12 rounded-2xl border border-white/35 bg-white/20 px-4 py-3 text-sm md:text-base text-white placeholder:text-slate-200"
+          inputClassName="w-full min-h-12 rounded-2xl border border-white/35 bg-white/20 px-4 py-3 text-sm md:text-base text-white placeholder:text-slate-200"
           required
         />
 

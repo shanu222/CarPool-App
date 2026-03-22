@@ -7,7 +7,7 @@ import type { Booking, MyRidesResponse, Ride } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
-type MyRidesTab = 'ongoing' | 'scheduled';
+type MyRidesTab = 'ongoing' | 'scheduled' | 'completed';
 
 const getRideStartDate = (ride?: Ride | null) => {
   if (!ride) {
@@ -29,6 +29,7 @@ export function MyTrips() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [driverOngoingRides, setDriverOngoingRides] = useState<Ride[]>([]);
   const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
+  const [driverCompletedRides, setDriverCompletedRides] = useState<Ride[]>([]);
   const [tab, setTab] = useState<MyRidesTab>('ongoing');
   const [loading, setLoading] = useState(true);
 
@@ -47,12 +48,14 @@ export function MyTrips() {
         setBookings(response.data);
         setDriverOngoingRides([]);
         setDriverScheduledRides([]);
+        setDriverCompletedRides([]);
       }
 
       if (role === 'driver') {
         const response = await api.get<MyRidesResponse>('/api/rides/my');
         setDriverOngoingRides(response.data.ongoingRides || []);
         setDriverScheduledRides(response.data.scheduledRides || []);
+        setDriverCompletedRides(response.data.completedRides || []);
         setBookings([]);
       }
     } catch (error: any) {
@@ -115,6 +118,10 @@ export function MyTrips() {
   const showDriverView = role === 'driver';
 
   const passengerOngoingBookings = bookings.filter((trip) => {
+    if (trip.status === 'completed' || trip.status === 'cancelled' || trip.ride?.status === 'completed' || trip.ride?.status === 'cancelled') {
+      return false;
+    }
+
     const start = getRideStartDate(trip.ride);
     if (!start) {
       return false;
@@ -124,6 +131,10 @@ export function MyTrips() {
   });
 
   const passengerScheduledBookings = bookings.filter((trip) => {
+    if (trip.status === 'completed' || trip.status === 'cancelled' || trip.ride?.status === 'completed' || trip.ride?.status === 'cancelled') {
+      return false;
+    }
+
     const start = getRideStartDate(trip.ride);
     if (!start) {
       return true;
@@ -132,8 +143,18 @@ export function MyTrips() {
     return start > new Date();
   });
 
-  const activePassengerTrips = tab === 'ongoing' ? passengerOngoingBookings : passengerScheduledBookings;
-  const activeDriverTrips = tab === 'ongoing' ? driverOngoingRides : driverScheduledRides;
+  const passengerCompletedBookings = bookings.filter((trip) => {
+    return trip.status === 'completed' || trip.ride?.status === 'completed';
+  });
+
+  const activePassengerTrips =
+    tab === 'ongoing'
+      ? passengerOngoingBookings
+      : tab === 'scheduled'
+      ? passengerScheduledBookings
+      : passengerCompletedBookings;
+  const activeDriverTrips =
+    tab === 'ongoing' ? driverOngoingRides : tab === 'scheduled' ? driverScheduledRides : driverCompletedRides;
 
   return (
     <div className="min-h-screen bg-transparent overflow-x-hidden">
@@ -157,6 +178,13 @@ export function MyTrips() {
               className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'scheduled' ? 'active' : ''}`}
             >
               Scheduled
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('completed')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'completed' ? 'active' : ''}`}
+            >
+              Completed
             </button>
           </div>
         ) : null}
@@ -190,8 +218,8 @@ export function MyTrips() {
 
         {!loading && showPassengerView && activePassengerTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'ongoing' ? 'No ongoing rides' : 'No scheduled rides'}
-            subtitle={tab === 'ongoing' ? 'Your accepted rides will appear here after start time.' : 'Your upcoming bookings appear here.'}
+            title={tab === 'ongoing' ? 'No ongoing rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
+            subtitle={tab === 'ongoing' ? 'Your accepted rides will appear here after start time.' : tab === 'scheduled' ? 'Your upcoming bookings appear here.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
@@ -199,8 +227,8 @@ export function MyTrips() {
 
         {!loading && showDriverView && activeDriverTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'ongoing' ? 'No ongoing rides' : 'No scheduled rides'}
-            subtitle={tab === 'ongoing' ? 'Rides move here when start time arrives.' : 'Post a ride within 15 days to see it here.'}
+            title={tab === 'ongoing' ? 'No ongoing rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
+            subtitle={tab === 'ongoing' ? 'Rides move here when start time arrives.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -253,7 +281,10 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
   const navigate = useNavigate();
   const { ride } = trip;
 
-  const canChat = canUseChat && ['accepted', 'ongoing', 'completed'].includes(trip.status);
+  const canChat =
+    canUseChat &&
+    ['accepted', 'ongoing'].includes(trip.status) &&
+    !['completed', 'cancelled'].includes(String(trip.ride?.status || ''));
   const statusClass =
     trip.status === 'pending'
       ? 'bg-amber-100 text-amber-700'
@@ -264,7 +295,7 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
       : trip.status === 'ongoing'
       ? 'bg-indigo-100 text-indigo-700'
       : trip.status === 'completed'
-      ? 'bg-green-100 text-green-700'
+      ? 'bg-slate-200 text-slate-700'
       : 'bg-red-100 text-red-600';
 
   return (
@@ -334,15 +365,20 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
       ) : null}
 
       {trip.status === 'completed' ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onRate();
-          }}
-          className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-green-100 px-3 py-2 text-xs md:text-sm text-green-700"
-        >
-          Rate Driver
-        </button>
+        <div className="mt-3 space-y-2">
+          <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
+            History: {ride.fromCity} → {ride.toCity} • {ride.date} {ride.time} • {ride.driver.name} • Rating {ride.driver.rating || 0}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRate();
+            }}
+            className="min-h-12 w-full md:w-auto rounded-lg bg-green-100 px-3 py-2 text-xs md:text-sm text-green-700"
+          >
+            Rate Driver
+          </button>
+        </div>
       ) : null}
     </motion.div>
   );
@@ -357,6 +393,15 @@ function DriverTripCard({
   onClick: () => void;
   onStatusChange: (rideId: string, status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled') => void;
 }) {
+  const driverStatusBadge =
+    ride.status === 'completed'
+      ? 'bg-slate-200 text-slate-700'
+      : ride.status === 'ongoing'
+      ? 'bg-indigo-100 text-indigo-700'
+      : ride.status === 'cancelled'
+      ? 'bg-red-100 text-red-700'
+      : 'bg-green-100 text-green-600';
+
   return (
     <motion.div
       whileHover={{ scale: 1.02 }}
@@ -365,7 +410,9 @@ function DriverTripCard({
       className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer"
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-600">Driver Ride</span>
+        <span className={`px-3 py-1 rounded-full text-xs ${driverStatusBadge}`}>
+          {ride.status ? ride.status.charAt(0).toUpperCase() + ride.status.slice(1) : 'Driver Ride'}
+        </span>
         <span className="text-sm text-slate-100">
           {ride.date} {ride.time}
         </span>
@@ -417,6 +464,11 @@ function DriverTripCard({
           Cancel
         </button>
       </div>
+      {ride.status === 'completed' ? (
+        <div className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
+          History: {ride.fromCity} → {ride.toCity} • {ride.date} {ride.time} • {ride.driver.name} • Rating {ride.driver.rating || 0}
+        </div>
+      ) : null}
     </motion.div>
   );
 }

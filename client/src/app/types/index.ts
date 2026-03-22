@@ -229,6 +229,7 @@ export interface RideSearchResponse {
 export interface MyRidesResponse {
   ongoingRides: Ride[];
   scheduledRides: Ride[];
+  completedRides: Ride[];
   rides: Ride[];
 }
 

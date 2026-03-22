@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
+import { PasswordInput } from '../components/PasswordInput';
 import type { AuthResponse } from '../types';
 
 export function Auth() {
@@ -238,12 +239,11 @@ export function Auth() {
           ) : null}
 
           {mode !== 'forgot' && (
-            <input
-              type="password"
+            <PasswordInput
               value={mode === 'reset' || mode === 'otp' ? newPassword : password}
               onChange={(e) => (mode === 'reset' || mode === 'otp' ? setNewPassword(e.target.value) : setPassword(e.target.value))}
               placeholder={mode === 'reset' || mode === 'otp' ? 'New password' : 'Password'}
-              className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              inputClassName="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
 
