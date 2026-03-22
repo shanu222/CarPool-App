@@ -20,7 +20,11 @@ export const getRideMessages = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    const hasBooking = await Booking.exists({ ride: rideId, user: req.user._id });
+    const hasBooking = await Booking.exists({
+      rideId,
+      passengerId: req.user._id,
+      status: { $in: ["accepted", "ongoing", "completed"] },
+    });
     const isDriver = ensureRideParticipant(ride, req.user._id);
 
     if (!isDriver && !hasBooking) {
@@ -53,7 +57,11 @@ export const sendMessage = async (req, res, next) => {
     }
 
     const isDriver = String(ride.driver._id) === String(req.user._id);
-    const hasBooking = await Booking.exists({ ride: rideId, user: req.user._id, status: { $in: ["booked", "ongoing", "completed"] } });
+    const hasBooking = await Booking.exists({
+      rideId,
+      passengerId: req.user._id,
+      status: { $in: ["accepted", "ongoing", "completed"] },
+    });
 
     if (!isDriver && !hasBooking) {
       return res.status(403).json({ message: "Only ride participants can chat" });

@@ -13,7 +13,7 @@ export function Booking() {
   const navigate = useNavigate();
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'wallet' | 'cash'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isBooked, setIsBooked] = useState(false);
+  const [isRequested, setIsRequested] = useState(false);
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState('');
 
@@ -48,12 +48,12 @@ export function Booking() {
       setError('');
       await api.post('/api/bookings/create', {
         rideId: ride._id,
-        seatsBooked: seats,
+        seatsRequested: seats,
       });
 
-      toast.success('Ride booked successfully');
+      toast.success('Booking request sent to driver');
       setIsProcessing(false);
-      setIsBooked(true);
+      setIsRequested(true);
       setTimeout(() => {
         navigate('/trips');
       }, 2000);
@@ -64,7 +64,7 @@ export function Booking() {
     }
   };
 
-  if (isBooked) {
+  if (isRequested) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center max-w-md mx-auto">
         <motion.div
@@ -75,9 +75,9 @@ export function Booking() {
           <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-16 h-16 text-white" />
           </div>
-          <h1 className="text-3xl mb-2">Booking Confirmed!</h1>
+          <h1 className="text-3xl mb-2">Request Sent!</h1>
           <p className="text-gray-600">
-            Your ride has been successfully booked
+            Your booking request is pending driver approval
           </p>
         </motion.div>
       </div>
@@ -219,7 +219,7 @@ export function Booking() {
               <span>Processing...</span>
             </>
           ) : (
-            <>Confirm Booking · ${total}</>
+            <>Send Request · ${total}</>
           )}
         </button>
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}

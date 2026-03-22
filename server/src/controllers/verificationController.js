@@ -10,18 +10,22 @@ const buildFilePath = (req, file) => {
 
 export const submitVerification = async (req, res, next) => {
   try {
-    const { cnic } = req.body;
+    const cnic = req.body.cnicNumber || req.body.cnic;
 
     if (!cnic?.trim()) {
-      return res.status(400).json({ message: "cnic is required" });
+      return res.status(400).json({ message: "cnicNumber is required" });
     }
 
     const profilePhoto = buildFilePath(req, req.files?.profilePhoto?.[0]);
-    const licensePhoto = buildFilePath(req, req.files?.licensePhoto?.[0]);
+    const cnicPhoto = buildFilePath(req, req.files?.cnicPhoto?.[0]) || buildFilePath(req, req.files?.licensePhoto?.[0]);
 
     req.user.cnic = cnic.trim();
+    req.user.cnicNumber = cnic.trim();
     if (profilePhoto) req.user.profilePhoto = profilePhoto;
-    if (licensePhoto) req.user.licensePhoto = licensePhoto;
+    if (cnicPhoto) {
+      req.user.cnicPhoto = cnicPhoto;
+      req.user.licensePhoto = cnicPhoto;
+    }
     req.user.isVerified = false;
 
     await req.user.save();
@@ -35,9 +39,14 @@ export const submitVerification = async (req, res, next) => {
 export const listVerificationRequests = async (_req, res, next) => {
   try {
     const users = await User.find({
-      $or: [{ cnic: { $exists: true, $ne: "" } }, { profilePhoto: { $exists: true, $ne: "" } }, { licensePhoto: { $exists: true, $ne: "" } }],
+      $or: [
+        { cnic: { $exists: true, $ne: "" } },
+        { cnicNumber: { $exists: true, $ne: "" } },
+        { profilePhoto: { $exists: true, $ne: "" } },
+        { cnicPhoto: { $exists: true, $ne: "" } },
+      ],
     })
-      .select("name email cnic profilePhoto licensePhoto isVerified role")
+      .select("name email cnic cnicNumber profilePhoto cnicPhoto licensePhoto isVerified role")
       .sort({ createdAt: -1 });
 
     return res.json(users);

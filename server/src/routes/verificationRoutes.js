@@ -10,6 +10,7 @@ router.post(
   protect,
   upload.fields([
     { name: "profilePhoto", maxCount: 1 },
+    { name: "cnicPhoto", maxCount: 1 },
     { name: "licensePhoto", maxCount: 1 },
   ]),
   submitVerification

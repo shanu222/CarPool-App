@@ -41,6 +41,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    cnicNumber: {
+      type: String,
+      trim: true,
+    },
+    cnicPhoto: {
+      type: String,
+      trim: true,
+    },
     cnic: {
       type: String,
       trim: true,
@@ -63,6 +71,26 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+userSchema.pre("save", function syncLegacyVerificationFields(next) {
+  if (this.cnicNumber && !this.cnic) {
+    this.cnic = this.cnicNumber;
+  }
+
+  if (this.cnic && !this.cnicNumber) {
+    this.cnicNumber = this.cnic;
+  }
+
+  if (this.cnicPhoto && !this.licensePhoto) {
+    this.licensePhoto = this.cnicPhoto;
+  }
+
+  if (this.licensePhoto && !this.cnicPhoto) {
+    this.cnicPhoto = this.licensePhoto;
+  }
+
+  return next();
+});
 
 userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $exists: true, $ne: "" } } });
 userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: "" } } });

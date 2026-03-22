@@ -8,6 +8,9 @@ export interface User {
   rating: number;
   ratingCount?: number;
   isVerified?: boolean;
+  cnicNumber?: string;
+  cnicPhoto?: string;
+  maskedCnic?: string;
   cnic?: string;
   profilePhoto?: string;
   licensePhoto?: string;
@@ -33,16 +36,19 @@ export interface Ride {
   };
   distanceText?: string;
   durationText?: string;
-  status?: "pending" | "ongoing" | "completed" | "cancelled";
+  status?: "scheduled" | "ongoing" | "completed" | "cancelled";
 }
 
 export interface Booking {
   _id: string;
+  passengerId?: User;
+  rideId?: string;
   user: User;
   ride: Ride;
+  seatsRequested?: number;
   seatsBooked: number;
   totalPrice: number;
-  status: "booked" | "ongoing" | "completed" | "cancelled";
+  status: "pending" | "accepted" | "rejected" | "ongoing" | "completed" | "cancelled";
   createdAt: string;
   driverNearNotified?: boolean;
 }

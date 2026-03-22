@@ -47,6 +47,7 @@ export function RideDetails() {
   const currentUserId = user?.id || user?._id || '';
   const driverUserId = ride.driver.id || ride.driver._id || '';
   const isDriverOwner = Boolean(currentUserId && driverUserId && currentUserId === driverUserId);
+  const canRequestBooking = ride.availableSeats > 0 && ['scheduled', 'ongoing'].includes(ride.status || 'scheduled');
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -197,9 +198,10 @@ export function RideDetails() {
           </div>
           <button
             onClick={() => navigate(`/booking/${ride._id}?seats=${selectedSeats}`)}
-            className="bg-blue-600 text-white px-8 py-4 rounded-2xl shadow-lg shadow-blue-600/30"
+            disabled={!canRequestBooking}
+            className="bg-blue-600 text-white px-8 py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50"
           >
-            Book Now
+            {canRequestBooking ? 'Request Booking' : 'Ride Closed'}
           </button>
         </div>
       </div>

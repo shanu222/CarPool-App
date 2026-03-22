@@ -10,6 +10,10 @@ export const createRide = async (req, res, next) => {
     const { fromCity, toCity, date, time, pricePerSeat, totalSeats, availableSeats } = req.body;
     const requestedSeats = Number(availableSeats ?? totalSeats);
 
+    if (!req.user?.isVerified) {
+      return res.status(403).json({ message: "Driver verification is required before posting rides" });
+    }
+
     if (!fromCity || !toCity || !date || !time || !pricePerSeat || !requestedSeats) {
       return res.status(400).json({ message: "All ride fields are required" });
     }
@@ -79,14 +83,17 @@ export const searchRides = async (req, res, next) => {
     const { from, to, date, sort = "time" } = req.query;
 
     const query = {
-      ...(from ? { fromCity: new RegExp(`^${from.trim()}$`, "i") } : {}),
-      ...(to ? { toCity: new RegExp(`^${to.trim()}$`, "i") } : {}),
+      ...(from ? { fromCity: new RegExp(from.trim(), "i") } : {}),
+      ...(to ? { toCity: new RegExp(to.trim(), "i") } : {}),
       ...(date ? { date } : {}),
       availableSeats: { $gt: 0 },
-      status: { $in: ["pending", "ongoing"] },
+      status: { $in: ["scheduled", "ongoing"] },
     };
 
-    const sortOption = sort === "price" ? { pricePerSeat: 1, createdAt: -1 } : { date: 1, time: 1, createdAt: -1 };
+    const sortOption =
+      sort === "price"
+        ? { status: 1, pricePerSeat: 1, createdAt: -1 }
+        : { status: 1, date: 1, time: 1, createdAt: -1 };
 
     const rides = await Ride.find(query).populate("driver", "name email phone role rating isVerified").sort(sortOption);
 
@@ -102,10 +109,6 @@ export const getRideById = async (req, res, next) => {
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
-    }
-
-    if (["ongoing", "completed", "cancelled"].includes(status)) {
-      await Booking.updateMany({ ride: ride._id, status: { $ne: "cancelled" } }, { status });
     }
 
     return res.json(ride);
@@ -130,7 +133,7 @@ export const updateRideStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
 
-    if (!status || !["pending", "ongoing", "completed", "cancelled"].includes(status)) {
+    if (!status || !["scheduled", "ongoing", "completed", "cancelled"].includes(status)) {
       return res.status(400).json({ message: "Valid ride status is required" });
     }
 
@@ -142,6 +145,14 @@ export const updateRideStatus = async (req, res, next) => {
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
+    }
+
+    if (["ongoing", "completed", "cancelled"].includes(status)) {
+      const nextBookingStatus = status === "cancelled" ? "cancelled" : status;
+      await Booking.updateMany(
+        { rideId: ride._id, status: { $in: ["accepted", "ongoing"] } },
+        { status: nextBookingStatus }
+      );
     }
 
     return res.json(ride);

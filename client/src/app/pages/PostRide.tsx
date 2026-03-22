@@ -28,6 +28,11 @@ export function PostRide() {
       return;
     }
 
+    if (!user?.isVerified) {
+      setError('Driver verification is required before posting rides. Upload your CNIC and profile in Profile.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');

@@ -61,6 +61,8 @@ export const initializeSocket = (httpServer) => {
   });
 
   io.on("connection", (socket) => {
+    socket.join(`user:${String(socket.user._id)}`);
+
     socket.on("join_ride_room", ({ rideId }) => {
       if (!rideId) {
         return;
@@ -73,6 +75,22 @@ export const initializeSocket = (httpServer) => {
       const { rideId, receiverId, text } = payload || {};
 
       if (!rideId || !receiverId || !text?.trim()) {
+        return;
+      }
+
+      const ride = await Ride.findById(rideId).select("driver");
+      if (!ride) {
+        return;
+      }
+
+      const isDriver = String(ride.driver) === String(socket.user._id);
+      const hasAcceptedBooking = await Booking.exists({
+        rideId,
+        passengerId: socket.user._id,
+        status: { $in: ["accepted", "ongoing", "completed"] },
+      });
+
+      if (!isDriver && !hasAcceptedBooking) {
         return;
       }
 
@@ -132,8 +150,8 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const pendingBookings = await Booking.find({ ride: rideId, driverNearNotified: false, status: { $in: ["booked", "ongoing"] } })
-        .select("_id user");
+      const pendingBookings = await Booking.find({ rideId, driverNearNotified: false, status: { $in: ["accepted", "ongoing"] } })
+        .select("_id passengerId");
 
       if (!pendingBookings.length) {
         return;
@@ -145,14 +163,18 @@ export const initializeSocket = (httpServer) => {
       );
 
       const notifications = pendingBookings.map((booking) => ({
-        user: booking.user,
+        user: booking.passengerId,
         type: "generic",
         title: "Driver near your pickup",
         body: "Your driver is approaching the pickup point.",
         data: { rideId },
       }));
 
-      await Notification.insertMany(notifications);
+      const created = await Notification.insertMany(notifications);
+
+      created.forEach((item) => {
+        io.to(`user:${String(item.user)}`).emit("new_notification", item);
+      });
     });
   });
 

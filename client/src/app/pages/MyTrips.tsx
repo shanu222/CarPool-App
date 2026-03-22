@@ -11,19 +11,22 @@ export function MyTrips() {
   const [activeTab, setActiveTab] = useState<'passenger' | 'driver'>('passenger');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [driverRides, setDriverRides] = useState<Ride[]>([]);
+  const [driverRequests, setDriverRequests] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadTrips = async () => {
       try {
         setLoading(true);
-        const [bookingResponse, rideResponse] = await Promise.all([
+        const [bookingResponse, rideResponse, requestResponse] = await Promise.all([
           api.get<Booking[]>('/api/bookings/my'),
           api.get<Ride[]>('/api/rides/my').catch(() => ({ data: [] as Ride[] })),
+          api.get<Booking[]>('/api/bookings/driver-requests').catch(() => ({ data: [] as Booking[] })),
         ]);
 
         setBookings(bookingResponse.data);
         setDriverRides(rideResponse.data);
+        setDriverRequests(requestResponse.data);
       } finally {
         setLoading(false);
       }
@@ -33,21 +36,33 @@ export function MyTrips() {
   }, []);
 
   const refreshTrips = async () => {
-    const [bookingResponse, rideResponse] = await Promise.all([
+    const [bookingResponse, rideResponse, requestResponse] = await Promise.all([
       api.get<Booking[]>('/api/bookings/my'),
       api.get<Ride[]>('/api/rides/my').catch(() => ({ data: [] as Ride[] })),
+      api.get<Booking[]>('/api/bookings/driver-requests').catch(() => ({ data: [] as Booking[] })),
     ]);
     setBookings(bookingResponse.data);
     setDriverRides(rideResponse.data);
+    setDriverRequests(requestResponse.data);
   };
 
-  const updateRideStatus = async (rideId: string, status: 'pending' | 'ongoing' | 'completed' | 'cancelled') => {
+  const updateRideStatus = async (rideId: string, status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled') => {
     try {
       await api.patch(`/api/rides/${rideId}/status`, { status });
       toast.success(`Ride marked as ${status}`);
       await refreshTrips();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Failed to update ride status');
+    }
+  };
+
+  const respondToRequest = async (bookingId: string, action: 'accepted' | 'rejected') => {
+    try {
+      await api.patch(`/api/bookings/${bookingId}/respond`, { action });
+      toast.success(`Request ${action}`);
+      await refreshTrips();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Could not update request');
     }
   };
 
@@ -134,6 +149,19 @@ export function MyTrips() {
             ))
           : null}
 
+        {!loading && activeTab === 'driver' && driverRequests.length > 0 ? (
+          <div className="space-y-2">
+            <h3 className="text-sm text-gray-600">Booking Requests</h3>
+            {driverRequests.map((request) => (
+              <DriverRequestCard
+                key={request._id}
+                request={request}
+                onRespond={respondToRequest}
+              />
+            ))}
+          </div>
+        ) : null}
+
         {!loading && ((activeTab === 'passenger' && bookings.length === 0) || (activeTab === 'driver' && driverRides.length === 0)) ? (
           <div className="text-center py-12">
             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -168,6 +196,20 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
   const navigate = useNavigate();
   const { ride } = trip;
 
+  const canChat = ['accepted', 'ongoing', 'completed'].includes(trip.status);
+  const statusClass =
+    trip.status === 'pending'
+      ? 'bg-amber-100 text-amber-700'
+      : trip.status === 'accepted'
+      ? 'bg-blue-100 text-blue-600'
+      : trip.status === 'rejected'
+      ? 'bg-red-100 text-red-600'
+      : trip.status === 'ongoing'
+      ? 'bg-indigo-100 text-indigo-700'
+      : trip.status === 'completed'
+      ? 'bg-green-100 text-green-700'
+      : 'bg-red-100 text-red-600';
+
   return (
     <motion.div
       whileHover={{ scale: 1.02 }}
@@ -178,11 +220,7 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
       {/* Status Badge */}
       <div className="flex items-center justify-between mb-3">
         <span
-          className={`px-3 py-1 rounded-full text-xs ${
-            trip.status === 'booked'
-              ? 'bg-blue-100 text-blue-600'
-              : 'bg-red-100 text-red-600'
-          }`}
+          className={`px-3 py-1 rounded-full text-xs ${statusClass}`}
         >
           {trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
         </span>
@@ -191,6 +229,7 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
             e.stopPropagation();
             navigate(`/chat/${ride._id}`);
           }}
+          disabled={!canChat}
           className="p-2 bg-gray-100 rounded-xl"
         >
           <MessageCircle className="w-4 h-4" />
@@ -232,11 +271,15 @@ function TripCard({ trip, onClick, onRate }: TripCardProps) {
         <div className="flex items-center gap-3 text-sm text-gray-600">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
-            <span>{trip.seatsBooked}</span>
+            <span>{trip.seatsRequested || trip.seatsBooked}</span>
           </div>
           <div className="text-blue-600">${trip.totalPrice}</div>
         </div>
       </div>
+
+      {ride.driver.maskedCnic ? (
+        <div className="mt-2 text-xs text-gray-500">Driver CNIC: {ride.driver.maskedCnic}</div>
+      ) : null}
 
       {trip.status === 'completed' ? (
         <button
@@ -260,7 +303,7 @@ function DriverTripCard({
 }: {
   ride: Ride;
   onClick: () => void;
-  onStatusChange: (rideId: string, status: 'pending' | 'ongoing' | 'completed' | 'cancelled') => void;
+  onStatusChange: (rideId: string, status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled') => void;
 }) {
   return (
     <motion.div
@@ -279,6 +322,15 @@ function DriverTripCard({
         <span className="text-blue-600">${ride.pricePerSeat}/seat</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onStatusChange(ride._id, 'scheduled');
+          }}
+          className="rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-700"
+        >
+          Set Scheduled
+        </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -308,5 +360,49 @@ function DriverTripCard({
         </button>
       </div>
     </motion.div>
+  );
+}
+
+function DriverRequestCard({
+  request,
+  onRespond,
+}: {
+  request: Booking;
+  onRespond: (bookingId: string, action: 'accepted' | 'rejected') => void;
+}) {
+  const passenger = request.passengerId || request.user;
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm">{passenger?.name || 'Passenger'}</p>
+          <p className="text-xs text-gray-500">
+            {(request.ride?.fromCity || '')} → {(request.ride?.toCity || '')}
+          </p>
+          <p className="text-xs text-gray-500">
+            {request.seatsRequested || request.seatsBooked} seat(s) · {request.status}
+          </p>
+        </div>
+        {request.status === 'pending' ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => onRespond(request._id, 'accepted')}
+              className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700"
+            >
+              Accept
+            </button>
+            <button
+              onClick={() => onRespond(request._id, 'rejected')}
+              className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700"
+            >
+              Reject
+            </button>
+          </div>
+        ) : (
+          <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-600">{request.status}</span>
+        )}
+      </div>
+    </div>
   );
 }

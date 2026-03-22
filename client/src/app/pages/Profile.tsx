@@ -22,9 +22,9 @@ export function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [cnic, setCnic] = useState(user?.cnic || '');
+  const [cnic, setCnic] = useState(user?.cnicNumber || user?.cnic || '');
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
-  const [licensePhoto, setLicensePhoto] = useState<File | null>(null);
+  const [cnicPhoto, setCnicPhoto] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -53,15 +53,15 @@ export function Profile() {
     try {
       setUploading(true);
       const formData = new FormData();
-      formData.append('cnic', cnic);
+      formData.append('cnicNumber', cnic);
       if (profilePhoto) {
         formData.append('profilePhoto', profilePhoto);
       }
-      if (licensePhoto) {
-        formData.append('licensePhoto', licensePhoto);
+      if (cnicPhoto) {
+        formData.append('cnicPhoto', cnicPhoto);
       }
 
-      await api.post('/api/verification/submit', formData, {
+      await api.post('/api/user/upload-documents', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -177,7 +177,7 @@ export function Profile() {
             <input
               type="file"
               accept="image/*"
-              onChange={(event) => setLicensePhoto(event.target.files?.[0] || null)}
+              onChange={(event) => setCnicPhoto(event.target.files?.[0] || null)}
               className="w-full text-sm"
             />
             <button
