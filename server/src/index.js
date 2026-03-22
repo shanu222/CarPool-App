@@ -47,7 +47,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  res.status(200).json({ ok: true, service: "carpool-server", dbConnected: isDbConnected });
+  res.status(200).send("Backend is LIVE");
 });
 
 app.get("/health", (req, res) => {
