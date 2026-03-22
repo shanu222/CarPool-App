@@ -27,6 +27,10 @@ export const getRideMessages = async (req, res, next) => {
     });
     const isDriver = ensureRideParticipant(ride, req.user._id);
 
+    if (!isDriver && !req.user?.canChat) {
+      return res.status(403).json({ message: "Chat is locked. Submit payment proof for booking/chat subscription." });
+    }
+
     if (!isDriver && !hasBooking) {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -62,6 +66,10 @@ export const sendMessage = async (req, res, next) => {
       passengerId: req.user._id,
       status: { $in: ["accepted", "ongoing", "completed"] },
     });
+
+    if (!isDriver && !req.user?.canChat) {
+      return res.status(403).json({ message: "Chat is locked. Submit payment proof for booking/chat subscription." });
+    }
 
     if (!isDriver && !hasBooking) {
       return res.status(403).json({ message: "Only ride participants can chat" });

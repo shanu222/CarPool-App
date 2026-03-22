@@ -47,9 +47,13 @@ export const initializeSocket = (httpServer) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select("_id name role");
+      const user = await User.findById(decoded.id).select("_id name role canChat accountStatus");
 
       if (!user) {
+        return next(new Error("Unauthorized"));
+      }
+
+      if (user.accountStatus === "banned" || user.accountStatus === "suspended") {
         return next(new Error("Unauthorized"));
       }
 
@@ -89,6 +93,10 @@ export const initializeSocket = (httpServer) => {
         passengerId: socket.user._id,
         status: { $in: ["accepted", "ongoing", "completed"] },
       });
+
+      if (!isDriver && !socket.user.canChat) {
+        return;
+      }
 
       if (!isDriver && !hasAcceptedBooking) {
         return;

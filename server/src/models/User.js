@@ -24,8 +24,18 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["passenger", "driver"],
+      enum: ["admin", "passenger", "driver"],
       default: "passenger",
+    },
+    accountStatus: {
+      type: String,
+      enum: ["active", "suspended", "banned"],
+      default: "active",
+      index: true,
+    },
+    suspensionReason: {
+      type: String,
+      trim: true,
     },
     rating: {
       type: Number,
@@ -40,6 +50,12 @@ const userSchema = new mongoose.Schema(
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    verificationStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+      index: true,
     },
     cnicNumber: {
       type: String,
@@ -66,6 +82,18 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    canPostRide: {
+      type: Boolean,
+      default: false,
+    },
+    canBookRide: {
+      type: Boolean,
+      default: false,
+    },
+    canChat: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -87,6 +115,15 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
 
   if (this.licensePhoto && !this.cnicPhoto) {
     this.cnicPhoto = this.licensePhoto;
+  }
+
+  if (this.role === "admin") {
+    this.canPostRide = true;
+    this.canBookRide = true;
+    this.canChat = true;
+    this.accountStatus = "active";
+    this.isVerified = true;
+    this.verificationStatus = "approved";
   }
 
   return next();

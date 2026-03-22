@@ -14,6 +14,10 @@ export const createRide = async (req, res, next) => {
       return res.status(403).json({ message: "Driver verification is required before posting rides" });
     }
 
+    if (!req.user?.canPostRide) {
+      return res.status(403).json({ message: "Ride posting is locked. Please submit payment proof for approval." });
+    }
+
     if (!fromCity || !toCity || !date || !time || !pricePerSeat || !requestedSeats) {
       return res.status(400).json({ message: "All ride fields are required" });
     }
@@ -92,8 +96,8 @@ export const searchRides = async (req, res, next) => {
 
     const sortOption =
       sort === "price"
-        ? { status: 1, pricePerSeat: 1, createdAt: -1 }
-        : { status: 1, date: 1, time: 1, createdAt: -1 };
+        ? { featured: -1, status: 1, pricePerSeat: 1, createdAt: -1 }
+        : { featured: -1, status: 1, date: 1, time: 1, createdAt: -1 };
 
     const rides = await Ride.find(query).populate("driver", "name email phone role rating isVerified").sort(sortOption);
 

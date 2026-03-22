@@ -68,6 +68,10 @@ export const createBooking = async (req, res, next) => {
     const { rideId, seatsRequested, seatsBooked } = req.body;
     const seats = Number(seatsRequested ?? seatsBooked);
 
+    if (!req.user?.canBookRide) {
+      return res.status(403).json({ message: "Booking is locked. Submit payment proof to unlock booking and chat." });
+    }
+
     if (!rideId || !seats || seats < 1) {
       return res.status(400).json({ message: "rideId and valid seatsRequested are required" });
     }

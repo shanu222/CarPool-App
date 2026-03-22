@@ -63,6 +63,14 @@ const rideSchema = new mongoose.Schema(
       default: "scheduled",
       index: true,
     },
+    featured: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    featuredAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

@@ -15,6 +15,8 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import verificationRoutes from "./routes/verificationRoutes.js";
 import locationRoutes from "./routes/locationRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { initializeSocket } from "./socket/setupSocket.js";
 
@@ -89,6 +91,8 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/locations", locationRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/admin", adminRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

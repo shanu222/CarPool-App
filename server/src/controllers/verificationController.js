@@ -27,6 +27,7 @@ export const submitVerification = async (req, res, next) => {
       req.user.licensePhoto = cnicPhoto;
     }
     req.user.isVerified = false;
+    req.user.verificationStatus = "pending";
 
     await req.user.save();
 
@@ -58,12 +59,13 @@ export const listVerificationRequests = async (_req, res, next) => {
 export const verifyUser = async (req, res, next) => {
   try {
     const { isVerified } = req.body;
+    const verified = Boolean(isVerified);
 
     const user = await User.findByIdAndUpdate(
       req.params.userId,
-      { isVerified: Boolean(isVerified) },
+      { isVerified: verified, verificationStatus: verified ? "approved" : "rejected" },
       { new: true }
-    ).select("name email isVerified role");
+    ).select("name email isVerified verificationStatus role");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });

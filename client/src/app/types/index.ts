@@ -4,16 +4,22 @@ export interface User {
   name: string;
   email?: string;
   phone?: string;
-  role: "passenger" | "driver";
+  role: "admin" | "passenger" | "driver";
+  accountStatus?: "active" | "suspended" | "banned";
+  suspensionReason?: string;
   rating: number;
   ratingCount?: number;
   isVerified?: boolean;
+  verificationStatus?: "none" | "pending" | "approved" | "rejected";
   cnicNumber?: string;
   cnicPhoto?: string;
   maskedCnic?: string;
   cnic?: string;
   profilePhoto?: string;
   licensePhoto?: string;
+  canPostRide?: boolean;
+  canBookRide?: boolean;
+  canChat?: boolean;
 }
 
 export interface Ride {
@@ -37,6 +43,8 @@ export interface Ride {
   distanceText?: string;
   durationText?: string;
   status?: "scheduled" | "ongoing" | "completed" | "cancelled";
+  featured?: boolean;
+  featuredAt?: string;
 }
 
 export interface Booking {
@@ -107,4 +115,32 @@ export interface Review {
   rating: number;
   reviewText?: string;
   createdAt: string;
+}
+
+export interface Payment {
+  _id: string;
+  userId: User;
+  type: "ride_post" | "booking" | "subscription";
+  amount: number;
+  method: "easypaisa" | "jazzcash" | "bank";
+  screenshot?: string;
+  status: "pending" | "approved" | "rejected";
+  reviewedBy?: Pick<User, "id" | "_id" | "name" | "email">;
+  rejectionReason?: string;
+  createdAt: string;
+}
+
+export interface PaymentSettings {
+  _id?: string;
+  easypaisaNumber: string;
+  jazzcashNumber: string;
+  bankAccount: string;
+  accountTitle: string;
+}
+
+export interface AdminAnalytics {
+  totalUsers: number;
+  totalRides: number;
+  totalEarnings: number;
+  activeRides: number;
 }

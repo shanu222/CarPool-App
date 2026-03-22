@@ -12,60 +12,87 @@ import { Profile } from "./pages/Profile";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LiveMap } from "./pages/LiveMap";
+import { AdminLogin } from "./pages/AdminLogin";
+import { AdminDashboard } from "./pages/AdminDashboard";
+import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 
-export const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Onboarding />,
-  },
-  {
-    path: "/auth",
-    element: <Auth />,
-  },
-  {
-    element: <ProtectedRoute />,
-    children: [
-      {
-        path: "/map",
-        element: <LiveMap />,
-      },
-      {
-        element: <Layout />,
-        children: [
-          {
-            path: "/home",
-            element: <Home />,
-          },
-          {
-            path: "/search",
-            element: <SearchResults />,
-          },
-          {
-            path: "/ride/:id",
-            element: <RideDetails />,
-          },
-          {
-            path: "/post-ride",
-            element: <PostRide />,
-          },
-          {
-            path: "/booking/:id",
-            element: <Booking />,
-          },
-          {
-            path: "/trips",
-            element: <MyTrips />,
-          },
-          {
-            path: "/chat/:id",
-            element: <Chat />,
-          },
-          {
-            path: "/profile",
-            element: <Profile />,
-          },
-        ],
-      },
-    ],
-  },
-]);
+const isAdminApp = import.meta.env.VITE_APP_MODE === "admin";
+
+export const router = createBrowserRouter(
+  isAdminApp
+    ? [
+        {
+          path: "/",
+          element: <AdminLogin />,
+        },
+        {
+          path: "/auth",
+          element: <AdminLogin />,
+        },
+        {
+          element: <AdminProtectedRoute />,
+          children: [
+            {
+              path: "/dashboard",
+              element: <AdminDashboard />,
+            },
+          ],
+        },
+      ]
+    : [
+        {
+          path: "/",
+          element: <Onboarding />,
+        },
+        {
+          path: "/auth",
+          element: <Auth />,
+        },
+        {
+          element: <ProtectedRoute />,
+          children: [
+            {
+              path: "/map",
+              element: <LiveMap />,
+            },
+            {
+              element: <Layout />,
+              children: [
+                {
+                  path: "/home",
+                  element: <Home />,
+                },
+                {
+                  path: "/search",
+                  element: <SearchResults />,
+                },
+                {
+                  path: "/ride/:id",
+                  element: <RideDetails />,
+                },
+                {
+                  path: "/post-ride",
+                  element: <PostRide />,
+                },
+                {
+                  path: "/booking/:id",
+                  element: <Booking />,
+                },
+                {
+                  path: "/trips",
+                  element: <MyTrips />,
+                },
+                {
+                  path: "/chat/:id",
+                  element: <Chat />,
+                },
+                {
+                  path: "/profile",
+                  element: <Profile />,
+                },
+              ],
+            },
+          ],
+        },
+      ]
+);

@@ -17,6 +17,14 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    if (user.accountStatus === "banned") {
+      return res.status(403).json({ message: "Account is banned" });
+    }
+
+    if (user.accountStatus === "suspended") {
+      return res.status(403).json({ message: user.suspensionReason || "Account is suspended" });
+    }
+
     req.user = user;
     next();
   } catch {
@@ -33,12 +41,7 @@ export const requireRole = (...roles) => (req, res, next) => {
 };
 
 export const requireAdmin = (req, res, next) => {
-  const allowedEmails = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (!req.user?.email || !allowedEmails.includes(req.user.email.toLowerCase())) {
+  if (!req.user || req.user.role !== "admin") {
     return res.status(403).json({ message: "Admin access required" });
   }
 

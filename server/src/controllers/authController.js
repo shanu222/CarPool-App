@@ -2,6 +2,14 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 
+const getAdminEmails = () =>
+  (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+const isAdminEmail = (email) => getAdminEmails().includes((email || "").toLowerCase());
+
 const signToken = (user) => {
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not configured");
@@ -18,14 +26,20 @@ const sanitizeUser = (user) => ({
   email: user.email,
   phone: user.phone,
   role: user.role,
+  accountStatus: user.accountStatus,
+  suspensionReason: user.suspensionReason,
   rating: user.rating,
   isVerified: user.isVerified,
+  verificationStatus: user.verificationStatus,
   cnicNumber: user.cnicNumber || user.cnic,
   cnic: user.cnic,
   cnicPhoto: user.cnicPhoto || user.licensePhoto,
   profilePhoto: user.profilePhoto,
   licensePhoto: user.licensePhoto,
   ratingCount: user.ratingCount,
+  canPostRide: user.canPostRide,
+  canBookRide: user.canBookRide,
+  canChat: user.canChat,
 });
 
 export const register = async (req, res, next) => {
@@ -52,12 +66,21 @@ export const register = async (req, res, next) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const normalizedEmail = email.toLowerCase().trim();
+    const finalRole = isAdminEmail(normalizedEmail) ? "admin" : role === "driver" ? "driver" : "passenger";
+
     const user = await User.create({
       name: name.trim(),
-      email: email ? email.toLowerCase().trim() : undefined,
+      email: normalizedEmail,
       phone: phone ? phone.trim() : undefined,
       password: hashedPassword,
-      role: role === "driver" ? "driver" : "passenger",
+      role: finalRole,
+      canPostRide: finalRole === "admin",
+      canBookRide: finalRole === "admin",
+      canChat: finalRole === "admin",
+      accountStatus: "active",
+      verificationStatus: finalRole === "admin" ? "approved" : "none",
+      isVerified: finalRole === "admin",
     });
 
     const token = signToken(user);
@@ -85,6 +108,24 @@ export const login = async (req, res, next) => {
 
     if (!passwordMatch) {
       return res.status(401).json({ message: "Authentication failed" });
+    }
+
+    if (user.accountStatus === "banned") {
+      return res.status(403).json({ message: "Account is banned" });
+    }
+
+    if (user.accountStatus === "suspended") {
+      return res.status(403).json({ message: user.suspensionReason || "Account is suspended" });
+    }
+
+    if (isAdminEmail(user.email) && user.role !== "admin") {
+      user.role = "admin";
+      user.canPostRide = true;
+      user.canBookRide = true;
+      user.canChat = true;
+      user.isVerified = true;
+      user.verificationStatus = "approved";
+      await user.save();
     }
 
     const token = signToken(user);
