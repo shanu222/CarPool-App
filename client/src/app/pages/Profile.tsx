@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
 import {
   User,
   Star,
@@ -13,10 +14,26 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../lib/api';
+import type { NotificationItem } from '../types';
 
 export function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  useEffect(() => {
+    const loadNotifications = async () => {
+      try {
+        const response = await api.get<NotificationItem[]>('/api/notifications/my');
+        setNotifications(response.data.slice(0, 6));
+      } catch {
+        setNotifications([]);
+      }
+    };
+
+    loadNotifications();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -107,12 +124,18 @@ export function Profile() {
           transition={{ delay: 0.3 }}
           className="bg-white rounded-2xl p-4 shadow-sm"
         >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base">Recent Reviews</h3>
-            <button className="text-sm text-blue-600">View All</button>
-          </div>
+          <h3 className="text-base mb-4">Recent Notifications</h3>
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">Review features can be added next. Core ride and booking flows are live.</p>
+            {notifications.length > 0 ? (
+              notifications.map((item) => (
+                <div key={item._id} className="rounded-xl bg-gray-50 p-3">
+                  <p className="text-sm">{item.title}</p>
+                  <p className="text-xs text-gray-600 mt-1">{item.body}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-600">No notifications yet.</p>
+            )}
           </div>
         </motion.div>
 

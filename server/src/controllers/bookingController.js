@@ -1,5 +1,7 @@
 import { Booking } from "../models/Booking.js";
 import { Ride } from "../models/Ride.js";
+import { Notification } from "../models/Notification.js";
+import { sendPushNotification } from "../services/pushService.js";
 
 export const createBooking = async (req, res, next) => {
   try {
@@ -26,6 +28,23 @@ export const createBooking = async (req, res, next) => {
       seatsBooked: seats,
       totalPrice: seats * ride.pricePerSeat,
       status: "booked",
+    });
+
+    await Notification.create({
+      user: ride.driver,
+      type: "ride_booked",
+      title: "Ride booked",
+      body: `${req.user.name} booked ${seats} seat(s) from ${ride.fromCity} to ${ride.toCity}`,
+      data: { rideId: ride._id, bookingId: booking._id },
+    });
+
+    const populatedRide = await Ride.findById(ride._id).populate("driver", "name fcmToken");
+
+    await sendPushNotification({
+      token: populatedRide?.driver?.fcmToken,
+      title: "Your ride was booked",
+      body: `${req.user.name} booked ${seats} seat(s)`,
+      data: { rideId: String(ride._id), bookingId: String(booking._id) },
     });
 
     const populatedBooking = await Booking.findById(booking._id)

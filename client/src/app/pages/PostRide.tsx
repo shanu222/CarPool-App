@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Users } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -39,9 +40,11 @@ export function PostRide() {
         totalSeats: Number(formData.totalSeats),
       });
 
+      toast.success('Ride published successfully');
       navigate('/trips');
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Could not publish ride');
+      toast.error(requestError?.response?.data?.message || 'Could not publish ride');
     } finally {
       setLoading(false);
     }
@@ -78,7 +81,7 @@ export function PostRide() {
             <label className="block text-sm mb-2 text-gray-700">From</label>
             <div className="relative">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <select
+              <input
                 value={formData.fromCity}
                 onChange={(e) => updateField('fromCity', e.target.value)}
                 placeholder="Departure city"
@@ -91,7 +94,7 @@ export function PostRide() {
             <label className="block text-sm mb-2 text-gray-700">To</label>
             <div className="relative">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600" />
-              <select
+              <input
                 value={formData.toCity}
                 onChange={(e) => updateField('toCity', e.target.value)}
                 placeholder="Destination city"

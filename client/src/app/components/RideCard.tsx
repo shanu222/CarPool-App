@@ -14,7 +14,7 @@ export function RideCard({ ride }: RideCardProps) {
     <motion.div
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      onClick={() => navigate(`/ride/${ride.id}`)}
+      onClick={() => navigate(`/ride/${ride._id}`)}
       className="bg-white rounded-2xl p-4 shadow-sm cursor-pointer border border-gray-100"
     >
       <div className="flex items-center gap-3 mb-4">

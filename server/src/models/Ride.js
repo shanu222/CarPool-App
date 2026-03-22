@@ -41,6 +41,22 @@ const rideSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    fromCoordinates: {
+      lat: Number,
+      lng: Number,
+    },
+    toCoordinates: {
+      lat: Number,
+      lng: Number,
+    },
+    distanceText: {
+      type: String,
+      trim: true,
+    },
+    durationText: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,

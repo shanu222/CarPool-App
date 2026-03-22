@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, CreditCard, Wallet, Banknote, CheckCircle } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import type { Ride } from '../types';
 import { useEffect } from 'react';
@@ -50,6 +51,7 @@ export function Booking() {
         seatsBooked: seats,
       });
 
+      toast.success('Ride booked successfully');
       setIsProcessing(false);
       setIsBooked(true);
       setTimeout(() => {
@@ -58,6 +60,7 @@ export function Booking() {
     } catch (requestError: any) {
       setIsProcessing(false);
       setError(requestError?.response?.data?.message || 'Booking failed');
+      toast.error(requestError?.response?.data?.message || 'Booking failed');
     }
   };
 

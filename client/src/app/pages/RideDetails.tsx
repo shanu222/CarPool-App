@@ -41,6 +41,12 @@ export function RideDetails() {
   }
 
   const totalPrice = ride.pricePerSeat * selectedSeats;
+  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const routePreviewUrl = mapsApiKey
+    ? `https://www.google.com/maps/embed/v1/directions?key=${encodeURIComponent(mapsApiKey)}&origin=${encodeURIComponent(
+        ride.fromCity
+      )}&destination=${encodeURIComponent(ride.toCity)}`
+    : null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -55,11 +61,23 @@ export function RideDetails() {
       </div>
 
       {/* Map Preview */}
-      <div className="relative h-48 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
-        <div className="text-center">
-          <Navigation className="w-12 h-12 text-blue-600 mx-auto mb-2" />
-          <div className="text-sm text-gray-600">{ride.fromCity} to {ride.toCity}</div>
-        </div>
+      <div className="relative h-48 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
+        {routePreviewUrl ? (
+          <iframe
+            title="Route preview"
+            src={routePreviewUrl}
+            className="w-full h-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <Navigation className="w-12 h-12 text-blue-600 mx-auto mb-2" />
+              <div className="text-sm text-gray-600">{ride.fromCity} to {ride.toCity}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="px-6 py-6 space-y-4">
@@ -120,6 +138,12 @@ export function RideDetails() {
                 <div className="text-sm text-gray-500">
                   Price ${ride.pricePerSeat} per seat
                 </div>
+                {(ride.distanceText || ride.durationText) && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {ride.distanceText || 'Distance unavailable'}
+                    {ride.durationText ? ` • ${ride.durationText}` : ''}
+                  </div>
+                )}
               </div>
             </div>
           </div>

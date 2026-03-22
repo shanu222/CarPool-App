@@ -1,5 +1,6 @@
 export interface User {
   id: string;
+  _id?: string;
   name: string;
   email?: string;
   phone?: string;
@@ -17,6 +18,16 @@ export interface Ride {
   pricePerSeat: number;
   totalSeats: number;
   availableSeats: number;
+  fromCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  toCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  distanceText?: string;
+  durationText?: string;
 }
 
 export interface Booking {
@@ -32,4 +43,31 @@ export interface Booking {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export interface NotificationItem {
+  _id: string;
+  type: "ride_posted" | "ride_booked" | "message" | "generic";
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+  data?: Record<string, unknown>;
+}
+
+export interface Message {
+  _id: string;
+  ride: string;
+  sender: {
+    _id: string;
+    name: string;
+    role: "passenger" | "driver";
+  };
+  receiver: {
+    _id: string;
+    name: string;
+    role: "passenger" | "driver";
+  };
+  text: string;
+  createdAt: string;
 }

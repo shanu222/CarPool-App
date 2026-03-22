@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "../types";
 import { clearSession, getStoredUser, getToken, setStoredUser, setToken } from "../lib/storage";
+import { disconnectSocket } from "../lib/socket";
 
 interface AuthContextValue {
   user: User | null;
@@ -26,6 +27,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     clearSession();
+    disconnectSocket();
     setUser(null);
     setTokenState(null);
   };

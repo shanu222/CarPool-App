@@ -1,16 +1,21 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { createServer } from "node:http";
 import morgan from "morgan";
 import { connectDb } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import rideRoutes from "./routes/rideRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import messageRoutes from "./routes/messageRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
+import { initializeSocket } from "./socket/setupSocket.js";
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || "0.0.0.0";
 let isDbConnected = false;
@@ -69,12 +74,16 @@ app.get("/ready", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/messages", messageRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 const startServer = async () => {
-  app.listen(port, host, () => {
+  initializeSocket(httpServer);
+
+  httpServer.listen(port, host, () => {
     console.log(`Server listening on ${host}:${port}`);
   });
 

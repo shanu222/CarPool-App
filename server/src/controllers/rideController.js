@@ -1,16 +1,28 @@
 import { Ride } from "../models/Ride.js";
+import { User } from "../models/User.js";
+import { Notification } from "../models/Notification.js";
+import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
+import { sendPushNotification } from "../services/pushService.js";
 
 export const createRide = async (req, res, next) => {
   try {
-    const { fromCity, toCity, date, time, pricePerSeat, totalSeats } = req.body;
+    const { fromCity, toCity, date, time, pricePerSeat, totalSeats, availableSeats } = req.body;
+    const requestedSeats = Number(availableSeats ?? totalSeats);
 
-    if (!fromCity || !toCity || !date || !time || !pricePerSeat || !totalSeats) {
+    if (!fromCity || !toCity || !date || !time || !pricePerSeat || !requestedSeats) {
       return res.status(400).json({ message: "All ride fields are required" });
     }
 
     if (fromCity.trim().toLowerCase() === toCity.trim().toLowerCase()) {
       return res.status(400).json({ message: "fromCity and toCity cannot be same" });
     }
+
+    const [fromCoordinates, toCoordinates] = await Promise.all([
+      geocodeCity(fromCity.trim()),
+      geocodeCity(toCity.trim()),
+    ]);
+
+    const routeMeta = await getDistanceAndDuration(fromCoordinates, toCoordinates);
 
     const ride = await Ride.create({
       driver: req.user._id,
@@ -19,9 +31,40 @@ export const createRide = async (req, res, next) => {
       date,
       time,
       pricePerSeat: Number(pricePerSeat),
-      totalSeats: Number(totalSeats),
-      availableSeats: Number(totalSeats),
+      totalSeats: requestedSeats,
+      availableSeats: requestedSeats,
+      fromCoordinates: fromCoordinates || undefined,
+      toCoordinates: toCoordinates || undefined,
+      distanceText: routeMeta?.distanceText,
+      durationText: routeMeta?.durationText,
     });
+
+    const passengers = await User.find({ role: "passenger", _id: { $ne: req.user._id } })
+      .select("_id fcmToken")
+      .limit(200);
+
+    if (passengers.length) {
+      await Notification.insertMany(
+        passengers.map((passenger) => ({
+          user: passenger._id,
+          type: "ride_posted",
+          title: "New ride available",
+          body: `${fromCity.trim()} to ${toCity.trim()} on ${date} at ${time}`,
+          data: { rideId: ride._id },
+        }))
+      );
+
+      await Promise.allSettled(
+        passengers.map((passenger) =>
+          sendPushNotification({
+            token: passenger.fcmToken,
+            title: "New ride posted",
+            body: `${fromCity.trim()} → ${toCity.trim()} · ${date} ${time}`,
+            data: { rideId: String(ride._id) },
+          })
+        )
+      );
+    }
 
     const populatedRide = await Ride.findById(ride._id).populate("driver", "name email phone role rating");
     return res.status(201).json(populatedRide);
@@ -32,7 +75,7 @@ export const createRide = async (req, res, next) => {
 
 export const searchRides = async (req, res, next) => {
   try {
-    const { from, to, date } = req.query;
+    const { from, to, date, sort = "time" } = req.query;
 
     const query = {
       ...(from ? { fromCity: new RegExp(`^${from.trim()}$`, "i") } : {}),
@@ -41,9 +84,9 @@ export const searchRides = async (req, res, next) => {
       availableSeats: { $gt: 0 },
     };
 
-    const rides = await Ride.find(query)
-      .populate("driver", "name email phone role rating")
-      .sort({ date: 1, time: 1, createdAt: -1 });
+    const sortOption = sort === "price" ? { pricePerSeat: 1, createdAt: -1 } : { date: 1, time: 1, createdAt: -1 };
+
+    const rides = await Ride.find(query).populate("driver", "name email phone role rating").sort(sortOption);
 
     return res.json(rides);
   } catch (error) {
