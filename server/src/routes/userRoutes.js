@@ -5,6 +5,7 @@ import { upload } from "../middleware/upload.js";
 import { User } from "../models/User.js";
 import { UserLocation } from "../models/UserLocation.js";
 import { isWithinPakistanBounds } from "../utils/pakistanLocation.js";
+import { UserReport } from "../models/UserReport.js";
 
 const router = Router();
 
@@ -33,9 +34,54 @@ router.post("/location", protect, async (req, res, next) => {
   }
 });
 
+router.post("/block", protect, async (req, res, next) => {
+  try {
+    const { targetUserId } = req.body;
+
+    if (!targetUserId) {
+      return res.status(400).json({ message: "targetUserId is required" });
+    }
+
+    if (String(targetUserId) === String(req.user._id)) {
+      return res.status(400).json({ message: "You cannot block yourself" });
+    }
+
+    await User.findByIdAndUpdate(req.user._id, {
+      $addToSet: { blockedUsers: targetUserId },
+    });
+
+    return res.json({ message: "User blocked" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/report", protect, async (req, res, next) => {
+  try {
+    const { targetUserId, rideId, reason } = req.body;
+
+    if (!targetUserId || !reason?.trim()) {
+      return res.status(400).json({ message: "targetUserId and reason are required" });
+    }
+
+    const report = await UserReport.create({
+      reporterId: req.user._id,
+      targetUserId,
+      rideId: rideId || undefined,
+      reason: reason.trim(),
+    });
+
+    return res.status(201).json(report);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get("/:id", protect, async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id).select("name profilePhoto isVerified paymentApproved canPostRide canBookRide canChat");
+    const user = await User.findById(req.params.id).select(
+      "name phone profilePhoto isVerified paymentApproved canPostRide canBookRide canChat blockedUsers"
+    );
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -44,12 +90,14 @@ router.get("/:id", protect, async (req, res, next) => {
     return res.json({
       _id: user._id,
       name: user.name,
+      phone: user.phone,
       profilePhoto: user.profilePhoto,
       isVerified: Boolean(user.isVerified),
       paymentApproved: Boolean(user.paymentApproved),
       canPostRide: Boolean(user.canPostRide),
       canBookRide: Boolean(user.canBookRide),
       canChat: Boolean(user.canChat),
+      blockedUsers: user.blockedUsers || [],
     });
   } catch (error) {
     return next(error);

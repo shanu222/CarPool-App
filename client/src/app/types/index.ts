@@ -29,6 +29,7 @@ export interface User {
   canBookRide?: boolean;
   canChat?: boolean;
   paymentApproved?: boolean;
+  blockedUsers?: string[];
 }
 
 export interface Ride {

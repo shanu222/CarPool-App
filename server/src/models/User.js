@@ -135,6 +135,12 @@ const userSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     resetToken: {
       type: String,
       select: false,

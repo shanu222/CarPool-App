@@ -203,6 +203,7 @@ const sanitizeUser = (user) => ({
   canBookRide: user.canBookRide,
   canChat: user.canChat,
   paymentApproved: user.paymentApproved,
+  blockedUsers: user.blockedUsers || [],
 });
 
 export const register = async (req, res, next) => {

@@ -22,6 +22,21 @@ const mapMessagePayload = (messageDoc) => {
   };
 };
 
+const isConversationBlocked = async (aUserId, bUserId) => {
+  const [aUser, bUser] = await Promise.all([
+    User.findById(aUserId).select("blockedUsers"),
+    User.findById(bUserId).select("blockedUsers"),
+  ]);
+
+  if (!aUser || !bUser) {
+    return false;
+  }
+
+  const aBlockedB = (aUser.blockedUsers || []).some((id) => String(id) === String(bUserId));
+  const bBlockedA = (bUser.blockedUsers || []).some((id) => String(id) === String(aUserId));
+  return aBlockedB || bBlockedA;
+};
+
 const toRad = (value) => (value * Math.PI) / 180;
 
 const calculateDistanceKm = (a, b) => {
@@ -115,6 +130,12 @@ export const initializeSocket = (httpServer) => {
       }
 
       if (!isDriver && !hasAcceptedBooking) {
+        return;
+      }
+
+      const blocked = await isConversationBlocked(socket.user._id, receiverId);
+      if (blocked) {
+        socket.emit("chat_blocked", { rideId, receiverId });
         return;
       }
 

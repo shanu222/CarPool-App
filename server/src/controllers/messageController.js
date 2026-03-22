@@ -25,6 +25,21 @@ const mapMessagePayload = (messageDoc) => {
   };
 };
 
+const isConversationBlocked = async (aUserId, bUserId) => {
+  const [aUser, bUser] = await Promise.all([
+    User.findById(aUserId).select("blockedUsers"),
+    User.findById(bUserId).select("blockedUsers"),
+  ]);
+
+  if (!aUser || !bUser) {
+    return false;
+  }
+
+  const aBlockedB = (aUser.blockedUsers || []).some((id) => String(id) === String(bUserId));
+  const bBlockedA = (bUser.blockedUsers || []).some((id) => String(id) === String(aUserId));
+  return aBlockedB || bBlockedA;
+};
+
 export const getRideMessages = async (req, res, next) => {
   try {
     const { rideId } = req.params;
@@ -51,6 +66,18 @@ export const getRideMessages = async (req, res, next) => {
 
     if (!isDriver && !hasBooking) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const latestMessage = await Message.findOne({ rideId }).sort({ createdAt: -1 });
+    const counterpartId = isDriver
+      ? latestMessage?.senderId || latestMessage?.receiverId || null
+      : ride.driver;
+
+    if (counterpartId) {
+      const blocked = await isConversationBlocked(req.user._id, counterpartId);
+      if (blocked) {
+        return res.status(403).json({ message: "User blocked" });
+      }
     }
 
     await Message.updateMany(
@@ -128,6 +155,11 @@ export const sendMessage = async (req, res, next) => {
 
     if (!isDriver && !hasBooking) {
       return res.status(403).json({ message: "Only ride participants can chat" });
+    }
+
+    const blocked = await isConversationBlocked(req.user._id, receiverId);
+    if (blocked) {
+      return res.status(403).json({ message: "User blocked" });
     }
 
     const createdMessage = await Message.create({
