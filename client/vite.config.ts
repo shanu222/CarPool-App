@@ -17,6 +17,13 @@ export default defineConfig({
     },
   },
 
+  preview: {
+    host: '0.0.0.0',
+    port: Number(process.env.PORT) || 4173,
+    // Railway serves preview behind *.up.railway.app hostnames.
+    allowedHosts: ['.up.railway.app', 'localhost', '127.0.0.1'],
+  },
+
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 })
