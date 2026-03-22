@@ -5,10 +5,54 @@ import { Booking } from "../models/Booking.js";
 import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
 import { sendPushNotification } from "../services/pushService.js";
 
+const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
+
+const parseRideDateTime = (date, time) => {
+  const value = new Date(`${date}T${time}:00`);
+  if (Number.isNaN(value.getTime())) {
+    return null;
+  }
+
+  return value;
+};
+
+const deriveStatusFromDateTime = (dateTime, now = new Date()) => {
+  if (dateTime <= now) {
+    return "ongoing";
+  }
+
+  return "scheduled";
+};
+
+const refreshRideLifecycleStatuses = async (now = new Date()) => {
+  await Ride.updateMany(
+    {
+      status: "scheduled",
+      dateTime: { $lte: now },
+    },
+    {
+      $set: { status: "ongoing" },
+    }
+  );
+
+  const completedBefore = new Date(now.getTime() - RIDE_AUTO_COMPLETE_HOURS * 60 * 60 * 1000);
+
+  await Ride.updateMany(
+    {
+      status: "ongoing",
+      dateTime: { $lte: completedBefore },
+    },
+    {
+      $set: { status: "completed" },
+    }
+  );
+};
+
 export const createRide = async (req, res, next) => {
   try {
     const { fromCity, toCity, date, time, pricePerSeat, totalSeats, availableSeats } = req.body;
     const requestedSeats = Number(availableSeats ?? totalSeats);
+    const rideDateTime = parseRideDateTime(date, time);
 
     if (!req.user?.isVerified) {
       return res.status(403).json({ message: "Driver verification is required before posting rides" });
@@ -20,6 +64,10 @@ export const createRide = async (req, res, next) => {
 
     if (!fromCity || !toCity || !date || !time || !pricePerSeat || !requestedSeats) {
       return res.status(400).json({ message: "All ride fields are required" });
+    }
+
+    if (!rideDateTime) {
+      return res.status(400).json({ message: "Invalid ride date/time" });
     }
 
     if (fromCity.trim().toLowerCase() === toCity.trim().toLowerCase()) {
@@ -39,6 +87,7 @@ export const createRide = async (req, res, next) => {
       toCity: toCity.trim(),
       date,
       time,
+      dateTime: rideDateTime,
       pricePerSeat: Number(pricePerSeat),
       totalSeats: requestedSeats,
       availableSeats: requestedSeats,
@@ -46,6 +95,7 @@ export const createRide = async (req, res, next) => {
       toCoordinates: toCoordinates || undefined,
       distanceText: routeMeta?.distanceText,
       durationText: routeMeta?.durationText,
+      status: deriveStatusFromDateTime(rideDateTime),
     });
 
     const passengers = await User.find({ role: "passenger", _id: { $ne: req.user._id } })
@@ -88,6 +138,7 @@ export const createRide = async (req, res, next) => {
 export const searchRides = async (req, res, next) => {
   try {
     const { from, to, date, sort = "time", type, route } = req.query;
+    await refreshRideLifecycleStatuses();
 
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -121,7 +172,7 @@ export const searchRides = async (req, res, next) => {
     if (type === "upcoming") {
       andConditions.push({ status: "scheduled" });
       andConditions.push({
-        $or: [{ date: { $gt: nowDate } }, { date: nowDate, time: { $gte: nowTime } }],
+        $or: [{ dateTime: { $gt: now } }, { date: { $gt: nowDate } }, { date: nowDate, time: { $gte: nowTime } }],
       });
     }
 
@@ -129,8 +180,8 @@ export const searchRides = async (req, res, next) => {
 
     const sortOption =
       sort === "price"
-        ? { featured: -1, status: 1, pricePerSeat: 1, createdAt: -1 }
-        : { featured: -1, status: 1, date: 1, time: 1, createdAt: -1 };
+        ? { featured: -1, status: 1, pricePerSeat: 1, dateTime: 1, createdAt: -1 }
+        : { featured: -1, status: 1, dateTime: 1, createdAt: -1 };
 
     const rides = await Ride.find(query)
       .populate(
@@ -143,6 +194,10 @@ export const searchRides = async (req, res, next) => {
     const upcomingRides = rides.filter((ride) => {
       if (ride.status !== "scheduled") {
         return false;
+      }
+
+      if (ride.dateTime && new Date(ride.dateTime) > now) {
+        return true;
       }
 
       if (ride.date > nowDate) {
@@ -164,6 +219,7 @@ export const searchRides = async (req, res, next) => {
 
 export const getRideById = async (req, res, next) => {
   try {
+    await refreshRideLifecycleStatuses();
     const ride = await Ride.findById(req.params.id).populate(
       "driver",
       "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
@@ -181,12 +237,13 @@ export const getRideById = async (req, res, next) => {
 
 export const getMyRides = async (req, res, next) => {
   try {
+    await refreshRideLifecycleStatuses();
     const rides = await Ride.find({ driver: req.user._id })
       .populate(
         "driver",
         "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
-      .sort({ date: 1, time: 1, createdAt: -1 });
+      .sort({ dateTime: 1, createdAt: -1 });
 
     return res.json(rides);
   } catch (error) {

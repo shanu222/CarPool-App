@@ -55,6 +55,8 @@ function AutoCenter({ target }: { target: { lat: number; lng: number } | null })
 }
 
 export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
+    const isOngoing = ride.status === 'ongoing';
+
   const socketRef = useRef(getSocket());
   const watchIdRef = useRef<number | null>(null);
   const lastEmitRef = useRef(0);
@@ -161,7 +163,7 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
   useEffect(() => {
     const socket = socketRef.current;
 
-    if (!socket || !ride?._id) {
+    if (!socket || !ride?._id || !isOngoing) {
       return;
     }
 
@@ -189,9 +191,13 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
       socket.off("location:receive", onLocationUpdate);
       socket.off("location_update", onLocationUpdate);
     };
-  }, [ride._id, ride.driver.id, ride.driver._id]);
+  }, [isOngoing, ride._id, ride.driver.id, ride.driver._id]);
 
   useEffect(() => {
+    if (!isOngoing) {
+      return;
+    }
+
     const loadLatestDriverLocation = async () => {
       try {
         const response = await api.get<LiveLocation>(`/api/locations/latest/${ride._id}`);
@@ -202,7 +208,7 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
     };
 
     loadLatestDriverLocation();
-  }, [ride._id]);
+  }, [isOngoing, ride._id]);
 
   useEffect(
     () => () => {
@@ -261,22 +267,28 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
       </div>
 
       <div className="p-4 space-y-3">
-        {remainingDistance ? (
+        {isOngoing && remainingDistance ? (
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">Distance remaining</span>
             <span className="font-medium">{remainingDistance.km} km</span>
           </div>
         ) : null}
 
-        {remainingDistance ? (
+        {isOngoing && remainingDistance ? (
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">ETA</span>
             <span className="font-medium">{remainingDistance.etaMinutes} mins</span>
           </div>
         ) : null}
 
+        {!isOngoing ? (
+          <div className="rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            Scheduled ride: showing static route and points.
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-2 gap-2 pt-2">
-          {isDriver ? (
+          {isDriver && isOngoing ? (
             <button
               type="button"
               onClick={sharing ? stopLocationSharing : startLocationSharing}
@@ -285,7 +297,9 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
               {sharing ? "Stop Sharing" : "Share Live Location"}
             </button>
           ) : (
-            <div className="rounded-xl bg-blue-50 px-3 py-2 text-center text-sm text-blue-700">Watching driver live</div>
+            <div className="rounded-xl bg-blue-50 px-3 py-2 text-center text-sm text-blue-700">
+              {isOngoing ? 'Watching driver live' : 'Ride not live yet'}
+            </div>
           )}
 
           <button

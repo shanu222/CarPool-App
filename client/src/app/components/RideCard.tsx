@@ -9,6 +9,8 @@ interface RideCardProps {
 
 export function RideCard({ ride }: RideCardProps) {
   const navigate = useNavigate();
+  const isLive = ride.status === 'ongoing' && ride.availableSeats > 0;
+  const isScheduled = ride.status === 'scheduled';
 
   return (
     <motion.div
@@ -34,9 +36,21 @@ export function RideCard({ ride }: RideCardProps) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xl text-blue-200">${ride.pricePerSeat}</div>
+          <div className="text-xl text-blue-200">PKR {ride.pricePerSeat}</div>
           <div className="text-xs text-slate-100">per seat</div>
         </div>
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        {isLive ? (
+          <span className="rounded-full bg-emerald-500/25 px-2 py-1 text-[11px] text-emerald-200">LIVE</span>
+        ) : isScheduled ? (
+          <span className="rounded-full bg-sky-500/25 px-2 py-1 text-[11px] text-sky-200">SCHEDULED</span>
+        ) : (
+          <span className="rounded-full bg-slate-500/25 px-2 py-1 text-[11px] text-slate-200">{ride.status || 'UNKNOWN'}</span>
+        )}
+
+        {isLive ? <span className="text-xs text-emerald-200">LIVE RIDE AVAILABLE</span> : null}
       </div>
 
       <div className="flex items-start gap-2 mb-3">

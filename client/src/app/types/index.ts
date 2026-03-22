@@ -35,6 +35,7 @@ export interface Ride {
   toCity: string;
   date: string;
   time: string;
+  dateTime?: string;
   pricePerSeat: number;
   totalSeats: number;
   availableSeats: number;

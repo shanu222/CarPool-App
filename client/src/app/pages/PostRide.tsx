@@ -62,14 +62,14 @@ export function PostRide() {
   const isFormValid = Object.values(formData).every((value) => value.trim() !== '');
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pb-10">
       {/* Header */}
       <div className="bg-white px-6 py-4 border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl">Post a Ride</h1>
+          <h1 className="text-xl">Offer Ride</h1>
         </div>
       </div>
 
@@ -166,7 +166,7 @@ export function PostRide() {
                   type="number"
                   value={formData.pricePerSeat}
                   onChange={(e) => updateField('pricePerSeat', e.target.value)}
-                  placeholder="35"
+                  placeholder="500"
                   className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -192,18 +192,15 @@ export function PostRide() {
         </motion.div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
-      </form>
 
-      {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 max-w-md mx-auto">
         <button
-          onClick={handleSubmit}
+          type="submit"
           disabled={!isFormValid || loading}
-          className="w-full bg-green-600 text-white py-4 rounded-2xl shadow-lg shadow-green-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? 'Publishing...' : 'Publish Ride'}
+          {loading ? 'Posting...' : 'Post Ride'}
         </button>
-      </div>
+      </form>
     </div>
   );
 }

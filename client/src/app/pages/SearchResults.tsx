@@ -173,7 +173,7 @@ export function SearchResults() {
             </div>
             <h2 className="text-xl mb-2 text-white">No rides found</h2>
             <p className="text-slate-100 mb-6">
-              Try adjusting your search or check back later
+              Try another route/date or check back for live rides
             </p>
             <button
               onClick={() => navigate('/post-ride')}

@@ -25,6 +25,11 @@ const rideSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    dateTime: {
+      type: Date,
+      required: true,
+      index: true,
+    },
     pricePerSeat: {
       type: Number,
       required: true,
@@ -78,5 +83,22 @@ const rideSchema = new mongoose.Schema(
 );
 
 rideSchema.index({ fromCity: 1, toCity: 1, date: 1 });
+
+rideSchema.pre("validate", function syncDateTime(next) {
+  if ((!this.dateTime || Number.isNaN(new Date(this.dateTime).getTime())) && this.date && this.time) {
+    const parsed = new Date(`${this.date}T${this.time}:00`);
+    if (!Number.isNaN(parsed.getTime())) {
+      this.dateTime = parsed;
+    }
+  }
+
+  if (this.dateTime && (this.isModified("dateTime") || this.isModified("date") || this.isModified("time"))) {
+    const iso = new Date(this.dateTime).toISOString();
+    this.date = iso.slice(0, 10);
+    this.time = iso.slice(11, 16);
+  }
+
+  return next();
+});
 
 export const Ride = mongoose.model("Ride", rideSchema);

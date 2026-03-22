@@ -4,18 +4,13 @@ import { MapPin, Calendar, Search, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export function Home() {
-  const [mode, setMode] = useState<'find' | 'offer'>('find');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [date, setDate] = useState('');
   const navigate = useNavigate();
 
   const handleSearch = () => {
-    if (mode === 'find') {
-      navigate('/search?from=' + from + '&to=' + to + '&date=' + date);
-    } else {
-      navigate('/post-ride');
-    }
+    navigate('/search?from=' + from + '&to=' + to + '&date=' + date);
   };
 
   return (
@@ -27,27 +22,17 @@ export function Home() {
       </div>
 
       <div className="px-6 py-6">
-        {/* Toggle */}
-        <div className="glass-subtle p-2 rounded-2xl mb-6 flex gap-2">
-          <button
-            onClick={() => setMode('find')}
-            className={`tab-pill flex-1 py-3 rounded-xl ${mode === 'find' ? 'active' : ''}`}
-          >
-            <Search className="w-5 h-5 inline-block mr-2" />
-            Find a Ride
-          </button>
-          <button
-            onClick={() => setMode('offer')}
-            className={`tab-pill flex-1 py-3 rounded-xl ${mode === 'offer' ? 'active' : ''}`}
-          >
-            <Plus className="w-5 h-5 inline-block mr-2" />
-            Offer a Ride
-          </button>
-        </div>
+        <button
+          onClick={() => navigate('/post-ride')}
+          className="mb-6 w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30"
+        >
+          <Plus className="mr-2 inline-block h-5 w-5" />
+          Offer a Ride
+        </button>
 
         {/* Search Form */}
         <motion.div
-          key={mode}
+          key="find"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel rounded-3xl p-6 space-y-4"
@@ -96,14 +81,11 @@ export function Home() {
           {/* CTA Button */}
           <button
             onClick={handleSearch}
-            disabled={mode === 'find' && (!from || !to || !date)}
-            className={`w-full py-4 rounded-2xl shadow-lg transition-all duration-200 ${
-              mode === 'find'
-                ? 'bg-blue-600 text-white shadow-blue-600/30'
-                : 'bg-green-600 text-white shadow-green-600/30'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            disabled={!from || !to || !date}
+            className="w-full rounded-2xl bg-blue-600 py-4 text-white shadow-lg shadow-blue-600/30 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {mode === 'find' ? 'Search Rides' : 'Post Your Ride'}
+            <Search className="mr-2 inline-block h-5 w-5" />
+            Search Rides
           </button>
         </motion.div>
 
