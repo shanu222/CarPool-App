@@ -6,6 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import type { Ride } from '../types';
 import { RideCard } from '../components/RideCard';
+import { pakistanCities } from '../../data/pakistanCities';
+import { CityAutocomplete } from '../components/CityAutocomplete';
+import { toast } from 'sonner';
 
 interface NearbyRideResponse {
   nearbyRides: Ride[];
@@ -27,7 +30,7 @@ export function Home() {
   const isPassenger = user?.role === 'passenger';
 
   const handleSearch = () => {
-    navigate('/search?from=' + from + '&to=' + to + '&date=' + date);
+    navigate('/search?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + '&date=' + date);
   };
 
   useEffect(() => {
@@ -41,7 +44,11 @@ export function Home() {
         setLiveRides(response.data.liveRides || []);
         setScheduledRides(response.data.scheduledRides || []);
       } catch (error: any) {
-        setNearbyError(error?.response?.data?.message || 'Could not load nearby rides');
+        const message = error?.response?.data?.message || 'Could not load nearby rides';
+        setNearbyError(message);
+        if (message === 'Only Pakistani cities allowed') {
+          toast.error('Please enter a valid Pakistani city');
+        }
       }
     };
 
@@ -117,31 +124,23 @@ export function Home() {
             animate={{ opacity: 1, y: 0 }}
             className="glass-panel rounded-3xl p-6 space-y-4"
           >
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">From</label>
-              <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  placeholder="City of departure"
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+            <CityAutocomplete
+              label="From"
+              value={from}
+              onChange={setFrom}
+              placeholder="City of departure"
+              icon={<MapPin className="w-5 h-5 text-gray-400" />}
+              cities={pakistanCities}
+            />
 
-            <div>
-              <label className="block text-sm mb-2 text-gray-700">To</label>
-              <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600" />
-                <input
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  placeholder="Destination city"
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+            <CityAutocomplete
+              label="To"
+              value={to}
+              onChange={setTo}
+              placeholder="Destination city"
+              icon={<MapPin className="w-5 h-5 text-blue-600" />}
+              cities={pakistanCities}
+            />
 
             <div>
               <label className="block text-sm mb-2 text-gray-700">Date</label>

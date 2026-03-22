@@ -5,6 +5,7 @@ import { RideCard } from '../components/RideCard';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import type { Ride, RideSearchResponse } from '../types';
+import { toast } from 'sonner';
 
 export function SearchResults() {
   const navigate = useNavigate();
@@ -42,6 +43,9 @@ export function SearchResults() {
         const apiMessage = requestError?.response?.data?.message;
         if (apiMessage === 'Passengers only') {
           setError('Switch to Passenger to search rides');
+        } else if (apiMessage === 'Only Pakistani cities allowed') {
+          setError('Please enter a valid Pakistani city');
+          toast.error('Please enter a valid Pakistani city');
         } else {
           setError(apiMessage || 'Could not load rides');
         }

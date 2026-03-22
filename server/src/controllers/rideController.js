@@ -4,6 +4,13 @@ import { Notification } from "../models/Notification.js";
 import { Booking } from "../models/Booking.js";
 import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
 import { sendPushNotification } from "../services/pushService.js";
+import {
+  getKnownPakistanCity,
+  isKnownPakistanCity,
+  isWithinPakistanBounds,
+  PAKISTAN_BOUNDS,
+  searchNominatimCity,
+} from "../utils/pakistanLocation.js";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
 
@@ -37,6 +44,54 @@ const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusKm * c;
+};
+
+const resolvePakistanCity = async (city) => {
+  const trimmedCity = String(city || "").trim();
+
+  if (!trimmedCity) {
+    return null;
+  }
+
+  const knownCity = getKnownPakistanCity(trimmedCity);
+  const inKnownList = Boolean(knownCity);
+
+  if (inKnownList) {
+    const coords =
+      (await geocodeCity(`${knownCity}, Pakistan`)) ||
+      (await geocodeCity(knownCity)) ||
+      null;
+
+    if (!coords || !isWithinPakistanBounds(coords)) {
+      return null;
+    }
+
+    return {
+      city: knownCity,
+      coords,
+    };
+  }
+
+  const nominatimResult = await searchNominatimCity(trimmedCity);
+  if (!nominatimResult) {
+    return null;
+  }
+
+  if (nominatimResult.country.toLowerCase() !== "pakistan") {
+    return null;
+  }
+
+  if (!isWithinPakistanBounds({ lat: nominatimResult.lat, lng: nominatimResult.lng })) {
+    return null;
+  }
+
+  return {
+    city: trimmedCity,
+    coords: {
+      lat: nominatimResult.lat,
+      lng: nominatimResult.lng,
+    },
+  };
 };
 
 const refreshRideLifecycleStatuses = async (now = new Date()) => {
@@ -89,17 +144,28 @@ export const createRide = async (req, res, next) => {
       return res.status(400).json({ message: "fromCity and toCity cannot be same" });
     }
 
-    const [fromCoordinates, toCoordinates] = await Promise.all([
-      geocodeCity(fromCity.trim()),
-      geocodeCity(toCity.trim()),
+    const [fromResolved, toResolved] = await Promise.all([
+      resolvePakistanCity(fromCity),
+      resolvePakistanCity(toCity),
     ]);
+
+    if (!fromResolved || !toResolved) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
+    }
+
+    const fromCoordinates = fromResolved.coords;
+    const toCoordinates = toResolved.coords;
+
+    if (!isWithinPakistanBounds(fromCoordinates) || !isWithinPakistanBounds(toCoordinates)) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
+    }
 
     const routeMeta = await getDistanceAndDuration(fromCoordinates, toCoordinates);
 
     const ride = await Ride.create({
       driver: req.user._id,
-      fromCity: fromCity.trim(),
-      toCity: toCity.trim(),
+      fromCity: fromResolved.city,
+      toCity: toResolved.city,
       date,
       time,
       dateTime: rideDateTime,
@@ -163,6 +229,20 @@ export const searchRides = async (req, res, next) => {
       return res.status(403).json({ message: "Please submit CNIC in profile verification before viewing rides" });
     }
 
+    if (from && !isKnownPakistanCity(String(from).trim())) {
+      const validFrom = await searchNominatimCity(String(from).trim());
+      if (!validFrom || validFrom.country.toLowerCase() !== "pakistan") {
+        return res.status(400).json({ message: "Only Pakistani cities allowed" });
+      }
+    }
+
+    if (to && !isKnownPakistanCity(String(to).trim())) {
+      const validTo = await searchNominatimCity(String(to).trim());
+      if (!validTo || validTo.country.toLowerCase() !== "pakistan") {
+        return res.status(400).json({ message: "Only Pakistani cities allowed" });
+      }
+    }
+
     const now = new Date();
     const nowDate = now.toISOString().slice(0, 10);
     const nowTime = now.toTimeString().slice(0, 5);
@@ -173,6 +253,10 @@ export const searchRides = async (req, res, next) => {
       ...(date ? [{ date }] : []),
       { availableSeats: { $gt: 0 } },
       { status: { $in: ["scheduled", "ongoing"] } },
+      { "fromCoordinates.lat": { $gte: PAKISTAN_BOUNDS.minLat, $lte: PAKISTAN_BOUNDS.maxLat } },
+      { "fromCoordinates.lng": { $gte: PAKISTAN_BOUNDS.minLng, $lte: PAKISTAN_BOUNDS.maxLng } },
+      { "toCoordinates.lat": { $gte: PAKISTAN_BOUNDS.minLat, $lte: PAKISTAN_BOUNDS.maxLat } },
+      { "toCoordinates.lng": { $gte: PAKISTAN_BOUNDS.minLng, $lte: PAKISTAN_BOUNDS.maxLng } },
     ];
 
     if (route?.trim()) {
@@ -258,6 +342,10 @@ export const getNearbyRides = async (req, res, next) => {
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.status(400).json({ message: "Valid lat and lng query params are required" });
+    }
+
+    if (!isWithinPakistanBounds({ lat, lng })) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
     }
 
     const baseQuery = {

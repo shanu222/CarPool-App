@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { PaymentModal } from '../components/PaymentModal';
+import { CityAutocomplete } from '../components/CityAutocomplete';
+import { pakistanCities } from '../../data/pakistanCities';
 
 export function PostRide() {
   const navigate = useNavigate();
@@ -99,29 +101,25 @@ export function PostRide() {
           <h3 className="text-base">Route Details</h3>
 
           <div>
-            <label className="block text-sm mb-2 text-gray-700">From</label>
-            <div className="relative">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                value={formData.fromCity}
-                onChange={(e) => updateField('fromCity', e.target.value)}
-                placeholder="Departure city"
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            <CityAutocomplete
+              label="From"
+              value={formData.fromCity}
+              onChange={(value) => updateField('fromCity', value)}
+              placeholder="Departure city"
+              icon={<MapPin className="w-5 h-5 text-gray-400" />}
+              cities={pakistanCities}
+            />
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-gray-700">To</label>
-            <div className="relative">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600" />
-              <input
-                value={formData.toCity}
-                onChange={(e) => updateField('toCity', e.target.value)}
-                placeholder="Destination city"
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            <CityAutocomplete
+              label="To"
+              value={formData.toCity}
+              onChange={(value) => updateField('toCity', value)}
+              placeholder="Destination city"
+              icon={<MapPin className="w-5 h-5 text-blue-600" />}
+              cities={pakistanCities}
+            />
           </div>
         </motion.div>
 

@@ -6,6 +6,7 @@ import type { AdminAnalytics, Payment, PaymentSettings, Ride, User } from "../ty
 
 type TabKey = "overview" | "users" | "rides" | "payments" | "settings";
 type UserStatusTab = "pending" | "approved" | "suspended" | "banned";
+type PaymentStatusTab = "pending" | "approved" | "rejected";
 
 export function AdminDashboard() {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export function AdminDashboard() {
   const [tab, setTab] = useState<TabKey>("overview");
   const [loading, setLoading] = useState(true);
   const [userStatusTab, setUserStatusTab] = useState<UserStatusTab>("pending");
+  const [paymentStatusTab, setPaymentStatusTab] = useState<PaymentStatusTab>("pending");
   const [users, setUsers] = useState<User[]>([]);
   const [rides, setRides] = useState<Ride[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -51,6 +53,7 @@ export function AdminDashboard() {
   };
 
   const filteredUsers = users.filter((item) => resolveUserStatus(item) === userStatusTab);
+  const filteredPayments = payments.filter((payment) => payment.status === paymentStatusTab);
 
   const loadDashboard = async () => {
     try {
@@ -300,7 +303,30 @@ export function AdminDashboard() {
 
       {!loading && tab === "payments" ? (
         <div className="mt-4 space-y-3">
-          {payments.map((payment) => (
+          <div className="glass-subtle rounded-2xl p-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setPaymentStatusTab("pending")}
+                className={`tab-pill rounded-xl px-3 py-2 text-sm ${paymentStatusTab === "pending" ? "active" : ""}`}
+              >
+                New Payments
+              </button>
+              <button
+                onClick={() => setPaymentStatusTab("approved")}
+                className={`tab-pill rounded-xl px-3 py-2 text-sm ${paymentStatusTab === "approved" ? "active" : ""}`}
+              >
+                Approved Payments
+              </button>
+              <button
+                onClick={() => setPaymentStatusTab("rejected")}
+                className={`tab-pill rounded-xl px-3 py-2 text-sm ${paymentStatusTab === "rejected" ? "active" : ""}`}
+              >
+                Rejected Payments
+              </button>
+            </div>
+          </div>
+
+          {filteredPayments.map((payment) => (
             <div key={payment._id} className="glass-panel rounded-2xl p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -308,11 +334,21 @@ export function AdminDashboard() {
                   <p className="text-xs text-slate-100">Type: {payment.type}</p>
                   <p className="text-xs text-slate-100">Amount: PKR {payment.amount}</p>
                   <p className="text-xs text-slate-100">Method: {payment.method}</p>
-                  <p className="text-xs text-slate-100">Status: {payment.status}</p>
+                  <div className="mt-1">
+                    <StatusBadge status={payment.status} />
+                  </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => reviewPayment(payment._id, "approved")} className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Approve</button>
-                  <button onClick={() => reviewPayment(payment._id, "rejected")} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Reject</button>
+                  {paymentStatusTab === "pending" ? (
+                    <>
+                      <button onClick={() => reviewPayment(payment._id, "approved")} className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Approve</button>
+                      <button onClick={() => reviewPayment(payment._id, "rejected")} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-700">Reject</button>
+                    </>
+                  ) : null}
+
+                  {paymentStatusTab === "rejected" ? (
+                    <button onClick={() => reviewPayment(payment._id, "approved")} className="rounded-lg bg-green-100 px-2 py-1 text-xs text-green-700">Approve Again</button>
+                  ) : null}
                 </div>
               </div>
 
@@ -323,6 +359,10 @@ export function AdminDashboard() {
               ) : null}
             </div>
           ))}
+
+          {filteredPayments.length === 0 ? (
+            <div className="glass-panel rounded-2xl p-6 text-sm text-slate-100">No payments in this category.</div>
+          ) : null}
         </div>
       ) : null}
 
@@ -355,6 +395,18 @@ export function AdminDashboard() {
       ) : null}
     </div>
   );
+}
+
+function StatusBadge({ status }: { status: Payment["status"] }) {
+  if (status === "approved") {
+    return <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">Approved</span>;
+  }
+
+  if (status === "rejected") {
+    return <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-700">Rejected</span>;
+  }
+
+  return <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-700">Pending</span>;
 }
 
 function StatCard({ label, value }: { label: string; value: number | string }) {

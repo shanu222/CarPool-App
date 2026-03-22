@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 
+const isPakistanLatitude = (value) => value === undefined || (value >= 23.5 && value <= 37.5);
+const isPakistanLongitude = (value) => value === undefined || (value >= 60.5 && value <= 77.5);
+
 const rideSchema = new mongoose.Schema(
   {
     driver: {
@@ -47,12 +50,36 @@ const rideSchema = new mongoose.Schema(
       min: 0,
     },
     fromCoordinates: {
-      lat: Number,
-      lng: Number,
+      lat: {
+        type: Number,
+        validate: {
+          validator: isPakistanLatitude,
+          message: "Only Pakistani cities allowed",
+        },
+      },
+      lng: {
+        type: Number,
+        validate: {
+          validator: isPakistanLongitude,
+          message: "Only Pakistani cities allowed",
+        },
+      },
     },
     toCoordinates: {
-      lat: Number,
-      lng: Number,
+      lat: {
+        type: Number,
+        validate: {
+          validator: isPakistanLatitude,
+          message: "Only Pakistani cities allowed",
+        },
+      },
+      lng: {
+        type: Number,
+        validate: {
+          validator: isPakistanLongitude,
+          message: "Only Pakistani cities allowed",
+        },
+      },
     },
     distanceText: {
       type: String,

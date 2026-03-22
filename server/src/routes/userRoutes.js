@@ -4,6 +4,7 @@ import { submitVerification } from "../controllers/verificationController.js";
 import { upload } from "../middleware/upload.js";
 import { User } from "../models/User.js";
 import { UserLocation } from "../models/UserLocation.js";
+import { isWithinPakistanBounds } from "../utils/pakistanLocation.js";
 
 const router = Router();
 
@@ -14,6 +15,10 @@ router.post("/location", protect, async (req, res, next) => {
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.status(400).json({ message: "Valid lat and lng are required" });
+    }
+
+    if (!isWithinPakistanBounds({ lat, lng })) {
+      return res.status(400).json({ message: "Only Pakistani cities allowed" });
     }
 
     const location = await UserLocation.findOneAndUpdate(
