@@ -180,9 +180,13 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
       setDriverLocation({ lat: payload.latitude, lng: payload.longitude });
     };
 
+    socket.on("location:update", onLocationUpdate);
+    socket.on("location:receive", onLocationUpdate);
     socket.on("location_update", onLocationUpdate);
 
     return () => {
+      socket.off("location:update", onLocationUpdate);
+      socket.off("location:receive", onLocationUpdate);
       socket.off("location_update", onLocationUpdate);
     };
   }, [ride._id, ride.driver.id, ride.driver._id]);

@@ -12,6 +12,7 @@ router.post(
     { name: "profilePhoto", maxCount: 1 },
     { name: "cnicPhoto", maxCount: 1 },
     { name: "licensePhoto", maxCount: 1 },
+    { name: "carPhoto", maxCount: 1 },
   ]),
   submitVerification
 );

@@ -73,6 +73,31 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    carPhoto: {
+      type: String,
+      trim: true,
+    },
+    carMake: {
+      type: String,
+      trim: true,
+    },
+    carModel: {
+      type: String,
+      trim: true,
+    },
+    carColor: {
+      type: String,
+      trim: true,
+    },
+    carPlateNumber: {
+      type: String,
+      trim: true,
+    },
+    carYear: {
+      type: Number,
+      min: 1970,
+      max: 2100,
+    },
     licensePhoto: {
       type: String,
       trim: true,
@@ -93,6 +118,14 @@ const userSchema = new mongoose.Schema(
     canChat: {
       type: Boolean,
       default: false,
+    },
+    passwordResetToken: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
     },
   },
   {

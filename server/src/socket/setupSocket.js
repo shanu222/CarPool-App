@@ -136,13 +136,17 @@ export const initializeSocket = (httpServer) => {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      io.to(`ride:${rideId}`).emit("location_update", {
+      const locationPayload = {
         rideId,
         userId: String(socket.user._id),
         latitude,
         longitude,
         updatedAt: location.updatedAt,
-      });
+      };
+
+      io.to(`ride:${rideId}`).emit("location:update", locationPayload);
+      io.to(`ride:${rideId}`).emit("location:receive", locationPayload);
+      io.to(`ride:${rideId}`).emit("location_update", locationPayload);
 
       const ride = await Ride.findById(rideId).select("driver fromCoordinates status");
       if (!ride || String(ride.driver) !== String(socket.user._id) || !ride.fromCoordinates || ride.status === "cancelled") {

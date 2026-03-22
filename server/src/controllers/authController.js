@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
+import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
 
 const getAdminEmails = () =>
@@ -119,6 +120,50 @@ const verifyAdminSecret = async (inputPassword, configuredPassword, configuredPa
   return timingSafeMatch(inputPassword, configuredPassword);
 };
 
+const getResetEmailTransport = () => {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: Number(process.env.SMTP_PORT || 587) === 465,
+    auth: {
+      user,
+      pass,
+    },
+  });
+};
+
+const sendResetEmail = async ({ to, resetUrl, token }) => {
+  const transport = getResetEmailTransport();
+  const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+
+  if (!transport || !from) {
+    return false;
+  }
+
+  await transport.sendMail({
+    from,
+    to,
+    subject: "Reset your Carpool password",
+    text: resetUrl
+      ? `Reset your password using this link: ${resetUrl}`
+      : `Use this reset token: ${token}`,
+    html: resetUrl
+      ? `<p>Reset your password using this link:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`
+      : `<p>Use this reset token:</p><p><strong>${token}</strong></p>`,
+  });
+
+  return true;
+};
+
 const signToken = (user, expiresIn = "7d") => {
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not configured");
@@ -144,6 +189,12 @@ const sanitizeUser = (user) => ({
   cnic: user.cnic,
   cnicPhoto: user.cnicPhoto || user.licensePhoto,
   profilePhoto: user.profilePhoto,
+  carPhoto: user.carPhoto,
+  carMake: user.carMake,
+  carModel: user.carModel,
+  carColor: user.carColor,
+  carPlateNumber: user.carPlateNumber,
+  carYear: user.carYear,
   licensePhoto: user.licensePhoto,
   ratingCount: user.ratingCount,
   canPostRide: user.canPostRide,
@@ -343,6 +394,94 @@ export const adminLogin = async (req, res, next) => {
     const adminTokenTtl = process.env.ADMIN_JWT_EXPIRES_IN || "8h";
     const token = signToken(user, adminTokenTtl);
     return res.json({ token, user: sanitizeUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const user = await User.findOne({ email: normalizedEmail });
+
+    // Always return the same response to avoid account enumeration.
+    if (!user) {
+      return res.json({ message: "If that email exists, a reset link has been sent" });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const resetMinutes = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES || 20);
+    const expiresAt = new Date(Date.now() + resetMinutes * 60 * 1000);
+
+    user.passwordResetToken = tokenHash;
+    user.passwordResetExpires = expiresAt;
+    await user.save();
+
+    const frontendBase = (process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)[0];
+    const resetUrl = frontendBase
+      ? `${frontendBase.replace(/\/$/, "")}/auth?mode=reset&token=${rawToken}&email=${encodeURIComponent(
+          normalizedEmail
+        )}`
+      : "";
+
+    const emailSent = await sendResetEmail({ to: normalizedEmail, resetUrl, token: rawToken });
+
+    if (process.env.NODE_ENV !== "production") {
+      return res.json({
+        message: "If that email exists, a reset link has been sent",
+        resetToken: rawToken,
+        resetUrl,
+        emailSent,
+      });
+    }
+
+    return res.json({ message: "If that email exists, a reset link has been sent" });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { email, token, newPassword } = req.body;
+
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ message: "email, token and newPassword are required" });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: "password must be at least 6 characters" });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+      passwordResetToken: tokenHash,
+      passwordResetExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset token" });
+    }
+
+    user.password = await bcrypt.hash(String(newPassword), 10);
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    return res.json({ message: "Password reset successful" });
   } catch (error) {
     return next(error);
   }

@@ -25,7 +25,7 @@ export const getAdminUsers = async (req, res, next) => {
 
     const users = await User.find(query)
       .select(
-        "name email phone role rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto accountStatus suspensionReason canPostRide canBookRide canChat createdAt"
+        "name email phone role rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason canPostRide canBookRide canChat createdAt"
       )
       .sort({ createdAt: -1 });
 

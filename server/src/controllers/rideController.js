@@ -75,7 +75,10 @@ export const createRide = async (req, res, next) => {
       );
     }
 
-    const populatedRide = await Ride.findById(ride._id).populate("driver", "name email phone role rating isVerified");
+    const populatedRide = await Ride.findById(ride._id).populate(
+      "driver",
+      "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+    );
     return res.status(201).json(populatedRide);
   } catch (error) {
     return next(error);
@@ -84,24 +87,76 @@ export const createRide = async (req, res, next) => {
 
 export const searchRides = async (req, res, next) => {
   try {
-    const { from, to, date, sort = "time" } = req.query;
+    const { from, to, date, sort = "time", type, route } = req.query;
 
-    const query = {
-      ...(from ? { fromCity: new RegExp(from.trim(), "i") } : {}),
-      ...(to ? { toCity: new RegExp(to.trim(), "i") } : {}),
-      ...(date ? { date } : {}),
-      availableSeats: { $gt: 0 },
-      status: { $in: ["scheduled", "ongoing"] },
-    };
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (req.user.role === "passenger" && !(req.user.cnicNumber || req.user.cnic)) {
+      return res.status(403).json({ message: "Please submit CNIC in profile verification before viewing rides" });
+    }
+
+    const now = new Date();
+    const nowDate = now.toISOString().slice(0, 10);
+    const nowTime = now.toTimeString().slice(0, 5);
+
+    const andConditions = [
+      ...(from ? [{ fromCity: new RegExp(from.trim(), "i") }] : []),
+      ...(to ? [{ toCity: new RegExp(to.trim(), "i") }] : []),
+      ...(date ? [{ date }] : []),
+      { availableSeats: { $gt: 0 } },
+      { status: { $in: ["scheduled", "ongoing"] } },
+    ];
+
+    if (route?.trim()) {
+      const routeRegex = new RegExp(route.trim(), "i");
+      andConditions.push({ $or: [{ fromCity: routeRegex }, { toCity: routeRegex }] });
+    }
+
+    if (type === "live") {
+      andConditions.push({ status: "ongoing" });
+    }
+
+    if (type === "upcoming") {
+      andConditions.push({ status: "scheduled" });
+      andConditions.push({
+        $or: [{ date: { $gt: nowDate } }, { date: nowDate, time: { $gte: nowTime } }],
+      });
+    }
+
+    const query = andConditions.length ? { $and: andConditions } : {};
 
     const sortOption =
       sort === "price"
         ? { featured: -1, status: 1, pricePerSeat: 1, createdAt: -1 }
         : { featured: -1, status: 1, date: 1, time: 1, createdAt: -1 };
 
-    const rides = await Ride.find(query).populate("driver", "name email phone role rating isVerified").sort(sortOption);
+    const rides = await Ride.find(query)
+      .populate(
+        "driver",
+        "name email phone role rating isVerified profilePhoto cnicNumber cnic carMake carModel carColor carPlateNumber carYear carPhoto"
+      )
+      .sort(sortOption);
 
-    return res.json(rides);
+    const liveRides = rides.filter((ride) => ride.status === "ongoing");
+    const upcomingRides = rides.filter((ride) => {
+      if (ride.status !== "scheduled") {
+        return false;
+      }
+
+      if (ride.date > nowDate) {
+        return true;
+      }
+
+      return ride.date === nowDate ? ride.time >= nowTime : false;
+    });
+
+    return res.json({
+      liveRides,
+      upcomingRides,
+      rides: [...liveRides, ...upcomingRides],
+    });
   } catch (error) {
     return next(error);
   }
@@ -109,7 +164,10 @@ export const searchRides = async (req, res, next) => {
 
 export const getRideById = async (req, res, next) => {
   try {
-    const ride = await Ride.findById(req.params.id).populate("driver", "name email phone role rating isVerified");
+    const ride = await Ride.findById(req.params.id).populate(
+      "driver",
+      "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+    );
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
@@ -124,7 +182,10 @@ export const getRideById = async (req, res, next) => {
 export const getMyRides = async (req, res, next) => {
   try {
     const rides = await Ride.find({ driver: req.user._id })
-      .populate("driver", "name email phone role rating isVerified")
+      .populate(
+        "driver",
+        "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+      )
       .sort({ date: 1, time: 1, createdAt: -1 });
 
     return res.json(rides);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { Mail, Phone } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
@@ -8,16 +9,35 @@ import { useAuth } from '../context/AuthContext';
 import type { AuthResponse } from '../types';
 
 export function Auth() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [role, setRole] = useState<'passenger' | 'driver'>('passenger');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { isAuthenticated, setAuth } = useAuth();
+
+  useEffect(() => {
+    const modeParam = searchParams.get('mode');
+    if (modeParam === 'forgot' || modeParam === 'reset') {
+      setMode(modeParam);
+    }
+
+    const tokenParam = searchParams.get('token');
+    const emailParam = searchParams.get('email');
+    if (tokenParam) {
+      setResetToken(tokenParam);
+    }
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -42,6 +62,22 @@ export function Auth() {
         });
 
         setAuth(response.data.token, response.data.user);
+      } else if (mode === 'forgot') {
+        await api.post('/api/auth/forgot-password', { email });
+        setError('Reset link/token sent. Check your email or backend logs.');
+        return;
+      } else if (mode === 'reset') {
+        await api.post('/api/auth/reset-password', {
+          email,
+          token: resetToken,
+          newPassword,
+        });
+        setError('Password reset successful. Please login.');
+        setMode('login');
+        setPassword('');
+        setResetToken('');
+        setNewPassword('');
+        return;
       } else {
         const response = await api.post<AuthResponse>('/api/auth/login', {
           email,
@@ -70,7 +106,14 @@ export function Auth() {
     }
   };
 
-  const canSubmit = email && password && (mode === 'login' || name);
+  const canSubmit =
+    mode === 'signup'
+      ? Boolean(email && password && name)
+      : mode === 'login'
+      ? Boolean(email && password)
+      : mode === 'forgot'
+      ? Boolean(email)
+      : Boolean(email && resetToken && newPassword);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -138,13 +181,25 @@ export function Auth() {
             />
           </div>
 
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          {mode !== 'forgot' && (
+            <input
+              type="password"
+              value={mode === 'reset' ? newPassword : password}
+              onChange={(e) => (mode === 'reset' ? setNewPassword(e.target.value) : setPassword(e.target.value))}
+              placeholder={mode === 'reset' ? 'New password' : 'Password'}
+              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
+
+          {mode === 'reset' && (
+            <input
+              type="text"
+              value={resetToken}
+              onChange={(e) => setResetToken(e.target.value)}
+              placeholder="Reset token"
+              className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
 
           {mode === 'signup' && (
             <div className="grid grid-cols-2 gap-2">
@@ -167,12 +222,50 @@ export function Auth() {
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
+          {mode === 'login' ? (
+            <button
+              type="button"
+              onClick={() => setMode('forgot')}
+              className="text-left text-sm text-blue-100"
+            >
+              Forgot password?
+            </button>
+          ) : null}
+
+          {mode === 'forgot' ? (
+            <button
+              type="button"
+              onClick={() => setMode('reset')}
+              className="text-left text-sm text-blue-100"
+            >
+              Already have a token? Reset now
+            </button>
+          ) : null}
+
+          {(mode === 'forgot' || mode === 'reset') ? (
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className="text-left text-sm text-blue-100"
+            >
+              Back to login
+            </button>
+          ) : null}
+
           <button
             type="submit"
             disabled={!canSubmit || loading}
             className="w-full bg-blue-600 text-white py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50"
           >
-            {loading ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Login'}
+            {loading
+              ? 'Please wait...'
+              : mode === 'signup'
+              ? 'Create account'
+              : mode === 'forgot'
+              ? 'Send reset'
+              : mode === 'reset'
+              ? 'Reset password'
+              : 'Login'}
           </button>
         </motion.form>
         </div>

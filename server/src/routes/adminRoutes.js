@@ -20,6 +20,7 @@ router.use(protect, requireAdmin);
 
 router.get("/users", getAdminUsers);
 router.post("/verify-user", verifyUserByAdmin);
+router.post("/verify", verifyUserByAdmin);
 router.post("/user-status", updateUserStatusByAdmin);
 
 router.get("/rides", getAdminRides);
@@ -28,6 +29,7 @@ router.post("/feature-ride", featureRideByAdmin);
 
 router.get("/payments", getAdminPayments);
 router.post("/approve-payment", approvePaymentByAdmin);
+router.post("/payment/approve", approvePaymentByAdmin);
 
 router.get("/payment-settings", getPaymentSettingsAdmin);
 router.post("/payment-settings", updatePaymentSettingsAdmin);

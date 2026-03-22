@@ -25,6 +25,12 @@ export function Profile() {
   const [cnic, setCnic] = useState(user?.cnicNumber || user?.cnic || '');
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
   const [cnicPhoto, setCnicPhoto] = useState<File | null>(null);
+  const [carPhoto, setCarPhoto] = useState<File | null>(null);
+  const [carMake, setCarMake] = useState(user?.carMake || '');
+  const [carModel, setCarModel] = useState(user?.carModel || '');
+  const [carColor, setCarColor] = useState(user?.carColor || '');
+  const [carPlateNumber, setCarPlateNumber] = useState(user?.carPlateNumber || '');
+  const [carYear, setCarYear] = useState(user?.carYear ? String(user.carYear) : '');
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -59,6 +65,18 @@ export function Profile() {
       }
       if (cnicPhoto) {
         formData.append('cnicPhoto', cnicPhoto);
+      }
+      if (carPhoto) {
+        formData.append('carPhoto', carPhoto);
+      }
+      if (user.role === 'driver') {
+        formData.append('carMake', carMake);
+        formData.append('carModel', carModel);
+        formData.append('carColor', carColor);
+        formData.append('carPlateNumber', carPlateNumber);
+        if (carYear) {
+          formData.append('carYear', carYear);
+        }
       }
 
       await api.post('/api/user/upload-documents', formData, {
@@ -180,6 +198,48 @@ export function Profile() {
               onChange={(event) => setCnicPhoto(event.target.files?.[0] || null)}
               className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
             />
+            {user.role === 'driver' ? (
+              <>
+                <input
+                  value={carMake}
+                  onChange={(event) => setCarMake(event.target.value)}
+                  placeholder="Car make"
+                  className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                />
+                <input
+                  value={carModel}
+                  onChange={(event) => setCarModel(event.target.value)}
+                  placeholder="Car model"
+                  className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                />
+                <input
+                  value={carPlateNumber}
+                  onChange={(event) => setCarPlateNumber(event.target.value)}
+                  placeholder="Car plate number"
+                  className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={carColor}
+                    onChange={(event) => setCarColor(event.target.value)}
+                    placeholder="Car color"
+                    className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                  />
+                  <input
+                    value={carYear}
+                    onChange={(event) => setCarYear(event.target.value)}
+                    placeholder="Year"
+                    className="w-full rounded-xl border border-white/40 bg-white/20 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                  />
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setCarPhoto(event.target.files?.[0] || null)}
+                  className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/85 file:px-3 file:py-1 file:text-slate-900"
+                />
+              </>
+            ) : null}
             <button
               type="button"
               onClick={submitVerification}

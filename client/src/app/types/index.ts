@@ -16,6 +16,12 @@ export interface User {
   maskedCnic?: string;
   cnic?: string;
   profilePhoto?: string;
+  carPhoto?: string;
+  carMake?: string;
+  carModel?: string;
+  carColor?: string;
+  carPlateNumber?: string;
+  carYear?: number;
   licensePhoto?: string;
   canPostRide?: boolean;
   canBookRide?: boolean;
@@ -143,4 +149,10 @@ export interface AdminAnalytics {
   totalRides: number;
   totalEarnings: number;
   activeRides: number;
+}
+
+export interface RideSearchResponse {
+  liveRides: Ride[];
+  upcomingRides: Ride[];
+  rides: Ride[];
 }
