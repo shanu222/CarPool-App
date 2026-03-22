@@ -1,16 +1,19 @@
 import type { User } from "../types";
 
-const TOKEN_KEY = "carpool_token";
+const TOKEN_KEY = "token";
+const LEGACY_TOKEN_KEY = "carpool_token";
 const USER_KEY = "carpool_user";
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const getToken = () => localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
 
 export const setToken = (token: string) => {
   localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(LEGACY_TOKEN_KEY, token);
 };
 
 export const clearToken = () => {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 };
 
 export const getStoredUser = (): User | null => {

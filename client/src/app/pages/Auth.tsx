@@ -35,7 +35,7 @@ export function Auth() {
       if (mode === 'signup') {
         const response = await api.post<AuthResponse>('/api/auth/register', {
           name,
-          email: email || undefined,
+          email,
           phone: phone || undefined,
           password,
           role,
@@ -44,8 +44,7 @@ export function Auth() {
         setAuth(response.data.token, response.data.user);
       } else {
         const response = await api.post<AuthResponse>('/api/auth/login', {
-          email: email || undefined,
-          phone: phone || undefined,
+          email,
           password,
         });
 
@@ -54,13 +53,18 @@ export function Auth() {
 
       navigate('/home');
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Authentication failed');
+      const apiMessage = requestError?.response?.data?.message;
+      if (apiMessage === 'Authentication failed') {
+        setError('Invalid email or password');
+      } else {
+        setError(apiMessage || 'Authentication failed');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const canSubmit = (email || phone) && password && (mode === 'login' || name);
+  const canSubmit = email && password && (mode === 'login' || name);
 
   return (
     <div className="min-h-screen bg-white flex flex-col max-w-md mx-auto">
@@ -105,8 +109,9 @@ export function Auth() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email (optional if phone is set)"
+              placeholder="Email"
               className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
             />
           </div>
 

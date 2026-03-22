@@ -2,10 +2,15 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 
-const signToken = (user) =>
-  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+const signToken = (user) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
+};
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -20,13 +25,17 @@ export const register = async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
 
-    if (!name || !password || (!email && !phone)) {
-      return res.status(400).json({ message: "name, password and email or phone are required" });
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "name, email and password are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "password must be at least 6 characters" });
     }
 
     const existingUser = await User.findOne({
       $or: [
-        ...(email ? [{ email: email.toLowerCase().trim() }] : []),
+        { email: email.toLowerCase().trim() },
         ...(phone ? [{ phone: phone.trim() }] : []),
       ],
     });
@@ -53,27 +62,22 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { email, phone, password } = req.body;
+    const { email, password } = req.body;
 
-    if ((!email && !phone) || !password) {
-      return res.status(400).json({ message: "email or phone, and password are required" });
+    if (!email || !password) {
+      return res.status(400).json({ message: "email and password are required" });
     }
 
-    const user = await User.findOne({
-      $or: [
-        ...(email ? [{ email: email.toLowerCase().trim() }] : []),
-        ...(phone ? [{ phone: phone.trim() }] : []),
-      ],
-    });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: "Authentication failed" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: "Authentication failed" });
     }
 
     const token = signToken(user);
