@@ -13,6 +13,11 @@ import { PaymentModal } from '../components/PaymentModal';
 const getUserId = (value: { id?: string; _id?: string } | null | undefined) =>
   value?.id || value?._id || '';
 
+const getSenderId = (msg: Message) => msg.sender?._id || msg.senderId?._id || '';
+const getReceiverId = (msg: Message) => msg.receiver?._id || msg.receiverId?._id || '';
+const getMessageText = (msg: Message) => msg.text || msg.message || '';
+const getMessageTime = (msg: Message) => msg.createdAt || msg.timestamp || new Date().toISOString();
+
 export function Chat() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -35,14 +40,14 @@ export function Chat() {
     }
 
     const counterpart = messages.find(
-      (msg) => msg.sender._id !== getUserId(user) || msg.receiver._id !== getUserId(user)
+      (msg) => getSenderId(msg) !== getUserId(user) || getReceiverId(msg) !== getUserId(user)
     );
 
     if (!counterpart) {
       return null;
     }
 
-    return counterpart.sender._id === getUserId(user) ? counterpart.receiver._id : counterpart.sender._id;
+    return getSenderId(counterpart) === getUserId(user) ? getReceiverId(counterpart) : getSenderId(counterpart);
   }, [messages, ride, user]);
 
   useEffect(() => {
@@ -51,10 +56,11 @@ export function Chat() {
         setLoading(true);
         const [rideResponse, messageResponse] = await Promise.all([
           api.get<Ride>(`/api/rides/${id}`),
-          api.get<Message[]>(`/api/messages/ride/${id}`),
+          api.get<Message[]>(`/api/messages/${id}`),
         ]);
         setRide(rideResponse.data);
         setMessages(messageResponse.data);
+        await api.patch(`/api/messages/${id}/seen`);
       } catch (requestError: any) {
         setError(requestError?.response?.data?.message || 'Ride not found');
       } finally {
@@ -81,20 +87,27 @@ export function Chat() {
     socket.emit('join_ride_room', { rideId: id });
 
     const handleNewMessage = (incoming: Message) => {
-      if (incoming.ride === id) {
+      const incomingRide = incoming.ride || incoming.rideId;
+      if (incomingRide === id) {
         setMessages((prev) => {
-          if (prev.some((item) => item._id === incoming._id)) {
-            return prev;
+          const withoutTemp = incoming.clientMessageId
+            ? prev.filter((item) => item.clientMessageId !== incoming.clientMessageId)
+            : prev;
+
+          if (withoutTemp.some((item) => item._id === incoming._id)) {
+            return withoutTemp;
           }
 
-          return [...prev, incoming];
+          return [...withoutTemp, incoming];
         });
       }
     };
 
+    socket.on('receive_message', handleNewMessage);
     socket.on('new_message', handleNewMessage);
 
     return () => {
+      socket.off('receive_message', handleNewMessage);
       socket.off('new_message', handleNewMessage);
     };
   }, [id]);
@@ -127,14 +140,50 @@ export function Chat() {
 
     const text = message.trim();
     setMessage('');
+    const clientMessageId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const optimisticMessage: Message = {
+      _id: clientMessageId,
+      clientMessageId,
+      ride: id || '',
+      sender: {
+        _id: getUserId(user),
+        name: user?.name || 'You',
+        role: (user?.role as 'passenger' | 'driver') || 'passenger',
+      },
+      receiver: {
+        _id: receiverId,
+        name: ride.driver.name,
+        role: 'driver',
+      },
+      text,
+      isSeen: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+
+    const socket = getSocket();
 
     try {
-      await api.post('/api/messages', {
-        rideId: id,
-        receiverId,
-        text,
-      });
+      if (socket?.connected) {
+        socket.emit('send_message', {
+          rideId: id,
+          receiverId,
+          text,
+          clientMessageId,
+        });
+      } else {
+        const response = await api.post<Message>('/api/messages', {
+          rideId: id,
+          receiverId,
+          text,
+        });
+
+        setMessages((prev) => prev.map((item) => (item.clientMessageId === clientMessageId ? response.data : item)));
+      }
     } catch (requestError: any) {
+      setMessages((prev) => prev.filter((item) => item.clientMessageId !== clientMessageId));
       setMessage(text);
       toast.error(requestError?.response?.data?.message || 'Could not send message');
     }
@@ -184,22 +233,22 @@ export function Chat() {
             key={msg._id}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.sender._id === getUserId(user) ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${getSenderId(msg) === getUserId(user) ? 'justify-end' : 'justify-start'}`}
           >
             <div
               className={`max-w-[70%] rounded-2xl px-4 py-3 ${
-                msg.sender._id === getUserId(user)
+                getSenderId(msg) === getUserId(user)
                   ? 'bg-blue-600 text-white rounded-br-sm'
                   : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
               }`}
             >
-              <p className="text-sm">{msg.text}</p>
+              <p className="text-sm">{getMessageText(msg)}</p>
               <p
                 className={`text-xs mt-1 ${
-                  msg.sender._id === getUserId(user) ? 'text-blue-100' : 'text-gray-500'
+                  getSenderId(msg) === getUserId(user) ? 'text-blue-100' : 'text-gray-500'
                 }`}
               >
-                {new Date(msg.createdAt).toLocaleTimeString('en-US', {
+                {new Date(getMessageTime(msg)).toLocaleTimeString('en-US', {
                   hour: 'numeric',
                   minute: '2-digit',
                 })}

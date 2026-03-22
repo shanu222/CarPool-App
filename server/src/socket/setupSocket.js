@@ -2,11 +2,25 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { Message } from "../models/Message.js";
 import { User } from "../models/User.js";
-import { setIo } from "./io.js";
+import { setIo, setUserOffline, setUserOnline, isUserOnline } from "./io.js";
 import { Location } from "../models/Location.js";
 import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
 import { Notification } from "../models/Notification.js";
+import { sendPushNotification } from "../services/pushService.js";
+
+const mapMessagePayload = (messageDoc) => {
+  const messageObj = typeof messageDoc.toObject === "function" ? messageDoc.toObject() : messageDoc;
+
+  return {
+    ...messageObj,
+    ride: messageObj.rideId,
+    sender: messageObj.senderId,
+    receiver: messageObj.receiverId,
+    text: messageObj.message,
+    createdAt: messageObj.createdAt || messageObj.timestamp,
+  };
+};
 
 const toRad = (value) => (value * Math.PI) / 180;
 
@@ -65,6 +79,8 @@ export const initializeSocket = (httpServer) => {
   });
 
   io.on("connection", (socket) => {
+    setUserOnline(socket.user._id);
+    socket.join(String(socket.user._id));
     socket.join(`user:${String(socket.user._id)}`);
 
     socket.on("join_ride_room", ({ rideId }) => {
@@ -76,7 +92,7 @@ export const initializeSocket = (httpServer) => {
     });
 
     socket.on("send_message", async (payload) => {
-      const { rideId, receiverId, text } = payload || {};
+      const { rideId, receiverId, text, clientMessageId } = payload || {};
 
       if (!rideId || !receiverId || !text?.trim()) {
         return;
@@ -102,18 +118,49 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const message = await Message.create({
-        ride: rideId,
-        sender: socket.user._id,
-        receiver: receiverId,
-        text: text.trim(),
+      const createdMessage = await Message.create({
+        rideId,
+        senderId: socket.user._id,
+        receiverId,
+        message: text.trim(),
+        timestamp: new Date(),
+        isSeen: false,
       });
 
-      const populated = await Message.findById(message._id)
-        .populate("sender", "name role")
-        .populate("receiver", "name role");
+      const populated = await Message.findById(createdMessage._id)
+        .populate("senderId", "name role")
+        .populate("receiverId", "name role");
 
-      io.to(`ride:${rideId}`).emit("new_message", populated);
+      const messagePayload = mapMessagePayload(populated);
+      messagePayload.clientMessageId = clientMessageId || null;
+
+      io.to(`ride:${rideId}`).emit("receive_message", messagePayload);
+      io.to(`ride:${rideId}`).emit("new_message", messagePayload);
+      io.to(`user:${String(receiverId)}`).emit("receive_message", messagePayload);
+
+      await Notification.create({
+        user: receiverId,
+        type: "message",
+        title: "New message",
+        body: `${socket.user.name} sent you a message`,
+        data: { rideId, messageId: String(createdMessage._id) },
+      });
+
+      if (!isUserOnline(receiverId)) {
+        const receiver = await User.findById(receiverId).select("fcmToken");
+        await sendPushNotification({
+          token: receiver?.fcmToken,
+          title: `New message from ${socket.user.name}`,
+          body: text.trim().slice(0, 80),
+          data: { rideId, messageId: String(createdMessage._id) },
+        });
+      }
+
+      socket.emit("message_sent", messagePayload);
+    });
+
+    socket.on("disconnect", () => {
+      setUserOffline(socket.user._id);
     });
 
     socket.on("share_location", async (payload) => {

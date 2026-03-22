@@ -89,8 +89,15 @@ export interface NotificationItem {
 
 export interface Message {
   _id: string;
+  clientMessageId?: string | null;
   ride: string;
+  rideId?: string;
   sender: {
+    _id: string;
+    name: string;
+    role: "passenger" | "driver";
+  };
+  senderId?: {
     _id: string;
     name: string;
     role: "passenger" | "driver";
@@ -100,7 +107,15 @@ export interface Message {
     name: string;
     role: "passenger" | "driver";
   };
+  receiverId?: {
+    _id: string;
+    name: string;
+    role: "passenger" | "driver";
+  };
   text: string;
+  message?: string;
+  isSeen?: boolean;
+  timestamp?: string;
   createdAt: string;
 }
 
