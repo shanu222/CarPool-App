@@ -39,7 +39,9 @@ export function AdminLogin() {
       setAuth(response.data.token, response.data.user);
       navigate("/dashboard", { replace: true });
     } catch (requestError: any) {
-      const message = requestError?.response?.data?.message || "Admin login failed";
+      const message =
+        requestError?.response?.data?.message ||
+        "Cannot reach backend. Check VITE_API_URL and backend CORS origins";
       setError(message);
     } finally {
       setLoading(false);

@@ -31,7 +31,13 @@ const host = process.env.HOST || "0.0.0.0";
 let isDbConnected = false;
 
 const normalizeOrigin = (value) => value.replace(/\/$/, "");
-const configuredOrigins = (process.env.CLIENT_ORIGIN || "")
+const configuredOrigins = [
+  process.env.CLIENT_ORIGIN || "",
+  process.env.ADMIN_CLIENT_ORIGIN || "",
+  process.env.CORS_ORIGIN || "",
+  process.env.FRONTEND_URL || "",
+]
+  .join(",")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean)
