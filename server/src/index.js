@@ -31,6 +31,29 @@ const host = process.env.HOST || "0.0.0.0";
 let isDbConnected = false;
 
 const normalizeOrigin = (value) => value.replace(/\/$/, "");
+const toUrl = (value) => {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+};
+
+const isRailwayOrigin = (value) => {
+  const parsed = toUrl(value);
+  return Boolean(parsed && parsed.hostname.endsWith(".up.railway.app"));
+};
+
+const isLocalOrigin = (value) => {
+  const parsed = toUrl(value);
+
+  if (!parsed) {
+    return false;
+  }
+
+  return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+};
+
 const configuredOrigins = [
   process.env.CLIENT_ORIGIN || "",
   process.env.ADMIN_CLIENT_ORIGIN || "",
@@ -43,6 +66,35 @@ const configuredOrigins = [
   .filter(Boolean)
   .map(normalizeOrigin);
 
+const allowRailwayOrigins = process.env.ALLOW_RAILWAY_ORIGINS !== "false";
+
+const isConfiguredOriginAllowed = (origin) => {
+  if (configuredOrigins.length === 0) {
+    return true;
+  }
+
+  if (configuredOrigins.includes(origin)) {
+    return true;
+  }
+
+  // Supports entries like https://*.up.railway.app in env variables.
+  return configuredOrigins.some((entry) => {
+    if (!entry.includes("*")) {
+      return false;
+    }
+
+    const pattern = new RegExp(
+      "^" +
+        entry
+          .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+          .replace(/\*/g, ".*") +
+        "$"
+    );
+
+    return pattern.test(origin);
+  });
+};
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -53,7 +105,15 @@ app.use(
 
       const normalized = normalizeOrigin(origin);
 
-      if (configuredOrigins.length === 0 || configuredOrigins.includes(normalized)) {
+      if (isConfiguredOriginAllowed(normalized)) {
+        return callback(null, true);
+      }
+
+      if (allowRailwayOrigins && isRailwayOrigin(normalized)) {
+        return callback(null, true);
+      }
+
+      if (isLocalOrigin(normalized)) {
         return callback(null, true);
       }
 
