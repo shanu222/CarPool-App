@@ -1,12 +1,15 @@
 import { Outlet, useNavigate, useLocation } from 'react-router';
 import { Home, Calendar, MessageCircle, User } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   const navItems = [
     { icon: Home, label: 'Home', path: '/home' },
+    ...(user?.role === 'driver' ? [{ icon: Calendar, label: 'Requests', path: '/ride-requests' }] : []),
     { icon: Calendar, label: 'Trips', path: '/trips' },
     { icon: MessageCircle, label: 'Messages', path: '/trips' },
     { icon: User, label: 'Profile', path: '/profile' },

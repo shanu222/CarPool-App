@@ -161,3 +161,24 @@ export interface RideSearchResponse {
   upcomingRides: Ride[];
   rides: Ride[];
 }
+
+export interface RideRequest {
+  _id: string;
+  passengerId: User;
+  fromCity: string;
+  toCity: string;
+  fromCoordinates: {
+    lat: number;
+    lng: number;
+  };
+  toCoordinates: {
+    lat: number;
+    lng: number;
+  };
+  dateTime: string;
+  seatsNeeded: number;
+  status: "open" | "matched" | "completed";
+  distanceKm?: number;
+  matchedRideId?: string;
+  matchedBookingId?: string;
+}

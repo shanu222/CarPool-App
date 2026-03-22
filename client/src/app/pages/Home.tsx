@@ -71,6 +71,35 @@ export function Home() {
       </div>
 
       <div className="px-6 py-6">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {isPassenger ? (
+            <button
+              onClick={() => navigate('/post-request')}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm text-white"
+            >
+              Find Ride
+            </button>
+          ) : null}
+
+          {isDriver ? (
+            <button
+              onClick={() => navigate('/post-ride')}
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm text-white"
+            >
+              Offer Ride
+            </button>
+          ) : null}
+
+          {isDriver ? (
+            <button
+              onClick={() => navigate('/ride-requests')}
+              className="rounded-xl bg-white/20 px-4 py-2 text-sm text-white"
+            >
+              Ride Requests
+            </button>
+          ) : null}
+        </div>
+
         {isDriver ? (
           <button
             onClick={() => navigate('/post-ride')}
