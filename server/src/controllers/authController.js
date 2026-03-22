@@ -98,12 +98,14 @@ const timingSafeMatch = (left, right) => {
 };
 
 const getConfiguredAdminCredential = () => {
-  const email = normalizeEmail(process.env.ADMIN_LOGIN_EMAIL || process.env.ADMIN_EMAIL || "");
-  const password = process.env.ADMIN_LOGIN_PASSWORD || "";
-  const passwordHash = process.env.ADMIN_LOGIN_PASSWORD_HASH || "";
+  const singleEmail = normalizeEmail(process.env.ADMIN_LOGIN_EMAIL || process.env.ADMIN_EMAIL || "");
+  const listEmails = getAdminEmails();
+  const emails = [...new Set([singleEmail, ...listEmails].filter(Boolean))];
+  const password = process.env.ADMIN_LOGIN_PASSWORD || process.env.ADMIN_PASSWORD || "";
+  const passwordHash = process.env.ADMIN_LOGIN_PASSWORD_HASH || process.env.ADMIN_PASSWORD_HASH || "";
 
   return {
-    email,
+    emails,
     password,
     passwordHash,
   };
@@ -208,7 +210,7 @@ export const login = async (req, res, next) => {
     const normalizedEmail = normalizeEmail(email);
     const configuredAdmin = getConfiguredAdminCredential();
 
-    if (configuredAdmin.email && normalizedEmail === configuredAdmin.email) {
+    if (configuredAdmin.emails.includes(normalizedEmail)) {
       await sleep(ADMIN_FAIL_DELAY_MS);
       return res.status(403).json({ message: "Use the admin login portal" });
     }
@@ -260,7 +262,7 @@ export const adminLogin = async (req, res, next) => {
     const { email, password } = req.body;
     const configuredAdmin = getConfiguredAdminCredential();
 
-    if (!configuredAdmin.email || (!configuredAdmin.password && !configuredAdmin.passwordHash)) {
+    if (configuredAdmin.emails.length === 0 || (!configuredAdmin.password && !configuredAdmin.passwordHash)) {
       return res.status(503).json({ message: "Admin login is not configured" });
     }
 
@@ -275,7 +277,9 @@ export const adminLogin = async (req, res, next) => {
       return res.status(429).json({ message: "Too many attempts. Try again later" });
     }
 
-    const emailMatches = timingSafeMatch(normalizedInputEmail, configuredAdmin.email);
+    const emailMatches = configuredAdmin.emails.some((emailOption) =>
+      timingSafeMatch(normalizedInputEmail, emailOption)
+    );
     const passwordMatches =
       emailMatches &&
       (await verifyAdminSecret(password, configuredAdmin.password, configuredAdmin.passwordHash));
@@ -288,13 +292,13 @@ export const adminLogin = async (req, res, next) => {
 
     resetAdminAttempts(key);
 
-    let user = await User.findOne({ email: configuredAdmin.email });
+    let user = await User.findOne({ email: normalizedInputEmail });
 
     if (!user) {
       const fallbackHash = await bcrypt.hash(crypto.randomUUID(), 10);
       user = await User.create({
         name: "Administrator",
-        email: configuredAdmin.email,
+        email: normalizedInputEmail,
         password: fallbackHash,
         role: "admin",
         accountStatus: "active",
