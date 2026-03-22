@@ -42,7 +42,7 @@ export function PostRide() {
       return;
     }
 
-    if (user?.paymentApproved !== true) {
+    if (user?.canPostRide !== true) {
       setError('Payment approval is required before posting rides.');
       setShowPaymentModal(true);
       return;
@@ -211,13 +211,13 @@ export function PostRide() {
 
         <button
           type="submit"
-          disabled={!isFormValid || loading || user?.role !== 'driver' || user?.paymentApproved !== true}
+          disabled={!isFormValid || loading || user?.role !== 'driver' || user?.canPostRide !== true}
           className="w-full rounded-2xl bg-green-600 py-4 text-white shadow-lg shadow-green-600/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Posting...' : 'Post Ride'}
         </button>
 
-        {user?.role === 'driver' && user?.paymentApproved !== true ? (
+        {user?.role === 'driver' && user?.canPostRide !== true ? (
           <button
             type="button"
             onClick={() => setShowPaymentModal(true)}

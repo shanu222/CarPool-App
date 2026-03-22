@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
+import { PaymentStatus } from './PaymentStatus';
 
 const AMOUNTS = {
   ride_post: 200,
@@ -11,6 +12,7 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
   const [method, setMethod] = useState('easypaisa');
   const [proof, setProof] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [latestStatus, setLatestStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const copy = useMemo(() => {
@@ -34,17 +36,37 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
       return;
     }
 
-    api
-      .get('/api/payments/settings')
-      .then((response) => setSettings(response.data))
-      .catch(() => setSettings(null));
-  }, [open]);
+    const loadModalData = async () => {
+      try {
+        const [settingsResponse, paymentsResponse] = await Promise.all([
+          api.get('/api/payments/settings'),
+          api.get('/api/payments/my'),
+        ]);
+
+        setSettings(settingsResponse.data);
+        const latest = (paymentsResponse.data || [])
+          .filter((payment) => payment.type === paymentType)
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+        setLatestStatus(latest?.status || null);
+      } catch {
+        setSettings(null);
+        setLatestStatus(null);
+      }
+    };
+
+    loadModalData();
+  }, [open, paymentType]);
 
   if (!open) {
     return null;
   }
 
   const submitPayment = async () => {
+    if (latestStatus === 'pending' || latestStatus === 'approved') {
+      return;
+    }
+
     if (!proof) {
       toast.error('Upload payment proof image to continue');
       return;
@@ -65,8 +87,8 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
       });
 
       toast.success('Payment proof submitted. Admin review is pending.');
+      setLatestStatus('pending');
       onSubmitted?.();
-      onClose();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Could not submit payment proof');
     } finally {
@@ -80,6 +102,8 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
         <h3 className="text-lg font-semibold text-slate-900">{copy.title}</h3>
         <p className="mt-1 text-sm text-slate-600">{copy.description}</p>
 
+        <PaymentStatus status={latestStatus} />
+
         <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
           <p>Easypaisa: {settings?.easypaisaNumber || '-'}</p>
           <p>JazzCash: {settings?.jazzcashNumber || '-'}</p>
@@ -91,7 +115,8 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
           <select
             value={method}
             onChange={(event) => setMethod(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            disabled={latestStatus === 'pending' || latestStatus === 'approved'}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
           >
             <option value="easypaisa">Easypaisa</option>
             <option value="jazzcash">JazzCash</option>
@@ -102,7 +127,8 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
             type="file"
             accept="image/*"
             onChange={(event) => setProof(event.target.files?.[0] || null)}
-            className="w-full text-sm"
+            disabled={latestStatus === 'pending' || latestStatus === 'approved'}
+            className="w-full text-sm disabled:cursor-not-allowed"
           />
 
           <div className="flex gap-2">
@@ -116,10 +142,16 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
             <button
               type="button"
               onClick={submitPayment}
-              disabled={submitting}
+              disabled={submitting || latestStatus === 'pending' || latestStatus === 'approved'}
               className="flex-1 rounded-xl bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
             >
-              {submitting ? 'Submitting...' : copy.cta}
+              {latestStatus === 'pending'
+                ? 'Waiting for Approval'
+                : latestStatus === 'approved'
+                ? 'Payment Approved'
+                : submitting
+                ? 'Submitting...'
+                : copy.cta}
             </button>
           </div>
         </div>

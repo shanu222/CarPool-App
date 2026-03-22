@@ -23,7 +23,7 @@ export function Booking() {
   const { user } = useAuth();
 
   const seats = parseInt(searchParams.get('seats') || '1');
-  const passengerPaymentLocked = user?.role === 'passenger' && user?.paymentApproved !== true;
+  const passengerPaymentLocked = user?.role === 'passenger' && user?.canChat !== true;
 
   useEffect(() => {
     const loadRide = async () => {

@@ -241,15 +241,18 @@ export const approvePaymentByAdmin = async (req, res, next) => {
       const user = await User.findById(payment.userId);
       if (user) {
         user.paymentApproved = true;
+        user.canChat = true;
+
+        if (user.role === "driver") {
+          user.canPostRide = true;
+        }
 
         if (payment.type === "ride_post") {
           user.canPostRide = true;
-          user.canChat = true;
         }
 
         if (payment.type === "booking_unlock") {
           user.canBookRide = true;
-          user.canChat = true;
         }
 
         await user.save();

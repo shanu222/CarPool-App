@@ -23,7 +23,7 @@ export function Chat() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const passengerPaymentLocked = user?.role === 'passenger' && user?.paymentApproved !== true;
+  const passengerChatLocked = user?.role === 'passenger' && user?.canChat !== true;
 
   const receiverId = useMemo(() => {
     if (!ride || !user) {
@@ -108,7 +108,7 @@ export function Chat() {
   }
 
   const handleSend = async () => {
-    if (passengerPaymentLocked) {
+    if (passengerChatLocked) {
       setShowUnlockModal(true);
       return;
     }
@@ -173,7 +173,7 @@ export function Chat() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {passengerPaymentLocked ? (
+        {passengerChatLocked ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Payment approval is required before passenger chat.
           </div>
@@ -222,14 +222,14 @@ export function Chat() {
           />
           <button
             onClick={handleSend}
-            disabled={!message.trim() || passengerPaymentLocked || !user?.canChat}
+            disabled={!message.trim() || passengerChatLocked || !user?.canChat}
             className="p-3 bg-blue-600 text-white rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-5 h-5" />
           </button>
         </div>
 
-        {passengerPaymentLocked ? (
+        {passengerChatLocked ? (
           <button
             type="button"
             onClick={() => setShowUnlockModal(true)}
