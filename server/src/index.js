@@ -12,6 +12,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+const host = process.env.HOST || "0.0.0.0";
 
 app.use(
   cors({
@@ -21,6 +22,14 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan("dev"));
+
+app.get("/", (req, res) => {
+  res.status(200).json({ ok: true, service: "carpool-server" });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ ok: true, service: "carpool-server" });
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "carpool-server" });
@@ -36,8 +45,8 @@ app.use(errorHandler);
 const startServer = async () => {
   try {
     await connectDb();
-    app.listen(port, () => {
-      console.log(`Server listening on port ${port}`);
+    app.listen(port, host, () => {
+      console.log(`Server listening on ${host}:${port}`);
     });
   } catch (error) {
     console.error("Failed to start server:", error.message);
