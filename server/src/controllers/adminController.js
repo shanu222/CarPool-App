@@ -242,6 +242,16 @@ export const approvePaymentByAdmin = async (req, res, next) => {
           user.canPostRide = true;
         }
 
+        if (payment.type === "driver_unlock") {
+          user.canPostRide = true;
+          user.canChat = true;
+        }
+
+        if (payment.type === "passenger_unlock") {
+          user.canBookRide = true;
+          user.canChat = true;
+        }
+
         if (payment.type === "booking" || payment.type === "subscription") {
           user.canBookRide = true;
           user.canChat = true;

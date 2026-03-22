@@ -10,6 +10,14 @@ const buildFilePath = (req, file) => {
 };
 
 const getDefaultAmount = (type) => {
+  if (type === "driver_unlock") {
+    return 200;
+  }
+
+  if (type === "passenger_unlock") {
+    return 100;
+  }
+
   if (type === "ride_post") {
     return 200;
   }
@@ -25,7 +33,7 @@ export const submitPaymentProof = async (req, res, next) => {
   try {
     const { type, method, amount } = req.body;
 
-    if (!type || !method || !["ride_post", "booking", "subscription"].includes(type)) {
+    if (!type || !method || !["ride_post", "booking", "subscription", "passenger_unlock", "driver_unlock"].includes(type)) {
       return res.status(400).json({ message: "Valid payment type and method are required" });
     }
 
@@ -38,8 +46,17 @@ export const submitPaymentProof = async (req, res, next) => {
       return res.status(400).json({ message: "Payment screenshot is required" });
     }
 
+    if (type === "passenger_unlock" && req.user.role !== "passenger") {
+      return res.status(403).json({ message: "passenger unlock is only for passenger accounts" });
+    }
+
+    if (type === "driver_unlock" && req.user.role !== "driver") {
+      return res.status(403).json({ message: "driver unlock is only for driver accounts" });
+    }
+
     const payment = await Payment.create({
       userId: req.user._id,
+      role: req.user.role,
       type,
       amount: Number(amount || getDefaultAmount(type)),
       method,

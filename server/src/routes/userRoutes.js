@@ -3,8 +3,30 @@ import { protect } from "../middleware/auth.js";
 import { submitVerification } from "../controllers/verificationController.js";
 import { upload } from "../middleware/upload.js";
 import { User } from "../models/User.js";
+import { UserLocation } from "../models/UserLocation.js";
 
 const router = Router();
+
+router.post("/location", protect, async (req, res, next) => {
+  try {
+    const lat = Number(req.body?.lat);
+    const lng = Number(req.body?.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ message: "Valid lat and lng are required" });
+    }
+
+    const location = await UserLocation.findOneAndUpdate(
+      { userId: req.user._id },
+      { lat, lng },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return res.json(location);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get("/:id", protect, async (req, res, next) => {
   try {

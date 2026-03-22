@@ -51,6 +51,7 @@ export interface Ride {
   };
   distanceText?: string;
   durationText?: string;
+  distanceKm?: number;
   status?: "scheduled" | "ongoing" | "completed" | "cancelled";
   featured?: boolean;
   featuredAt?: string;
@@ -129,7 +130,8 @@ export interface Review {
 export interface Payment {
   _id: string;
   userId: User;
-  type: "ride_post" | "booking" | "subscription";
+  role?: "passenger" | "driver" | "admin";
+  type: "ride_post" | "booking" | "subscription" | "passenger_unlock" | "driver_unlock";
   amount: number;
   method: "easypaisa" | "jazzcash" | "bank";
   screenshot?: string;

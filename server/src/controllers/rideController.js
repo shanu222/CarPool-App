@@ -24,6 +24,21 @@ const deriveStatusFromDateTime = (dateTime, now = new Date()) => {
   return "scheduled";
 };
 
+const toRadians = (value) => (value * Math.PI) / 180;
+
+const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+};
+
 const refreshRideLifecycleStatuses = async (now = new Date()) => {
   await Ride.updateMany(
     {
@@ -230,6 +245,61 @@ export const getRideById = async (req, res, next) => {
     }
 
     return res.json(ride);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getNearbyRides = async (req, res, next) => {
+  try {
+    await refreshRideLifecycleStatuses();
+    const lat = Number(req.query?.lat);
+    const lng = Number(req.query?.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ message: "Valid lat and lng query params are required" });
+    }
+
+    const baseQuery = {
+      status: { $in: ["scheduled", "ongoing"] },
+      "fromCoordinates.lat": { $exists: true },
+      "fromCoordinates.lng": { $exists: true },
+    };
+
+    const rideQuery = req.user?.role === "passenger"
+      ? { ...baseQuery, availableSeats: { $gt: 0 } }
+      : baseQuery;
+
+    const rides = await Ride.find(rideQuery)
+      .populate(
+        "driver",
+        "name email phone role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+      )
+      .sort({ featured: -1, dateTime: 1, createdAt: -1 });
+
+    const nearbyRides = rides
+      .map((ride) => {
+        const rideLat = Number(ride.fromCoordinates?.lat);
+        const rideLng = Number(ride.fromCoordinates?.lng);
+
+        if (!Number.isFinite(rideLat) || !Number.isFinite(rideLng)) {
+          return null;
+        }
+
+        const distanceKm = calculateDistanceKm(lat, lng, rideLat, rideLng);
+        return {
+          ...ride.toObject(),
+          distanceKm: Number(distanceKm.toFixed(2)),
+        };
+      })
+      .filter((ride) => ride && ride.distanceKm < 50)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return res.json({
+      nearbyRides,
+      liveRides: nearbyRides.filter((ride) => ride.status === "ongoing"),
+      scheduledRides: nearbyRides.filter((ride) => ride.status === "scheduled"),
+    });
   } catch (error) {
     return next(error);
   }

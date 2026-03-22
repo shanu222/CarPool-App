@@ -111,6 +111,7 @@ export function MyTrips() {
               <TripCard
                 key={trip._id}
                 trip={trip}
+                canUseChat={Boolean(user?.canChat)}
                 onRate={() => submitReview(trip)}
                 onClick={() => navigate(`/ride/${trip.ride._id}`)}
               />
@@ -184,15 +185,16 @@ function EmptyState({ title, subtitle, buttonText, onClick }: EmptyStateProps) {
 
 interface TripCardProps {
   trip: Booking;
+  canUseChat: boolean;
   onClick: () => void;
   onRate: () => void;
 }
 
-function TripCard({ trip, onClick, onRate }: TripCardProps) {
+function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
   const navigate = useNavigate();
   const { ride } = trip;
 
-  const canChat = ['accepted', 'ongoing', 'completed'].includes(trip.status);
+  const canChat = canUseChat && ['accepted', 'ongoing', 'completed'].includes(trip.status);
   const statusClass =
     trip.status === 'pending'
       ? 'bg-amber-100 text-amber-700'

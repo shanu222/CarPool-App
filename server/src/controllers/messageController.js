@@ -31,7 +31,7 @@ export const getRideMessages = async (req, res, next) => {
       return res.status(403).json({ message: "Passengers only" });
     }
 
-    if (!isDriver && !req.user?.canChat) {
+    if (req.user?.role !== "admin" && !req.user?.canChat) {
       return res.status(403).json({ message: "Chat is locked. Submit payment proof for booking/chat subscription." });
     }
 
@@ -75,7 +75,7 @@ export const sendMessage = async (req, res, next) => {
       return res.status(403).json({ message: "Passengers only" });
     }
 
-    if (!isDriver && !req.user?.canChat) {
+    if (req.user?.role !== "admin" && !req.user?.canChat) {
       return res.status(403).json({ message: "Chat is locked. Submit payment proof for booking/chat subscription." });
     }
 

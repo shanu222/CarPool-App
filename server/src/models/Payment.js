@@ -8,9 +8,15 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    role: {
+      type: String,
+      enum: ["passenger", "driver", "admin"],
+      required: true,
+      index: true,
+    },
     type: {
       type: String,
-      enum: ["ride_post", "booking", "subscription"],
+      enum: ["ride_post", "booking", "subscription", "passenger_unlock", "driver_unlock"],
       required: true,
       index: true,
     },

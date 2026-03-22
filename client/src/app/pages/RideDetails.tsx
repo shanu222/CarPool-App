@@ -7,6 +7,7 @@ import type { Ride } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LiveRideMap } from '../components/LiveRideMap';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
 
 export function RideDetails() {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export function RideDetails() {
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   useEffect(() => {
     const loadRide = async () => {
@@ -49,6 +51,7 @@ export function RideDetails() {
   const driverUserId = ride.driver.id || ride.driver._id || '';
   const isDriverOwner = Boolean(currentUserId && driverUserId && currentUserId === driverUserId);
   const canRequestBooking = ride.availableSeats > 0 && ['scheduled', 'ongoing'].includes(ride.status || 'scheduled');
+  const interactionLocked = !user?.canChat || (user?.role === 'passenger' && !user?.canBookRide);
 
   return (
     <div className="relative min-h-screen bg-transparent pb-28">
@@ -87,7 +90,14 @@ export function RideDetails() {
               </div>
             </div>
             <button
-              onClick={() => navigate(`/chat/${ride._id}`)}
+              onClick={() => {
+                if (interactionLocked) {
+                  setShowUnlockModal(true);
+                  return;
+                }
+
+                navigate(`/chat/${ride._id}`);
+              }}
               className="p-3 bg-white/20 text-white rounded-xl"
             >
               <MessageCircle className="w-5 h-5" />
@@ -206,14 +216,23 @@ export function RideDetails() {
             <div className="text-2xl text-blue-600">PKR {totalPrice}</div>
           </div>
           <button
-            onClick={() => navigate(`/booking/${ride._id}?seats=${selectedSeats}`)}
-            disabled={!canRequestBooking}
+            onClick={() => {
+              if (interactionLocked) {
+                setShowUnlockModal(true);
+                return;
+              }
+
+              navigate(`/booking/${ride._id}?seats=${selectedSeats}`);
+            }}
+            disabled={!canRequestBooking || interactionLocked}
             className="bg-blue-600 text-white px-8 py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50"
           >
-            {canRequestBooking ? 'Request Booking' : 'Ride Closed'}
+            {interactionLocked ? 'Pay to unlock interaction' : canRequestBooking ? 'Request Booking' : 'Ride Closed'}
           </button>
         </div>
       </div>
+
+      <UnlockInteractionModal open={showUnlockModal} onClose={() => setShowUnlockModal(false)} />
     </div>
   );
 }

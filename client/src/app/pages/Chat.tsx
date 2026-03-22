@@ -8,6 +8,7 @@ import type { Message, Ride } from '../types';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
 
 const getUserId = (value: { id?: string; _id?: string } | null | undefined) =>
   value?.id || value?._id || '';
@@ -21,6 +22,7 @@ export function Chat() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   const receiverId = useMemo(() => {
     if (!ride || !user) {
@@ -105,6 +107,11 @@ export function Chat() {
   }
 
   const handleSend = async () => {
+    if (!user?.canChat) {
+      setShowUnlockModal(true);
+      return;
+    }
+
     if (!message.trim()) return;
 
     if (!receiverId) {
@@ -160,6 +167,12 @@ export function Chat() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        {!user?.canChat ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Pay to unlock interaction before opening chat.
+          </div>
+        ) : null}
+
         {messages.map((msg) => (
           <motion.div
             key={msg._id}
@@ -203,13 +216,25 @@ export function Chat() {
           />
           <button
             onClick={handleSend}
-            disabled={!message.trim()}
+            disabled={!message.trim() || !user?.canChat}
             className="p-3 bg-blue-600 text-white rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-5 h-5" />
           </button>
         </div>
+
+        {!user?.canChat ? (
+          <button
+            type="button"
+            onClick={() => setShowUnlockModal(true)}
+            className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50 py-2 text-sm text-blue-700"
+          >
+            Pay to unlock interaction
+          </button>
+        ) : null}
       </div>
+
+      <UnlockInteractionModal open={showUnlockModal} onClose={() => setShowUnlockModal(false)} />
     </div>
   );
 }

@@ -29,6 +29,23 @@ export function ProtectedRoute() {
     }
   }, [isAuthenticated, user?._id, user?.id, setCurrentUser]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !navigator.geolocation) {
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        api.post('/api/user/location', {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }).catch(() => undefined);
+      },
+      () => undefined,
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
   }
