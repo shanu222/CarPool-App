@@ -58,6 +58,7 @@ export function Booking() {
         seatsRequested: seats,
       });
 
+      window.dispatchEvent(new CustomEvent('trips:refresh'));
       toast.success('Booking request sent to driver');
       setIsProcessing(false);
       setIsRequested(true);

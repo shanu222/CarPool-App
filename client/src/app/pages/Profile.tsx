@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 
 export function Profile() {
   const navigate = useNavigate();
-  const { user, logout, setCurrentUser } = useAuth();
+  const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [cnic, setCnic] = useState(user?.cnicNumber || user?.cnic || '');
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
@@ -32,7 +32,6 @@ export function Profile() {
   const [carPlateNumber, setCarPlateNumber] = useState(user?.carPlateNumber || '');
   const [carYear, setCarYear] = useState(user?.carYear ? String(user.carYear) : '');
   const [uploading, setUploading] = useState(false);
-  const [switchingRole, setSwitchingRole] = useState(false);
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -50,27 +49,6 @@ export function Profile() {
   const handleLogout = () => {
     logout();
     navigate('/auth');
-  };
-
-  const handleRoleSwitch = async () => {
-    if (!user || user.role === 'admin') {
-      return;
-    }
-
-    const nextRole = user.role === 'driver' ? 'passenger' : 'driver';
-
-    try {
-      setSwitchingRole(true);
-      const response = await api.patch('/api/user/role', { role: nextRole });
-      if (response?.data?.user) {
-        setCurrentUser(response.data.user);
-      }
-      toast.success(`Switched to ${nextRole}`);
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Could not switch role');
-    } finally {
-      setSwitchingRole(false);
-    }
   };
 
   if (!user) {
@@ -200,21 +178,6 @@ export function Profile() {
           transition={{ delay: 0.3 }}
           className="glass-panel rounded-2xl p-4"
         >
-          {user.role !== 'admin' ? (
-            <button
-              type="button"
-              onClick={handleRoleSwitch}
-              disabled={switchingRole}
-              className="mb-4 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
-            >
-              {switchingRole
-                ? 'Switching...'
-                : user.role === 'driver'
-                ? 'Switch to Passenger'
-                : 'Switch to Driver'}
-            </button>
-          ) : null}
-
           <h3 className="text-base mb-4 text-white">Verification</h3>
           <div className="space-y-3 mb-4">
             <input

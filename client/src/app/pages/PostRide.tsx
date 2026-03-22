@@ -52,6 +52,7 @@ export function PostRide() {
         totalSeats: Number(formData.totalSeats),
       });
 
+      window.dispatchEvent(new CustomEvent('trips:refresh'));
       toast.success('Ride published successfully');
       navigate('/trips');
     } catch (requestError: any) {
