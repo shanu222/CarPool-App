@@ -25,7 +25,7 @@ export function AdminLogin() {
 
     try {
       setLoading(true);
-      const response = await api.post<AuthResponse>("/api/auth/login", {
+      const response = await api.post<AuthResponse>("/api/auth/admin/login", {
         email,
         password,
       });

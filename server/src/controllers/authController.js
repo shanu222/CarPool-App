@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 import { User } from "../models/User.js";
 
 const getAdminEmails = () =>
@@ -10,13 +11,119 @@ const getAdminEmails = () =>
 
 const isAdminEmail = (email) => getAdminEmails().includes((email || "").toLowerCase());
 
-const signToken = (user) => {
+const ADMIN_MAX_ATTEMPTS = Number(process.env.ADMIN_LOGIN_MAX_ATTEMPTS || 5);
+const ADMIN_LOCK_WINDOW_MS = Number(process.env.ADMIN_LOGIN_LOCK_MINUTES || 15) * 60 * 1000;
+const ADMIN_FAIL_DELAY_MS = Number(process.env.ADMIN_LOGIN_FAIL_DELAY_MS || 700);
+const adminLoginAttempts = new Map();
+
+const normalizeEmail = (value) => (value || "").trim().toLowerCase();
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getClientIp = (req) => {
+  const forwarded = req.headers["x-forwarded-for"];
+
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return req.ip || "unknown";
+};
+
+const getAttemptKey = (req, email) => `${getClientIp(req)}:${normalizeEmail(email)}`;
+
+const clearOldAttempts = (record, now) => {
+  if (!record) {
+    return;
+  }
+
+  if (record.lockedUntil && record.lockedUntil <= now) {
+    record.lockedUntil = 0;
+    record.count = 0;
+  }
+
+  if (record.firstFailureAt && now - record.firstFailureAt > ADMIN_LOCK_WINDOW_MS) {
+    record.count = 0;
+    record.firstFailureAt = 0;
+  }
+};
+
+const registerAdminFailure = (key) => {
+  const now = Date.now();
+  const record = adminLoginAttempts.get(key) || { count: 0, firstFailureAt: now, lockedUntil: 0 };
+
+  clearOldAttempts(record, now);
+
+  if (!record.firstFailureAt) {
+    record.firstFailureAt = now;
+  }
+
+  record.count += 1;
+
+  if (record.count >= ADMIN_MAX_ATTEMPTS) {
+    record.lockedUntil = now + ADMIN_LOCK_WINDOW_MS;
+    record.count = 0;
+    record.firstFailureAt = 0;
+  }
+
+  adminLoginAttempts.set(key, record);
+};
+
+const isAdminLockedOut = (key) => {
+  const now = Date.now();
+  const record = adminLoginAttempts.get(key);
+
+  if (!record) {
+    return false;
+  }
+
+  clearOldAttempts(record, now);
+  adminLoginAttempts.set(key, record);
+  return Boolean(record.lockedUntil && record.lockedUntil > now);
+};
+
+const resetAdminAttempts = (key) => {
+  adminLoginAttempts.delete(key);
+};
+
+const timingSafeMatch = (left, right) => {
+  const leftBuffer = Buffer.from(left || "", "utf8");
+  const rightBuffer = Buffer.from(right || "", "utf8");
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const getConfiguredAdminCredential = () => {
+  const email = normalizeEmail(process.env.ADMIN_LOGIN_EMAIL || process.env.ADMIN_EMAIL || "");
+  const password = process.env.ADMIN_LOGIN_PASSWORD || "";
+  const passwordHash = process.env.ADMIN_LOGIN_PASSWORD_HASH || "";
+
+  return {
+    email,
+    password,
+    passwordHash,
+  };
+};
+
+const verifyAdminSecret = async (inputPassword, configuredPassword, configuredPasswordHash) => {
+  if (configuredPasswordHash) {
+    return bcrypt.compare(inputPassword, configuredPasswordHash);
+  }
+
+  return timingSafeMatch(inputPassword, configuredPassword);
+};
+
+const signToken = (user, expiresIn = "7d") => {
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not configured");
   }
 
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn,
   });
 };
 
@@ -98,10 +205,23 @@ export const login = async (req, res, next) => {
       return res.status(400).json({ message: "email and password are required" });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const normalizedEmail = normalizeEmail(email);
+    const configuredAdmin = getConfiguredAdminCredential();
+
+    if (configuredAdmin.email && normalizedEmail === configuredAdmin.email) {
+      await sleep(ADMIN_FAIL_DELAY_MS);
+      return res.status(403).json({ message: "Use the admin login portal" });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       return res.status(401).json({ message: "Authentication failed" });
+    }
+
+    if (user.role === "admin") {
+      await sleep(ADMIN_FAIL_DELAY_MS);
+      return res.status(403).json({ message: "Use the admin login portal" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -129,6 +249,95 @@ export const login = async (req, res, next) => {
     }
 
     const token = signToken(user);
+    return res.json({ token, user: sanitizeUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const adminLogin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const configuredAdmin = getConfiguredAdminCredential();
+
+    if (!configuredAdmin.email || (!configuredAdmin.password && !configuredAdmin.passwordHash)) {
+      return res.status(503).json({ message: "Admin login is not configured" });
+    }
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "email and password are required" });
+    }
+
+    const normalizedInputEmail = normalizeEmail(email);
+    const key = getAttemptKey(req, normalizedInputEmail);
+
+    if (isAdminLockedOut(key)) {
+      return res.status(429).json({ message: "Too many attempts. Try again later" });
+    }
+
+    const emailMatches = timingSafeMatch(normalizedInputEmail, configuredAdmin.email);
+    const passwordMatches =
+      emailMatches &&
+      (await verifyAdminSecret(password, configuredAdmin.password, configuredAdmin.passwordHash));
+
+    if (!emailMatches || !passwordMatches) {
+      registerAdminFailure(key);
+      await sleep(ADMIN_FAIL_DELAY_MS);
+      return res.status(401).json({ message: "Authentication failed" });
+    }
+
+    resetAdminAttempts(key);
+
+    let user = await User.findOne({ email: configuredAdmin.email });
+
+    if (!user) {
+      const fallbackHash = await bcrypt.hash(crypto.randomUUID(), 10);
+      user = await User.create({
+        name: "Administrator",
+        email: configuredAdmin.email,
+        password: fallbackHash,
+        role: "admin",
+        accountStatus: "active",
+        verificationStatus: "approved",
+        isVerified: true,
+        canPostRide: true,
+        canBookRide: true,
+        canChat: true,
+      });
+    } else {
+      let changed = false;
+
+      if (user.role !== "admin") {
+        user.role = "admin";
+        changed = true;
+      }
+
+      if (user.accountStatus !== "active") {
+        user.accountStatus = "active";
+        user.suspensionReason = "";
+        changed = true;
+      }
+
+      if (!user.isVerified || user.verificationStatus !== "approved") {
+        user.isVerified = true;
+        user.verificationStatus = "approved";
+        changed = true;
+      }
+
+      if (!user.canPostRide || !user.canBookRide || !user.canChat) {
+        user.canPostRide = true;
+        user.canBookRide = true;
+        user.canChat = true;
+        changed = true;
+      }
+
+      if (changed) {
+        await user.save();
+      }
+    }
+
+    const adminTokenTtl = process.env.ADMIN_JWT_EXPIRES_IN || "8h";
+    const token = signToken(user, adminTokenTtl);
     return res.json({ token, user: sanitizeUser(user) });
   } catch (error) {
     return next(error);
