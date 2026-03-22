@@ -130,6 +130,13 @@ export function Home() {
             <div className="text-xs text-gray-600">Avg Rating</div>
           </div>
         </div>
+
+        <button
+          onClick={() => navigate('/map')}
+          className="mt-6 w-full rounded-2xl bg-slate-900 px-5 py-4 text-white shadow-lg"
+        >
+          Open Live Map
+        </button>
       </div>
     </div>
   );

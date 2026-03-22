@@ -1,0 +1,136 @@
+.live-map-page {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #0b1220;
+}
+
+.live-map-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.map-top-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 500;
+  background: rgba(15, 23, 42, 0.86);
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  padding: 14px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.45);
+}
+
+.map-top-panel h1 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.map-top-panel p {
+  margin: 4px 0;
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0.95;
+}
+
+.osrm-text {
+  word-break: break-all;
+  opacity: 0.8;
+}
+
+.map-actions {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 24px;
+  z-index: 520;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.map-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f8fafc;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.map-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.28);
+}
+
+.map-btn-primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+}
+
+.map-error-box {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 84px;
+  z-index: 525;
+  background: rgba(127, 29, 29, 0.92);
+  border: 1px solid rgba(254, 202, 202, 0.4);
+  color: #fee2e2;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.map-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 6px 14px rgba(2, 6, 23, 0.4);
+  position: relative;
+}
+
+.map-pin::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ffffff;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.map-pin.rider {
+  background: #2563eb;
+}
+
+.map-pin.passenger {
+  background: #16a34a;
+}
+
+@media (max-width: 640px) {
+  .map-top-panel {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    padding: 12px;
+  }
+
+  .map-actions {
+    left: 12px;
+    right: 12px;
+    bottom: 16px;
+  }
+}

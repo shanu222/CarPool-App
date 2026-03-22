@@ -11,6 +11,7 @@ import { Chat } from "./pages/Chat";
 import { Profile } from "./pages/Profile";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { LiveMap } from "./pages/LiveMap";
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,10 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      {
+        path: "/map",
+        element: <LiveMap />,
+      },
       {
         element: <Layout />,
         children: [
