@@ -11,9 +11,10 @@ export function SearchResults() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sortBy, setSortBy] = useState<'price' | 'time' | 'rating'>('price');
-  const [viewType, setViewType] = useState<'all' | 'ongoing' | 'scheduled'>('all');
+  const [viewType, setViewType] = useState<'all' | 'live' | 'nearby' | 'scheduled'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [liveRides, setLiveRides] = useState<Ride[]>([]);
+  const [nearbyRides, setNearbyRides] = useState<Ride[]>([]);
   const [scheduledRides, setScheduledRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,7 +47,8 @@ export function SearchResults() {
           },
         });
 
-        setLiveRides(response.data.ongoingRides || response.data.liveRides || []);
+        setLiveRides(response.data.liveRides || response.data.ongoingRides || []);
+        setNearbyRides(response.data.nearbyRides || response.data.nearbyWindowRides || []);
         setScheduledRides(response.data.scheduledRides || response.data.upcomingRides || []);
       } catch (requestError: any) {
         const apiMessage = requestError?.response?.data?.message;
@@ -82,7 +84,8 @@ export function SearchResults() {
 
   const sortedLiveRides = useMemo(() => sortRides(liveRides), [liveRides, sortRides]);
   const sortedScheduledRides = useMemo(() => sortRides(scheduledRides), [scheduledRides, sortRides]);
-  const totalRides = sortedLiveRides.length + sortedScheduledRides.length;
+  const sortedNearbyRides = useMemo(() => sortRides(nearbyRides), [nearbyRides, sortRides]);
+  const totalRides = sortedLiveRides.length + sortedNearbyRides.length + sortedScheduledRides.length;
 
   return (
     <div className="min-h-screen bg-transparent pb-24">
@@ -138,10 +141,16 @@ export function SearchResults() {
               All
             </button>
             <button
-              onClick={() => setViewType('ongoing')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'ongoing' ? 'active' : ''}`}
+              onClick={() => setViewType('live')}
+              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'live' ? 'active' : ''}`}
             >
-              Ongoing
+              Live
+            </button>
+            <button
+              onClick={() => setViewType('nearby')}
+              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'nearby' ? 'active' : ''}`}
+            >
+              Nearby
             </button>
             <button
               onClick={() => setViewType('scheduled')}
@@ -166,8 +175,17 @@ export function SearchResults() {
 
             {sortedLiveRides.length > 0 ? (
               <div className="space-y-2">
-                <h3 className="text-sm text-emerald-200">Ongoing Rides</h3>
+                <h3 className="text-sm text-emerald-200">Live Rides</h3>
                 {sortedLiveRides.map((ride) => (
+                  <RideCard key={ride._id} ride={ride} />
+                ))}
+              </div>
+            ) : null}
+
+            {sortedNearbyRides.length > 0 ? (
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm text-amber-200">Nearby Rides</h3>
+                {sortedNearbyRides.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>

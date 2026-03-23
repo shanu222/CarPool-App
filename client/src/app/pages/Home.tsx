@@ -13,8 +13,12 @@ import { toast } from 'sonner';
 interface NearbyRideResponse {
   nearbyRides: Ride[];
   liveRides: Ride[];
+  nearbyWindowRides?: Ride[];
   scheduledRides: Ride[];
 }
+
+type DriverHomeTab = 'offer' | 'live' | 'nearby' | 'scheduled' | 'search';
+type PassengerHomeTab = 'search' | 'request' | 'live' | 'nearby' | 'scheduled';
 
 export function Home() {
   const [from, setFrom] = useState('');
@@ -28,6 +32,8 @@ export function Home() {
   const { user } = useAuth();
   const isDriver = user?.role === 'driver';
   const isPassenger = user?.role === 'passenger';
+  const [driverTab, setDriverTab] = useState<DriverHomeTab>('live');
+  const [passengerTab, setPassengerTab] = useState<PassengerHomeTab>('search');
 
   const handleSearch = () => {
     navigate('/search?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + '&date=' + date);
@@ -79,35 +85,28 @@ export function Home() {
 
       <div className="px-3 py-4 md:px-5 md:py-5">
         <div className="mb-4 flex flex-wrap gap-2">
+          {isDriver ? (
+            <>
+              <button onClick={() => setDriverTab('offer')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'offer' ? 'bg-green-600 text-white' : 'bg-white/20 text-white'}`}>Offer Ride</button>
+              <button onClick={() => setDriverTab('live')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'live' ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white'}`}>Live Rides</button>
+              <button onClick={() => setDriverTab('nearby')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'nearby' ? 'bg-amber-600 text-white' : 'bg-white/20 text-white'}`}>Nearby Rides</button>
+              <button onClick={() => setDriverTab('scheduled')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'scheduled' ? 'bg-sky-600 text-white' : 'bg-white/20 text-white'}`}>Scheduled Rides</button>
+              <button onClick={() => setDriverTab('search')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'search' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'}`}>Search Rides</button>
+            </>
+          ) : null}
+
           {isPassenger ? (
-            <button
-              onClick={() => navigate('/post-request')}
-              className="rounded-xl bg-blue-600 px-4 py-3 text-sm text-white min-h-12"
-            >
-              Find Ride
-            </button>
-          ) : null}
-
-          {isDriver ? (
-            <button
-              onClick={() => navigate('/post-ride')}
-              className="rounded-xl bg-green-600 px-4 py-3 text-sm text-white min-h-12"
-            >
-              Offer Ride
-            </button>
-          ) : null}
-
-          {isDriver ? (
-            <button
-              onClick={() => navigate('/ride-requests')}
-              className="rounded-xl bg-white/20 px-4 py-3 text-sm text-white min-h-12"
-            >
-              Ride Requests
-            </button>
+            <>
+              <button onClick={() => setPassengerTab('search')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'search' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'}`}>Search Rides</button>
+              <button onClick={() => setPassengerTab('request')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'request' ? 'bg-indigo-600 text-white' : 'bg-white/20 text-white'}`}>Request Ride</button>
+              <button onClick={() => setPassengerTab('live')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'live' ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white'}`}>Live Rides</button>
+              <button onClick={() => setPassengerTab('nearby')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'nearby' ? 'bg-amber-600 text-white' : 'bg-white/20 text-white'}`}>Nearby Rides</button>
+              <button onClick={() => setPassengerTab('scheduled')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'scheduled' ? 'bg-sky-600 text-white' : 'bg-white/20 text-white'}`}>Scheduled Rides</button>
+            </>
           ) : null}
         </div>
 
-        {isDriver ? (
+        {isDriver && driverTab === 'offer' ? (
           <button
             onClick={() => navigate('/post-ride')}
             className="responsive-action mb-5 w-full rounded-2xl bg-green-600 py-3 md:py-4 text-white shadow-lg shadow-green-600/30"
@@ -117,7 +116,7 @@ export function Home() {
           </button>
         ) : null}
 
-        {isPassenger ? (
+        {isPassenger && (passengerTab === 'search' || passengerTab === 'request') ? (
           <motion.div
             key="find"
             initial={{ opacity: 0, y: 20 }}
@@ -157,12 +156,12 @@ export function Home() {
             </div>
 
             <button
-              onClick={handleSearch}
+              onClick={() => (passengerTab === 'request' ? navigate('/post-request') : handleSearch())}
               disabled={!from || !to || !date}
               className="responsive-action w-full rounded-2xl bg-blue-600 py-3 md:py-4 text-white shadow-lg shadow-blue-600/30 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Search className="mr-2 inline-block h-5 w-5" />
-              Search Rides
+              {passengerTab === 'request' ? 'Create Ride Request' : 'Search Rides'}
             </button>
           </motion.div>
         ) : (
@@ -174,7 +173,7 @@ export function Home() {
         <div className="mt-6 space-y-6">
           <section>
             <h2 className="mb-2 text-sm md:text-base text-slate-200">Nearby Rides</h2>
-            {nearbyTop.length > 0 ? (
+            {(isDriver ? driverTab === 'nearby' : passengerTab === 'nearby') && nearbyTop.length > 0 ? (
               <div className="space-y-3">
                 {nearbyTop.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
@@ -182,34 +181,34 @@ export function Home() {
               </div>
             ) : (
               <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">
-                {nearbyError || 'No nearby rides in a 50km radius yet.'}
+                {(isDriver ? driverTab === 'nearby' : passengerTab === 'nearby') ? (nearbyError || 'No nearby rides in a 50km radius yet.') : 'Select Nearby tab to view these rides.'}
               </div>
             )}
           </section>
 
           <section>
             <h2 className="mb-2 text-sm md:text-base text-emerald-200">Live Rides</h2>
-            {liveRides.length > 0 ? (
+            {(isDriver ? driverTab === 'live' : passengerTab === 'live') && liveRides.length > 0 ? (
               <div className="space-y-3">
                 {liveRides.slice(0, 3).map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>
             ) : (
-              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">No live rides nearby.</div>
+              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">{(isDriver ? driverTab === 'live' : passengerTab === 'live') ? 'No live rides nearby.' : 'Select Live tab to view these rides.'}</div>
             )}
           </section>
 
           <section>
             <h2 className="mb-2 text-sm md:text-base text-sky-200">Scheduled Rides</h2>
-            {scheduledRides.length > 0 ? (
+            {(isDriver ? driverTab === 'scheduled' : passengerTab === 'scheduled') && scheduledRides.length > 0 ? (
               <div className="space-y-3">
                 {scheduledRides.slice(0, 3).map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>
             ) : (
-              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">No scheduled rides nearby.</div>
+              <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">{(isDriver ? driverTab === 'scheduled' : passengerTab === 'scheduled') ? 'No scheduled rides nearby.' : 'Select Scheduled tab to view these rides.'}</div>
             )}
           </section>
         </div>

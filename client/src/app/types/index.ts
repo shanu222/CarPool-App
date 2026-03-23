@@ -76,7 +76,7 @@ export interface Ride {
   distanceText?: string;
   durationText?: string;
   distanceKm?: number;
-  status?: "scheduled" | "ongoing" | "completed" | "cancelled";
+  status?: "live" | "nearby" | "scheduled" | "completed" | "cancelled" | "ongoing";
   featured?: boolean;
   featuredAt?: string;
 }
@@ -233,14 +233,18 @@ export interface AdminAnalytics {
 }
 
 export interface RideSearchResponse {
+  liveRides: Ride[];
+  nearbyRides?: Ride[];
+  nearbyWindowRides?: Ride[];
   ongoingRides: Ride[];
   scheduledRides: Ride[];
-  liveRides: Ride[];
   upcomingRides: Ride[];
   rides: Ride[];
 }
 
 export interface MyRidesResponse {
+  liveRides?: Ride[];
+  nearbyRides?: Ride[];
   ongoingRides: Ride[];
   scheduledRides: Ride[];
   completedRides: Ride[];
@@ -263,6 +267,7 @@ export interface RideRequest {
   dateTime: string;
   seatsNeeded: number;
   status: "open" | "matched" | "completed";
+  timeClass?: "live" | "nearby" | "scheduled" | "completed";
   distanceKm?: number;
   matchedRideId?: string;
   matchedBookingId?: string;

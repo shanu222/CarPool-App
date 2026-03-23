@@ -27,6 +27,17 @@ const resolveRideStatusForChat = async (ride) => {
     return ride.status;
   }
 
+  const now = new Date();
+  const nearbyUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  if (new Date(start) <= now) {
+    ride.status = "live";
+  } else if (new Date(start) <= nearbyUntil) {
+    ride.status = "nearby";
+  } else {
+    ride.status = "scheduled";
+  }
+
   const completedBefore = new Date(Date.now() - RIDE_AUTO_COMPLETE_HOURS * 60 * 60 * 1000);
   if (new Date(start) <= completedBefore) {
     ride.status = "completed";
@@ -38,6 +49,7 @@ const resolveRideStatusForChat = async (ride) => {
     return "completed";
   }
 
+  await ride.save();
   return ride.status;
 };
 
@@ -135,6 +147,10 @@ export const getRideMessages = async (req, res, next) => {
 
     await resolveRideStatusForChat(ride);
 
+    if (ride.status !== "live") {
+      return res.status(403).json({ message: "Chat is only available for live rides." });
+    }
+
     const participant = await isRideParticipant(ride, req.user._id);
 
     if (!participant && req.user?.role !== "admin") {
@@ -215,6 +231,10 @@ export const sendMessage = async (req, res, next) => {
 
     if (["completed", "cancelled"].includes(String(chatStatus))) {
       return res.status(403).json({ message: "This ride is completed. Chat is disabled." });
+    }
+
+    if (chatStatus !== "live") {
+      return res.status(403).json({ message: "Chat is only available for live rides." });
     }
 
     const participant = await isRideParticipant(ride, req.user._id);

@@ -55,7 +55,7 @@ function AutoCenter({ target }: { target: { lat: number; lng: number } | null })
 }
 
 export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
-    const isOngoing = ride.status === 'ongoing';
+  const isOngoing = ride.status === 'live';
 
   const socketRef = useRef(getSocket());
   const watchIdRef = useRef<number | null>(null);

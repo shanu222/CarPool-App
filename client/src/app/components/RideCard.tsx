@@ -10,7 +10,8 @@ interface RideCardProps {
 
 export function RideCard({ ride }: RideCardProps) {
   const navigate = useNavigate();
-  const isLive = ride.status === 'ongoing' && ride.availableSeats > 0;
+  const isLive = ride.status === 'live' && ride.availableSeats > 0;
+  const isNearby = ride.status === 'nearby';
   const isScheduled = ride.status === 'scheduled';
 
   return (
@@ -43,6 +44,8 @@ export function RideCard({ ride }: RideCardProps) {
       <div className="mb-3 flex items-center justify-between">
         {isLive ? (
           <span className="rounded-full bg-emerald-500/25 px-2 py-1 text-[11px] text-emerald-200">LIVE</span>
+        ) : isNearby ? (
+          <span className="rounded-full bg-amber-500/25 px-2 py-1 text-[11px] text-amber-200">NEARBY</span>
         ) : isScheduled ? (
           <span className="rounded-full bg-sky-500/25 px-2 py-1 text-[11px] text-sky-200">SCHEDULED</span>
         ) : (

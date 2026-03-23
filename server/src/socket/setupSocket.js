@@ -104,6 +104,17 @@ const resolveRideStatusForChat = async (ride) => {
     return ride.status;
   }
 
+  const now = new Date();
+  const nearbyUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  if (new Date(start) <= now) {
+    ride.status = "live";
+  } else if (new Date(start) <= nearbyUntil) {
+    ride.status = "nearby";
+  } else {
+    ride.status = "scheduled";
+  }
+
   const completedBefore = new Date(Date.now() - RIDE_AUTO_COMPLETE_HOURS * 60 * 60 * 1000);
   if (new Date(start) <= completedBefore) {
     ride.status = "completed";
@@ -115,6 +126,7 @@ const resolveRideStatusForChat = async (ride) => {
     return "completed";
   }
 
+  await ride.save();
   return ride.status;
 };
 
@@ -203,6 +215,14 @@ export const initializeSocket = (httpServer) => {
         socket.emit("chat_closed", {
           rideId,
           message: "This ride is completed. Chat is disabled.",
+        });
+        return;
+      }
+
+      if (chatStatus !== "live") {
+        socket.emit("chat_locked", {
+          rideId,
+          message: "Chat is only available for live rides.",
         });
         return;
       }

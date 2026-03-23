@@ -68,7 +68,7 @@ export const createBooking = async (req, res, next) => {
       return res.status(400).json({ message: "Driver cannot book own ride" });
     }
 
-    if (!["scheduled", "ongoing"].includes(ride.status)) {
+    if (!["scheduled", "nearby", "live"].includes(ride.status)) {
       return res.status(400).json({ message: "This ride is not accepting booking requests" });
     }
 
@@ -162,7 +162,7 @@ export const respondToBookingRequest = async (req, res, next) => {
         {
           _id: booking.rideId._id,
           availableSeats: { $gte: booking.seatsRequested },
-          status: { $in: ["scheduled", "ongoing"] },
+          status: { $in: ["scheduled", "nearby", "live"] },
         },
         { $inc: { availableSeats: -booking.seatsRequested, bookedSeats: booking.seatsRequested } },
         { new: true }

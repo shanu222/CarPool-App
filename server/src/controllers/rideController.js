@@ -14,6 +14,7 @@ import {
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
 const RIDE_POSTING_WINDOW_DAYS = 15;
+const NEARBY_WINDOW_HOURS = 24;
 
 const parseRideDateTime = (date, time) => {
   const value = new Date(`${date}T${time}:00`);
@@ -26,10 +27,33 @@ const parseRideDateTime = (date, time) => {
 
 const deriveStatusFromDateTime = (dateTime, now = new Date()) => {
   if (dateTime <= now) {
-    return "ongoing";
+    return "live";
+  }
+
+  const nearbyUntil = new Date(now.getTime() + NEARBY_WINDOW_HOURS * 60 * 60 * 1000);
+  if (dateTime <= nearbyUntil) {
+    return "nearby";
   }
 
   return "scheduled";
+};
+
+const isRideLive = (ride, now = new Date()) => {
+  if (!ride) {
+    return false;
+  }
+
+  const status = String(ride.status || "");
+  if (status === "live") {
+    return true;
+  }
+
+  if (["completed", "cancelled"].includes(status)) {
+    return false;
+  }
+
+  const start = new Date(ride.startTime || ride.dateTime || 0);
+  return !Number.isNaN(start.getTime()) && start <= now;
 };
 
 const toRadians = (value) => (value * Math.PI) / 180;
@@ -129,13 +153,35 @@ const resolvePakistanCity = async (city) => {
 };
 
 const refreshRideLifecycleStatuses = async (now = new Date()) => {
+  const nearbyUntil = new Date(now.getTime() + NEARBY_WINDOW_HOURS * 60 * 60 * 1000);
+
   await Ride.updateMany(
     {
-      status: "scheduled",
+      status: { $nin: ["completed", "cancelled"] },
       dateTime: { $lte: now },
     },
     {
-      $set: { status: "ongoing" },
+      $set: { status: "live" },
+    }
+  );
+
+  await Ride.updateMany(
+    {
+      status: { $nin: ["completed", "cancelled", "live"] },
+      dateTime: { $gt: now, $lte: nearbyUntil },
+    },
+    {
+      $set: { status: "nearby" },
+    }
+  );
+
+  await Ride.updateMany(
+    {
+      status: { $nin: ["completed", "cancelled"] },
+      dateTime: { $gt: nearbyUntil },
+    },
+    {
+      $set: { status: "scheduled" },
     }
   );
 
@@ -143,7 +189,7 @@ const refreshRideLifecycleStatuses = async (now = new Date()) => {
 
   await Ride.updateMany(
     {
-      status: "ongoing",
+      status: "live",
       dateTime: { $lte: completedBefore },
     },
     {
@@ -265,6 +311,7 @@ export const searchRides = async (req, res, next) => {
       fromCity,
       toCity,
       date,
+      dateTime,
       sort = "time",
       type,
       route,
@@ -315,8 +362,9 @@ export const searchRides = async (req, res, next) => {
     const andConditions = [
       { driver: { $ne: req.user._id } },
       ...(date ? [{ date }] : []),
+      ...(dateTime ? [{ dateTime: { $gte: new Date(String(dateTime)) } }] : []),
       { availableSeats: { $gt: 0 } },
-      { status: { $in: ["scheduled", "ongoing"] } },
+      { status: { $in: ["scheduled", "nearby", "live"] } },
       { "fromCoordinates.lat": { $gte: PAKISTAN_BOUNDS.minLat, $lte: PAKISTAN_BOUNDS.maxLat } },
       { "fromCoordinates.lng": { $gte: PAKISTAN_BOUNDS.minLng, $lte: PAKISTAN_BOUNDS.maxLng } },
       { "toCoordinates.lat": { $gte: PAKISTAN_BOUNDS.minLat, $lte: PAKISTAN_BOUNDS.maxLat } },
@@ -328,8 +376,12 @@ export const searchRides = async (req, res, next) => {
       andConditions.push({ $or: [{ fromCity: routeRegex }, { toCity: routeRegex }] });
     }
 
-    if (type === "live" || type === "ongoing") {
-      andConditions.push({ status: "ongoing" });
+    if (type === "live") {
+      andConditions.push({ status: "live" });
+    }
+
+    if (type === "nearby") {
+      andConditions.push({ status: "nearby" });
     }
 
     if (type === "upcoming" || type === "scheduled") {
@@ -417,29 +469,17 @@ export const searchRides = async (req, res, next) => {
       .filter(Boolean)
       .sort((a, b) => a.distanceKm - b.distanceKm);
 
-    const ongoingRides = smartMatched.filter((ride) => ride.status === "ongoing");
-    const scheduledRides = smartMatched.filter((ride) => {
-      if (ride.status !== "scheduled") {
-        return false;
-      }
-
-      if (ride.dateTime && new Date(ride.dateTime) > now) {
-        return true;
-      }
-
-      if (ride.date > nowDate) {
-        return true;
-      }
-
-      return ride.date === nowDate ? ride.time >= nowTime : false;
-    });
+    const liveRides = smartMatched.filter((ride) => ride.status === "live");
+    const nearbyRides = smartMatched.filter((ride) => ride.status === "nearby");
+    const scheduledRides = smartMatched.filter((ride) => ride.status === "scheduled");
 
     return res.json({
-      ongoingRides,
+      liveRides,
+      nearbyRides,
       scheduledRides,
-      liveRides: ongoingRides,
+      ongoingRides: liveRides,
       upcomingRides: scheduledRides,
-      rides: [...ongoingRides, ...scheduledRides],
+      rides: [...liveRides, ...nearbyRides, ...scheduledRides],
     });
   } catch (error) {
     return next(error);
@@ -480,7 +520,7 @@ export const getNearbyRides = async (req, res, next) => {
 
     const baseQuery = {
       driver: { $ne: req.user?._id },
-      status: { $in: ["scheduled", "ongoing"] },
+      status: { $in: ["scheduled", "nearby", "live"] },
       "fromCoordinates.lat": { $exists: true },
       "fromCoordinates.lng": { $exists: true },
     };
@@ -516,7 +556,8 @@ export const getNearbyRides = async (req, res, next) => {
 
     return res.json({
       nearbyRides,
-      liveRides: nearbyRides.filter((ride) => ride.status === "ongoing"),
+      liveRides: nearbyRides.filter((ride) => ride.status === "live"),
+      nearbyWindowRides: nearbyRides.filter((ride) => ride.status === "nearby"),
       scheduledRides: nearbyRides.filter((ride) => ride.status === "scheduled"),
     });
   } catch (error) {
@@ -534,12 +575,15 @@ export const getMyRides = async (req, res, next) => {
       )
       .sort({ dateTime: 1, createdAt: -1 });
 
-    const ongoingRides = rides.filter((ride) => ride.status === "ongoing");
+    const liveRides = rides.filter((ride) => ride.status === "live");
+    const nearbyRides = rides.filter((ride) => ride.status === "nearby");
     const scheduledRides = rides.filter((ride) => ride.status === "scheduled");
     const completedRides = rides.filter((ride) => ride.status === "completed");
 
     return res.json({
-      ongoingRides,
+      liveRides,
+      nearbyRides,
+      ongoingRides: liveRides,
       scheduledRides,
       completedRides,
       rides,
@@ -553,7 +597,7 @@ export const updateRideStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
 
-    if (!status || !["scheduled", "ongoing", "completed", "cancelled"].includes(status)) {
+    if (!status || !["scheduled", "nearby", "live", "completed", "cancelled"].includes(status)) {
       return res.status(400).json({ message: "Valid ride status is required" });
     }
 
@@ -576,7 +620,7 @@ export const updateRideStatus = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    if (["ongoing", "completed", "cancelled"].includes(status)) {
+    if (["live", "completed", "cancelled"].includes(status)) {
       const nextBookingStatus = status === "cancelled" ? "cancelled" : status;
       await Booking.updateMany(
         { rideId: ride._id, status: { $in: ["accepted", "booked", "ongoing"] } },

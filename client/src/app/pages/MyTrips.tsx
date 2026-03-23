@@ -3,34 +3,22 @@ import { useNavigate } from 'react-router';
 import { MapPin, Calendar, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
-import type { Booking, MyRidesResponse, Ride } from '../types';
+import type { Booking, MyRidesResponse, Ride, RideRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
-type MyRidesTab = 'ongoing' | 'scheduled' | 'completed';
-
-const getRideStartDate = (ride?: Ride | null) => {
-  if (!ride) {
-    return null;
-  }
-
-  const candidate = ride.startTime || ride.dateTime || `${ride.date}T${ride.time}:00`;
-  const parsed = new Date(candidate as string);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed;
-};
+type MyRidesTab = 'live' | 'nearby' | 'scheduled' | 'completed';
 
 export function MyTrips() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [driverOngoingRides, setDriverOngoingRides] = useState<Ride[]>([]);
+  const [requests, setRequests] = useState<RideRequest[]>([]);
+  const [driverLiveRides, setDriverLiveRides] = useState<Ride[]>([]);
+  const [driverNearbyRides, setDriverNearbyRides] = useState<Ride[]>([]);
   const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
   const [driverCompletedRides, setDriverCompletedRides] = useState<Ride[]>([]);
-  const [tab, setTab] = useState<MyRidesTab>('ongoing');
+  const [tab, setTab] = useState<MyRidesTab>('live');
   const [loading, setLoading] = useState(true);
 
   const role = user?.role;
@@ -44,19 +32,26 @@ export function MyTrips() {
     try {
       setLoading(true);
       if (role === 'passenger') {
-        const response = await api.get<Booking[]>('/api/bookings/my');
-        setBookings(response.data);
-        setDriverOngoingRides([]);
+        const [bookingResponse, requestResponse] = await Promise.all([
+          api.get<Booking[]>('/api/bookings/my'),
+          api.get<RideRequest[]>('/api/requests/my'),
+        ]);
+        setBookings(bookingResponse.data);
+        setRequests(requestResponse.data);
+        setDriverLiveRides([]);
+        setDriverNearbyRides([]);
         setDriverScheduledRides([]);
         setDriverCompletedRides([]);
       }
 
       if (role === 'driver') {
         const response = await api.get<MyRidesResponse>('/api/rides/my');
-        setDriverOngoingRides(response.data.ongoingRides || []);
+        setDriverLiveRides(response.data.liveRides || response.data.ongoingRides || []);
+        setDriverNearbyRides(response.data.nearbyRides || []);
         setDriverScheduledRides(response.data.scheduledRides || []);
         setDriverCompletedRides(response.data.completedRides || []);
         setBookings([]);
+        setRequests([]);
       }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Could not load trips');
@@ -80,7 +75,7 @@ export function MyTrips() {
     };
   }, [loadTrips]);
 
-  const updateRideStatus = async (rideId: string, status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled') => {
+  const updateRideStatus = async (rideId: string, status: 'scheduled' | 'nearby' | 'live' | 'completed' | 'cancelled') => {
     try {
       await api.patch(`/api/rides/${rideId}/status`, { status });
       toast.success(`Ride marked as ${status}`);
@@ -127,44 +122,43 @@ export function MyTrips() {
   const showPassengerView = role === 'passenger';
   const showDriverView = role === 'driver';
 
-  const passengerOngoingBookings = bookings.filter((trip) => {
-    if (trip.status === 'completed' || trip.status === 'cancelled' || trip.ride?.status === 'completed' || trip.ride?.status === 'cancelled') {
-      return false;
-    }
-
-    const start = getRideStartDate(trip.ride);
-    if (!start) {
-      return false;
-    }
-
-    return start <= new Date();
-  });
-
-  const passengerScheduledBookings = bookings.filter((trip) => {
-    if (trip.status === 'completed' || trip.status === 'cancelled' || trip.ride?.status === 'completed' || trip.ride?.status === 'cancelled') {
-      return false;
-    }
-
-    const start = getRideStartDate(trip.ride);
-    if (!start) {
-      return true;
-    }
-
-    return start > new Date();
-  });
+  const passengerLiveBookings = bookings.filter((trip) => trip.ride?.status === 'live');
+  const passengerNearbyBookings = bookings.filter((trip) => trip.ride?.status === 'nearby');
+  const passengerScheduledBookings = bookings.filter((trip) => trip.ride?.status === 'scheduled');
 
   const passengerCompletedBookings = bookings.filter((trip) => {
     return trip.status === 'completed' || trip.ride?.status === 'completed';
   });
 
+  const passengerLiveRequests = requests.filter((item) => item.timeClass === 'live');
+  const passengerNearbyRequests = requests.filter((item) => item.timeClass === 'nearby');
+  const passengerScheduledRequests = requests.filter((item) => item.timeClass === 'scheduled');
+  const passengerCompletedRequests = requests.filter((item) => item.timeClass === 'completed' || item.status === 'completed');
+
   const activePassengerTrips =
-    tab === 'ongoing'
-      ? passengerOngoingBookings
+    tab === 'live'
+      ? passengerLiveBookings
+      : tab === 'nearby'
+      ? passengerNearbyBookings
       : tab === 'scheduled'
       ? passengerScheduledBookings
       : passengerCompletedBookings;
+  const activePassengerRequests =
+    tab === 'live'
+      ? passengerLiveRequests
+      : tab === 'nearby'
+      ? passengerNearbyRequests
+      : tab === 'scheduled'
+      ? passengerScheduledRequests
+      : passengerCompletedRequests;
   const activeDriverTrips =
-    tab === 'ongoing' ? driverOngoingRides : tab === 'scheduled' ? driverScheduledRides : driverCompletedRides;
+    tab === 'live'
+      ? driverLiveRides
+      : tab === 'nearby'
+      ? driverNearbyRides
+      : tab === 'scheduled'
+      ? driverScheduledRides
+      : driverCompletedRides;
 
   return (
     <div className="min-h-screen bg-transparent overflow-x-hidden">
@@ -177,10 +171,17 @@ export function MyTrips() {
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              onClick={() => setTab('ongoing')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'ongoing' ? 'active' : ''}`}
+              onClick={() => setTab('live')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'live' ? 'active' : ''}`}
             >
-              Ongoing
+              Live
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('nearby')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'nearby' ? 'active' : ''}`}
+            >
+              Nearby
             </button>
             <button
               type="button"
@@ -216,6 +217,16 @@ export function MyTrips() {
             ))
           : null}
 
+        {!loading && showPassengerView && activePassengerRequests.length > 0
+          ? activePassengerRequests.map((request) => (
+              <RequestTripCard
+                key={request._id}
+                request={request}
+                onClick={() => (request.matchedRideId ? navigate(`/ride/${request.matchedRideId}`) : navigate('/home'))}
+              />
+            ))
+          : null}
+
         {!loading && showDriverView && activeDriverTrips.length > 0
           ? activeDriverTrips.map((ride) => (
               <DriverTripCard
@@ -227,10 +238,10 @@ export function MyTrips() {
             ))
           : null}
 
-        {!loading && showPassengerView && activePassengerTrips.length === 0 ? (
+        {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 ? (
           <EmptyState
-            title={tab === 'ongoing' ? 'No ongoing rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
-            subtitle={tab === 'ongoing' ? 'Your accepted rides will appear here after start time.' : tab === 'scheduled' ? 'Your upcoming bookings appear here.' : 'Your ride history will appear here after completion.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'nearby' ? 'No nearby rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'nearby' ? 'Your next 24-hour rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
@@ -238,8 +249,8 @@ export function MyTrips() {
 
         {!loading && showDriverView && activeDriverTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'ongoing' ? 'No ongoing rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
-            subtitle={tab === 'ongoing' ? 'Rides move here when start time arrives.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : 'Completed rides appear here as history.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'nearby' ? 'No nearby rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'nearby' ? 'Rides in the next 24 hours appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -293,10 +304,7 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm }: TripCardProp
   const navigate = useNavigate();
   const { ride } = trip;
 
-  const canChat =
-    canUseChat &&
-    ['accepted', 'booked', 'ongoing'].includes(trip.status) &&
-    !['completed', 'cancelled'].includes(String(trip.ride?.status || ''));
+  const canChat = canUseChat && ride?.status === 'live' && ['accepted', 'booked'].includes(trip.status);
   const statusClass =
     trip.status === 'pending'
       ? 'bg-amber-100 text-amber-700'
@@ -423,13 +431,15 @@ function DriverTripCard({
 }: {
   ride: Ride;
   onClick: () => void;
-  onStatusChange: (rideId: string, status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled') => void;
+  onStatusChange: (rideId: string, status: 'scheduled' | 'nearby' | 'live' | 'completed' | 'cancelled') => void;
 }) {
   const driverStatusBadge =
     ride.status === 'completed'
       ? 'bg-slate-200 text-slate-700'
-      : ride.status === 'ongoing'
+      : ride.status === 'live'
       ? 'bg-indigo-100 text-indigo-700'
+      : ride.status === 'nearby'
+      ? 'bg-blue-100 text-blue-700'
       : ride.status === 'cancelled'
       ? 'bg-red-100 text-red-700'
       : 'bg-green-100 text-green-600';
@@ -471,11 +481,20 @@ function DriverTripCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onStatusChange(ride._id, 'ongoing');
+            onStatusChange(ride._id, 'live');
           }}
           className="min-h-12 rounded-lg bg-blue-100 px-2 py-1 text-xs md:text-sm text-blue-700"
         >
           Start Ride
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onStatusChange(ride._id, 'nearby');
+          }}
+          className="min-h-12 rounded-lg bg-indigo-100 px-2 py-1 text-xs md:text-sm text-indigo-700"
+        >
+          Set Nearby
         </button>
         <button
           onClick={(e) => {
@@ -501,6 +520,31 @@ function DriverTripCard({
           History: {ride.fromCity} → {ride.toCity} • {ride.date} {ride.time} • {ride.driver.name} • Rating {ride.driver.rating || 0}
         </div>
       ) : null}
+    </motion.div>
+  );
+}
+
+function RequestTripCard({ request, onClick }: { request: RideRequest; onClick: () => void }) {
+  const statusText = request.status.charAt(0).toUpperCase() + request.status.slice(1);
+  const requestDate = new Date(request.dateTime);
+
+  return (
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span className="px-3 py-1 rounded-full text-xs bg-amber-100 text-amber-700">Requested</span>
+        <span className="text-xs text-slate-100">{statusText}</span>
+      </div>
+      <div className="text-base mb-2 text-white">
+        {request.fromCity} → {request.toCity}
+      </div>
+      <div className="text-sm text-slate-100">
+        {Number.isNaN(requestDate.getTime()) ? request.dateTime : requestDate.toLocaleString()}
+      </div>
     </motion.div>
   );
 }
