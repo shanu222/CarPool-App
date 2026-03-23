@@ -1,5 +1,6 @@
 import { Booking } from "../models/Booking.js";
 import { Ride } from "../models/Ride.js";
+import { Payment } from "../models/Payment.js";
 import { createUserNotification } from "../services/notificationService.js";
 
 const notifyUser = async ({ userId, type = "message", title, body, data }) =>
@@ -40,10 +41,6 @@ export const createBooking = async (req, res, next) => {
     const { rideId, seatsRequested, seatsBooked } = req.body;
     const seats = Number(seatsRequested ?? seatsBooked);
 
-    if (!req.user?.canBookRide) {
-      return res.status(403).json({ message: "Booking is locked. Submit payment proof to unlock booking and chat." });
-    }
-
     if (!rideId || !seats || seats < 1) {
       return res.status(400).json({ message: "rideId and valid seatsRequested are required" });
     }
@@ -52,6 +49,19 @@ export const createBooking = async (req, res, next) => {
 
     if (!ride) {
       return res.status(404).json({ message: "Ride not found" });
+    }
+
+    const interactionUnlocked = await Payment.exists({
+      userId: req.user._id,
+      rideId,
+      type: "interaction_unlock",
+      status: "approved",
+    });
+
+    if (!interactionUnlocked) {
+      return res.status(403).json({
+        message: "Payment unlock is required before booking this ride.",
+      });
     }
 
     if (String(ride.driver) === String(req.user._id)) {
@@ -69,7 +79,7 @@ export const createBooking = async (req, res, next) => {
     const existing = await Booking.findOne({
       rideId: ride._id,
       passengerId: req.user._id,
-      status: { $in: ["pending", "accepted", "ongoing"] },
+      status: { $in: ["pending", "accepted", "booked", "ongoing"] },
     });
 
     if (existing) {
@@ -134,6 +144,19 @@ export const respondToBookingRequest = async (req, res, next) => {
       return res.status(400).json({ message: "Only pending requests can be updated" });
     }
 
+    const interactionUnlocked = await Payment.exists({
+      userId: req.user._id,
+      rideId: booking.rideId._id,
+      type: "interaction_unlock",
+      status: "approved",
+    });
+
+    if (!interactionUnlocked) {
+      return res.status(403).json({
+        message: "Payment approval is required to interact with this booking request.",
+      });
+    }
+
     if (action === "accepted") {
       const updatedRide = await Ride.findOneAndUpdate(
         {
@@ -141,7 +164,7 @@ export const respondToBookingRequest = async (req, res, next) => {
           availableSeats: { $gte: booking.seatsRequested },
           status: { $in: ["scheduled", "ongoing"] },
         },
-        { $inc: { availableSeats: -booking.seatsRequested } },
+        { $inc: { availableSeats: -booking.seatsRequested, bookedSeats: booking.seatsRequested } },
         { new: true }
       );
 
@@ -150,6 +173,7 @@ export const respondToBookingRequest = async (req, res, next) => {
       }
 
       booking.status = "accepted";
+      booking.driverConfirm = true;
       await booking.save();
     } else {
       booking.status = "rejected";
@@ -190,7 +214,7 @@ export const getDriverBookingRequests = async (req, res, next) => {
 
     const requests = await Booking.find({
       $or: [{ rideId: { $in: rideIds } }, { ride: { $in: rideIds } }],
-      status: { $in: ["pending", "accepted", "rejected"] },
+      status: { $in: ["pending", "accepted", "booked", "rejected"] },
     })
       .populate({
         path: "ride",
@@ -223,11 +247,50 @@ export const getMyBookings = async (req, res, next) => {
     const sanitized = bookings.map((booking) =>
       sanitizeDriverForBooking(
         booking,
-        ["accepted", "ongoing", "completed"].includes(booking.status)
+        ["accepted", "booked", "ongoing", "completed"].includes(booking.status)
       )
     );
 
     return res.json(sanitized);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const confirmRideBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId).populate("rideId");
+
+    if (!booking || !booking.rideId) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const isPassenger = String(booking.passengerId) === String(req.user._id);
+    const isDriver = String(booking.rideId.driver) === String(req.user._id);
+
+    if (!isPassenger && !isDriver) {
+      return res.status(403).json({ message: "Only ride participants can confirm" });
+    }
+
+    if (!["accepted", "booked", "ongoing"].includes(booking.status)) {
+      return res.status(400).json({ message: "Only accepted rides can be confirmed" });
+    }
+
+    if (isPassenger) {
+      booking.passengerConfirm = true;
+    }
+
+    if (isDriver) {
+      booking.driverConfirm = true;
+    }
+
+    if (booking.passengerConfirm && booking.driverConfirm) {
+      booking.status = "booked";
+    }
+
+    await booking.save();
+
+    return res.json(booking);
   } catch (error) {
     return next(error);
   }

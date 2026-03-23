@@ -63,6 +63,7 @@ export interface Ride {
   startTime?: string;
   pricePerSeat: number;
   totalSeats: number;
+  bookedSeats?: number;
   availableSeats: number;
   fromCoordinates?: {
     lat: number;
@@ -89,7 +90,9 @@ export interface Booking {
   seatsRequested?: number;
   seatsBooked: number;
   totalPrice: number;
-  status: "pending" | "accepted" | "rejected" | "ongoing" | "completed" | "cancelled";
+  status: "pending" | "accepted" | "booked" | "rejected" | "ongoing" | "completed" | "cancelled";
+  passengerConfirm?: boolean;
+  driverConfirm?: boolean;
   createdAt: string;
   driverNearNotified?: boolean;
 }
@@ -148,7 +151,7 @@ export interface Message {
     name: string;
     role: "passenger" | "driver";
   };
-  receiver: {
+  receiver?: {
     _id: string;
     name: string;
     role: "passenger" | "driver";
@@ -193,14 +196,25 @@ export interface Payment {
   _id: string;
   userId: User;
   role?: "passenger" | "driver";
-  type: "ride_post" | "booking_unlock";
+  type: "interaction_unlock" | "ride_post" | "booking_unlock";
+  rideId?: Ride;
+  distanceKm?: number;
   amount: number;
+  currency?: string;
   method: "easypaisa" | "jazzcash" | "bank";
   screenshot?: string;
   status: "pending" | "approved" | "rejected";
   reviewedBy?: Pick<User, "id" | "_id" | "name" | "email">;
   rejectionReason?: string;
   createdAt: string;
+}
+
+export interface PaymentQuote {
+  rideId: string;
+  role: "driver" | "passenger";
+  distanceKm: number;
+  amount: number;
+  currency: string;
 }
 
 export interface PaymentSettings {

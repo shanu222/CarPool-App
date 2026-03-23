@@ -16,14 +16,29 @@ const paymentSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["ride_post", "booking_unlock"],
+      enum: ["interaction_unlock", "ride_post", "booking_unlock"],
       required: true,
       index: true,
+    },
+    rideId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Ride",
+      index: true,
+    },
+    distanceKm: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     amount: {
       type: Number,
       required: true,
       min: 0,
+    },
+    currency: {
+      type: String,
+      default: "PKR",
+      trim: true,
     },
     method: {
       type: String,
@@ -53,5 +68,6 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.index({ createdAt: -1 });
+paymentSchema.index({ userId: 1, rideId: 1, type: 1, status: 1 });
 
 export const Payment = mongoose.model("Payment", paymentSchema);

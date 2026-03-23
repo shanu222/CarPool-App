@@ -39,8 +39,16 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "accepted", "rejected", "ongoing", "completed", "cancelled"],
+      enum: ["pending", "accepted", "booked", "rejected", "ongoing", "completed", "cancelled"],
       default: "pending",
+    },
+    passengerConfirm: {
+      type: Boolean,
+      default: false,
+    },
+    driverConfirm: {
+      type: Boolean,
+      default: false,
     },
     driverNearNotified: {
       type: Boolean,

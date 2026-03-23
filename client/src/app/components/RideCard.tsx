@@ -49,7 +49,9 @@ export function RideCard({ ride }: RideCardProps) {
           <span className="rounded-full bg-slate-500/25 px-2 py-1 text-[11px] text-slate-200">{ride.status || 'UNKNOWN'}</span>
         )}
 
-        {isLive ? <span className="text-xs text-emerald-200">LIVE RIDE AVAILABLE</span> : null}
+        {ride.availableSeats > 0 ? (
+          <span className="text-xs text-emerald-200">{ride.availableSeats} seat{ride.availableSeats !== 1 ? 's' : ''} left</span>
+        ) : null}
       </div>
 
       <div className="flex items-start gap-2 mb-3">
@@ -74,7 +76,7 @@ export function RideCard({ ride }: RideCardProps) {
         <div className="flex items-center gap-4 text-sm text-slate-100">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
-            <span>{ride.availableSeats}/{ride.totalSeats}</span>
+            <span>{ride.availableSeats} seats left</span>
           </div>
           <div className="flex items-center gap-1">
             <Clock className="w-4 h-4" />

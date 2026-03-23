@@ -49,6 +49,12 @@ const rideSchema = new mongoose.Schema(
       min: 1,
       max: 8,
     },
+    bookedSeats: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
     availableSeats: {
       type: Number,
       required: true,
@@ -137,6 +143,21 @@ rideSchema.pre("validate", function syncDateTime(next) {
     this.date = iso.slice(0, 10);
     this.time = iso.slice(11, 16);
     this.startTime = this.dateTime;
+  }
+
+  if (typeof this.totalSeats === "number" && typeof this.bookedSeats !== "number") {
+    const available = typeof this.availableSeats === "number" ? this.availableSeats : this.totalSeats;
+    this.bookedSeats = Math.max(0, this.totalSeats - available);
+  }
+
+  if (typeof this.totalSeats === "number" && typeof this.availableSeats !== "number") {
+    this.availableSeats = Math.max(0, this.totalSeats - Number(this.bookedSeats || 0));
+  }
+
+  if (typeof this.totalSeats === "number" && typeof this.bookedSeats === "number" && typeof this.availableSeats === "number") {
+    const normalizedBooked = Math.min(this.totalSeats, Math.max(0, this.bookedSeats));
+    this.bookedSeats = normalizedBooked;
+    this.availableSeats = Math.max(0, this.totalSeats - normalizedBooked);
   }
 
   return next();

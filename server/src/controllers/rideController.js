@@ -162,10 +162,6 @@ export const createRide = async (req, res, next) => {
       return res.status(403).json({ message: "Driver verification is required before posting rides" });
     }
 
-    if (!req.user?.canPostRide) {
-      return res.status(403).json({ message: "Ride posting is locked. Please submit payment proof for approval." });
-    }
-
     if (!fromCity || !toCity || !date || !time || !pricePerSeat || !requestedSeats) {
       return res.status(400).json({ message: "All ride fields are required" });
     }
@@ -215,6 +211,7 @@ export const createRide = async (req, res, next) => {
       startTime: rideDateTime,
       pricePerSeat: Number(pricePerSeat),
       totalSeats: requestedSeats,
+      bookedSeats: 0,
       availableSeats: requestedSeats,
       fromCoordinates: fromCoordinates || undefined,
       toCoordinates: toCoordinates || undefined,
@@ -582,7 +579,7 @@ export const updateRideStatus = async (req, res, next) => {
     if (["ongoing", "completed", "cancelled"].includes(status)) {
       const nextBookingStatus = status === "cancelled" ? "cancelled" : status;
       await Booking.updateMany(
-        { rideId: ride._id, status: { $in: ["accepted", "ongoing"] } },
+        { rideId: ride._id, status: { $in: ["accepted", "booked", "ongoing"] } },
         { status: nextBookingStatus }
       );
     }

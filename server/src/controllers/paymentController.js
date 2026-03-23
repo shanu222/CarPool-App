@@ -1,5 +1,6 @@
 import { Payment } from "../models/Payment.js";
 import { PaymentSettings } from "../models/PaymentSettings.js";
+import { getInteractionQuote, PRICING_CURRENCY } from "../services/interactionPricingService.js";
 
 const buildFilePath = (req, file) => {
   if (!file) {
@@ -9,24 +10,46 @@ const buildFilePath = (req, file) => {
   return `${req.protocol}://${req.get("host")}/uploads/payments/${file.filename}`;
 };
 
-const getDefaultAmount = (type) => {
-  if (type === "ride_post") {
-    return 200;
-  }
+export const getPaymentQuote = async (req, res, next) => {
+  try {
+    const { rideId } = req.params;
 
-  if (type === "booking_unlock") {
-    return 100;
-  }
+    if (!rideId) {
+      return res.status(400).json({ message: "rideId is required" });
+    }
 
-  return 0;
+    if (!req.user || !["driver", "passenger"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only drivers and passengers can request interaction quote" });
+    }
+
+    const quote = await getInteractionQuote({ rideId, role: req.user.role });
+    if (!quote) {
+      return res.status(404).json({ message: "Ride not found" });
+    }
+
+    return res.json({
+      rideId: quote.ride._id,
+      distanceKm: quote.distanceKm,
+      amount: quote.amount,
+      currency: quote.currency,
+      role: req.user.role,
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 export const submitPaymentProof = async (req, res, next) => {
   try {
-    const { type, method, amount } = req.body;
+    const { method, rideId } = req.body;
+    const type = "interaction_unlock";
 
-    if (!type || !method || !["ride_post", "booking_unlock"].includes(type)) {
-      return res.status(400).json({ message: "Valid payment type and method are required" });
+    if (!rideId) {
+      return res.status(400).json({ message: "rideId is required" });
+    }
+
+    if (!method) {
+      return res.status(400).json({ message: "Payment method is required" });
     }
 
     if (!["easypaisa", "jazzcash", "bank"].includes(method)) {
@@ -38,19 +61,34 @@ export const submitPaymentProof = async (req, res, next) => {
       return res.status(400).json({ message: "Payment screenshot is required" });
     }
 
-    if (type === "ride_post" && req.user.role !== "driver") {
-      return res.status(403).json({ message: "ride_post payment is only for driver accounts" });
+    if (!["driver", "passenger"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only drivers and passengers can submit interaction payment" });
     }
 
-    if (type === "booking_unlock" && req.user.role !== "passenger") {
-      return res.status(403).json({ message: "booking_unlock payment is only for passenger accounts" });
+    const quote = await getInteractionQuote({ rideId, role: req.user.role });
+    if (!quote) {
+      return res.status(404).json({ message: "Ride not found" });
+    }
+
+    const existing = await Payment.findOne({
+      userId: req.user._id,
+      rideId,
+      type,
+      status: { $in: ["pending", "approved"] },
+    }).sort({ createdAt: -1 });
+
+    if (existing) {
+      return res.status(409).json({ message: existing.status === "approved" ? "Interaction already unlocked for this ride" : "Payment review already pending for this ride" });
     }
 
     const payment = await Payment.create({
       userId: req.user._id,
       role: req.user.role,
       type,
-      amount: Number(amount || getDefaultAmount(type)),
+      rideId,
+      distanceKm: quote.distanceKm,
+      amount: quote.amount,
+      currency: quote.currency || PRICING_CURRENCY,
       method,
       screenshot,
       status: "pending",
@@ -64,7 +102,13 @@ export const submitPaymentProof = async (req, res, next) => {
 
 export const getMyPayments = async (req, res, next) => {
   try {
-    const payments = await Payment.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    const { rideId } = req.query;
+    const query = {
+      userId: req.user._id,
+      ...(rideId ? { rideId } : {}),
+    };
+
+    const payments = await Payment.find(query).sort({ createdAt: -1 });
     return res.json(payments);
   } catch (error) {
     return next(error);

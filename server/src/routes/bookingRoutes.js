@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+	confirmRideBooking,
 	createBooking,
 	getDriverBookingRequests,
 	getMyBookings,
@@ -13,5 +14,6 @@ router.post("/create", protect, requirePassenger, createBooking);
 router.get("/my", protect, requirePassenger, getMyBookings);
 router.get("/driver-requests", protect, requireDriver, getDriverBookingRequests);
 router.patch("/:bookingId/respond", protect, requireDriver, respondToBookingRequest);
+router.patch("/:bookingId/confirm", protect, confirmRideBooking);
 
 export default router;

@@ -114,6 +114,16 @@ export function MyTrips() {
     }
   };
 
+  const confirmRide = async (trip: Booking) => {
+    try {
+      await api.patch(`/api/bookings/${trip._id}/confirm`);
+      toast.success('Ride confirmation updated');
+      await loadTrips();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Could not confirm ride');
+    }
+  };
+
   const showPassengerView = role === 'passenger';
   const showDriverView = role === 'driver';
 
@@ -198,8 +208,9 @@ export function MyTrips() {
               <TripCard
                 key={trip._id}
                 trip={trip}
-                canUseChat={Boolean(user?.canChat)}
+                canUseChat={true}
                 onRate={() => submitReview(trip)}
+                onConfirm={() => confirmRide(trip)}
                 onClick={() => navigate(`/ride/${trip.ride._id}`)}
               />
             ))
@@ -275,21 +286,24 @@ interface TripCardProps {
   canUseChat: boolean;
   onClick: () => void;
   onRate: () => void;
+  onConfirm: () => void;
 }
 
-function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
+function TripCard({ trip, canUseChat, onClick, onRate, onConfirm }: TripCardProps) {
   const navigate = useNavigate();
   const { ride } = trip;
 
   const canChat =
     canUseChat &&
-    ['accepted', 'ongoing'].includes(trip.status) &&
+    ['accepted', 'booked', 'ongoing'].includes(trip.status) &&
     !['completed', 'cancelled'].includes(String(trip.ride?.status || ''));
   const statusClass =
     trip.status === 'pending'
       ? 'bg-amber-100 text-amber-700'
       : trip.status === 'accepted'
       ? 'bg-blue-100 text-blue-600'
+      : trip.status === 'booked'
+      ? 'bg-emerald-100 text-emerald-700'
       : trip.status === 'rejected'
       ? 'bg-red-100 text-red-600'
       : trip.status === 'ongoing'
@@ -356,7 +370,7 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
             <Users className="w-4 h-4" />
             <span>{trip.seatsRequested || trip.seatsBooked}</span>
           </div>
-          <div className="text-blue-600">${trip.totalPrice}</div>
+          <div className="text-blue-600">PKR {trip.totalPrice}</div>
         </div>
       </div>
 
@@ -378,6 +392,24 @@ function TripCard({ trip, canUseChat, onClick, onRate }: TripCardProps) {
           >
             Rate Driver
           </button>
+        </div>
+      ) : null}
+
+      {(trip.status === 'accepted' || trip.status === 'booked') && !trip.passengerConfirm ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfirm();
+          }}
+          className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
+        >
+          Confirm Ride
+        </button>
+      ) : null}
+
+      {(trip.passengerConfirm || trip.driverConfirm) ? (
+        <div className="mt-2 text-xs text-slate-100">
+          Confirmation: Passenger {trip.passengerConfirm ? 'Yes' : 'No'} • Driver {trip.driverConfirm ? 'Yes' : 'No'}
         </div>
       ) : null}
     </motion.div>
@@ -424,7 +456,7 @@ function DriverTripCard({
         <span className="text-slate-100">
           {ride.availableSeats}/{ride.totalSeats} seats left
         </span>
-        <span className="text-blue-600">${ride.pricePerSeat}/seat</span>
+        <span className="text-blue-600">PKR {ride.pricePerSeat}/seat</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
         <button

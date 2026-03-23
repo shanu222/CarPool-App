@@ -4,11 +4,11 @@ import { ArrowLeft, CreditCard, Wallet, Banknote, CheckCircle } from 'lucide-rea
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
-import type { Ride } from '../types';
+import type { Payment, Ride } from '../types';
 import { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { PaymentModal } from '../components/PaymentModal';
+import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
 
 export function Booking() {
   const { id } = useParams();
@@ -20,10 +20,10 @@ export function Booking() {
   const [ride, setRide] = useState<Ride | null>(null);
   const [error, setError] = useState('');
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [interactionUnlocked, setInteractionUnlocked] = useState(false);
   const { user } = useAuth();
 
   const seats = parseInt(searchParams.get('seats') || '1');
-  const passengerPaymentLocked = user?.role === 'passenger' && user?.canChat !== true;
 
   useEffect(() => {
     const loadRide = async () => {
@@ -40,6 +40,22 @@ export function Booking() {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    api
+      .get<Payment[]>(`/api/payments/my?rideId=${id}`)
+      .then((response) => {
+        const hasApproved = (response.data || []).some(
+          (payment) => payment.type === 'interaction_unlock' && payment.status === 'approved',
+        );
+        setInteractionUnlocked(hasApproved);
+      })
+      .catch(() => setInteractionUnlocked(false));
+  }, [id, showUnlockModal]);
+
   if (!ride) {
     return <div className="p-6">{error || 'Loading booking...'}</div>;
   }
@@ -49,8 +65,8 @@ export function Booking() {
   const total = subtotal + serviceFee;
 
   const handleBook = async () => {
-    if (passengerPaymentLocked) {
-      setError('Payment approval is required before booking and chat.');
+    if (!interactionUnlocked) {
+      setError('Payment unlock is required before booking this ride.');
       setShowUnlockModal(true);
       return;
     }
@@ -197,17 +213,17 @@ export function Booking() {
           <div className="space-y-2">
             <div className="flex justify-between text-slate-100">
               <span>
-                ${ride.pricePerSeat} × {seats} seat{seats > 1 ? 's' : ''}
+                PKR {ride.pricePerSeat} × {seats} seat{seats > 1 ? 's' : ''}
               </span>
-              <span>${subtotal}</span>
+              <span>PKR {subtotal}</span>
             </div>
             <div className="flex justify-between text-slate-100">
               <span>Service fee</span>
-              <span>${serviceFee}</span>
+              <span>PKR {serviceFee}</span>
             </div>
             <div className="border-t border-white/30 pt-2 mt-2 flex justify-between">
               <span className="text-white">Total</span>
-              <span className="text-lg md:text-xl text-blue-200">${total}</span>
+              <span className="text-lg md:text-xl text-blue-200">PKR {total}</span>
             </div>
           </div>
         </motion.div>
@@ -232,7 +248,7 @@ export function Booking() {
         <div className="rounded-2xl glass-panel px-3 py-3 md:px-5 md:py-4">
         <button
           onClick={handleBook}
-          disabled={isProcessing || user?.role !== 'passenger' || passengerPaymentLocked}
+          disabled={isProcessing || user?.role !== 'passenger' || !interactionUnlocked}
           className="responsive-action w-full bg-blue-600 text-white py-3 md:py-4 rounded-2xl shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base"
         >
           {isProcessing ? (
@@ -241,26 +257,26 @@ export function Booking() {
               <span>Processing...</span>
             </>
           ) : (
-            <>Send Request · ${total}</>
+            <>Send Request · PKR {total}</>
           )}
         </button>
-        {passengerPaymentLocked ? (
+        {!interactionUnlocked ? (
           <button
             type="button"
             onClick={() => setShowUnlockModal(true)}
             className="mt-2 min-h-12 w-full rounded-2xl border border-blue-300 bg-white/10 py-3 text-sm md:text-base text-blue-100"
           >
-            Submit payment proof to unlock booking
+            Pay & Unlock Booking
           </button>
         ) : null}
         {error && <p className="text-sm text-red-300 mt-2">{error}</p>}
         </div>
       </div>
 
-      <PaymentModal
+      <UnlockInteractionModal
         open={showUnlockModal}
+        rideId={id}
         onClose={() => setShowUnlockModal(false)}
-        paymentType="booking_unlock"
       />
     </div>
   );

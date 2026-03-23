@@ -353,8 +353,14 @@ export function AdminDashboard() {
                 <div>
                   <p className="text-white">{payment.userId?.name || "User"}</p>
                   <p className="text-xs text-slate-100">Type: {payment.type}</p>
-                  <p className="text-xs text-slate-100">Amount: PKR {payment.amount}</p>
+                  <p className="text-xs text-slate-100">Distance: {Math.round(payment.distanceKm || 0)} KM</p>
+                  <p className="text-xs text-slate-100">Amount: {payment.currency || 'PKR'} {payment.amount}</p>
                   <p className="text-xs text-slate-100">Method: {payment.method}</p>
+                  {payment.rideId ? (
+                    <p className="text-xs text-slate-100">
+                      Ride: {payment.rideId.fromCity} → {payment.rideId.toCity}
+                    </p>
+                  ) : null}
                   <div className="mt-1">
                     <StatusBadge status={payment.status} />
                   </div>

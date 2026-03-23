@@ -40,7 +40,7 @@ export function RideRequestDetails() {
       return;
     }
 
-    if (!user?.isVerified || !user?.canChat) {
+    if (!user?.isVerified) {
       setShowUnlock(true);
       return;
     }
@@ -55,7 +55,11 @@ export function RideRequestDetails() {
         navigate('/trips');
       }
     } catch (requestError: any) {
-      toast.error(requestError?.response?.data?.message || 'Could not accept request');
+      const apiMessage = requestError?.response?.data?.message || 'Could not accept request';
+      if (String(apiMessage).toLowerCase().includes('payment')) {
+        setShowUnlock(true);
+      }
+      toast.error(apiMessage);
     }
   };
 
@@ -98,9 +102,9 @@ export function RideRequestDetails() {
           <p className="text-xs text-slate-100">Rating: {request.passengerId?.rating ?? '-'}</p>
         </div>
 
-        {!user?.isVerified || !user?.canChat ? (
+        {!user?.isVerified ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            Verify and pay to contact passenger
+            Verify your profile to accept passenger requests
           </div>
         ) : null}
 
@@ -112,7 +116,7 @@ export function RideRequestDetails() {
         </button>
       </div>
 
-      <UnlockInteractionModal open={showUnlock} onClose={() => setShowUnlock(false)} />
+      <UnlockInteractionModal open={showUnlock} rideId={request.matchedRideId} onClose={() => setShowUnlock(false)} />
     </div>
   );
 }

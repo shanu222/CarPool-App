@@ -136,8 +136,8 @@ export const acceptRideRequest = async (req, res, next) => {
       return res.status(403).json({ message: "Drivers only" });
     }
 
-    if (!req.user.isVerified || !req.user.canChat) {
-      return res.status(403).json({ message: "Verify and pay to contact passenger" });
+    if (!req.user.isVerified) {
+      return res.status(403).json({ message: "Driver verification is required" });
     }
 
     const request = await RideRequest.findById(req.params.requestId);
@@ -155,6 +155,7 @@ export const acceptRideRequest = async (req, res, next) => {
       dateTime: request.dateTime,
       pricePerSeat: 100,
       totalSeats: request.seatsNeeded,
+      bookedSeats: request.seatsNeeded,
       availableSeats: 0,
       fromCoordinates: request.fromCoordinates,
       toCoordinates: request.toCoordinates,

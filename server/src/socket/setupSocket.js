@@ -6,6 +6,7 @@ import { setIo, setUserOffline, setUserOnline, isUserOnline } from "./io.js";
 import { Location } from "../models/Location.js";
 import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
+import { Payment } from "../models/Payment.js";
 import { Notification } from "../models/Notification.js";
 import { sendPushNotification } from "../services/pushService.js";
 import { createUserNotification } from "../services/notificationService.js";
@@ -38,6 +39,31 @@ const isConversationBlocked = async (aUserId, bUserId) => {
   return aBlockedB || bBlockedA;
 };
 
+const getRideParticipantIds = async (rideId, driverId) => {
+  const acceptedBookings = await Booking.find({
+    rideId,
+    status: { $in: ["accepted", "booked", "ongoing", "completed"] },
+  }).select("passengerId");
+
+  const passengerIds = acceptedBookings.map((item) => String(item.passengerId));
+  return [...new Set([String(driverId), ...passengerIds])];
+};
+
+const hasInteractionAccess = async (userId, rideId, role) => {
+  if (role === "admin") {
+    return true;
+  }
+
+  const approvedPayment = await Payment.exists({
+    userId,
+    rideId,
+    type: "interaction_unlock",
+    status: "approved",
+  });
+
+  return Boolean(approvedPayment);
+};
+
 const toRad = (value) => (value * Math.PI) / 180;
 
 const calculateDistanceKm = (a, b) => {
@@ -55,6 +81,14 @@ const calculateDistanceKm = (a, b) => {
 };
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
+const FREE_CHAT_MESSAGE_LIMIT = 5;
+const PHONE_REGEX = /(\+?\d[\d\s\-()]{7,}\d)/;
+const WHATSAPP_LINK_REGEX = /(wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/)/i;
+
+const containsLockedContactContent = (text) => {
+  const value = String(text || "");
+  return PHONE_REGEX.test(value) || WHATSAPP_LINK_REGEX.test(value);
+};
 
 const resolveRideStatusForChat = async (ride) => {
   if (!ride) {
@@ -75,7 +109,7 @@ const resolveRideStatusForChat = async (ride) => {
     ride.status = "completed";
     await ride.save();
     await Booking.updateMany(
-      { rideId: ride._id, status: { $in: ["accepted", "ongoing"] } },
+      { rideId: ride._id, status: { $in: ["accepted", "booked", "ongoing"] } },
       { status: "completed" }
     );
     return "completed";
@@ -107,7 +141,7 @@ export const initializeSocket = (httpServer) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select("_id name role canChat accountStatus");
+      const user = await User.findById(decoded.id).select("_id name role accountStatus");
 
       if (!user) {
         return next(new Error("Unauthorized"));
@@ -129,8 +163,22 @@ export const initializeSocket = (httpServer) => {
     socket.join(String(socket.user._id));
     socket.join(`user:${String(socket.user._id)}`);
 
-    socket.on("join_ride_room", ({ rideId }) => {
+    socket.on("join_ride_room", async ({ rideId }) => {
       if (!rideId) {
+        return;
+      }
+
+      const ride = await Ride.findById(rideId).select("driver status dateTime startTime");
+      if (!ride) {
+        return;
+      }
+
+      const participantIds = await getRideParticipantIds(rideId, ride.driver);
+      if (!participantIds.includes(String(socket.user._id)) && socket.user.role !== "admin") {
+        socket.emit("chat_locked", {
+          rideId,
+          message: "Only ride participants can join this chat.",
+        });
         return;
       }
 
@@ -140,7 +188,7 @@ export const initializeSocket = (httpServer) => {
     socket.on("send_message", async (payload) => {
       const { rideId, receiverId, text, clientMessageId } = payload || {};
 
-      if (!rideId || !receiverId || !text?.trim()) {
+      if (!rideId || !text?.trim()) {
         return;
       }
 
@@ -159,31 +207,55 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const isDriver = String(ride.driver) === String(socket.user._id);
-      const hasAcceptedBooking = await Booking.exists({
-        rideId,
-        passengerId: socket.user._id,
-        status: { $in: ["accepted", "ongoing", "completed"] },
-      });
-
-      if (!isDriver && !socket.user.canChat) {
+      const participantIds = await getRideParticipantIds(rideId, ride.driver);
+      if (!participantIds.includes(String(socket.user._id)) && socket.user.role !== "admin") {
         return;
       }
 
-      if (!isDriver && !hasAcceptedBooking) {
+      const unlocked = await hasInteractionAccess(socket.user._id, rideId, socket.user.role);
+
+      const normalizedReceiverId = receiverId ? String(receiverId) : null;
+      if (normalizedReceiverId && !participantIds.includes(normalizedReceiverId)) {
         return;
       }
 
-      const blocked = await isConversationBlocked(socket.user._id, receiverId);
-      if (blocked) {
-        socket.emit("chat_blocked", { rideId, receiverId });
+      const recipients = normalizedReceiverId
+        ? [normalizedReceiverId]
+        : participantIds.filter((id) => id !== String(socket.user._id));
+
+      if (!recipients.length) {
+        return;
+      }
+
+      if (!unlocked && containsLockedContactContent(text.trim())) {
+        socket.emit("chat_locked", {
+          rideId,
+          message: "Phone numbers and WhatsApp links are blocked before payment unlock.",
+        });
+        return;
+      }
+
+      if (!unlocked) {
+        const sentCount = await Message.countDocuments({ rideId, senderId: socket.user._id });
+        if (sentCount >= FREE_CHAT_MESSAGE_LIMIT) {
+          socket.emit("chat_locked", {
+            rideId,
+            message: "Free chat limit reached. Pay to unlock unlimited chat and contact.",
+          });
+          return;
+        }
+      }
+
+      const blockedChecks = await Promise.all(recipients.map((targetId) => isConversationBlocked(socket.user._id, targetId)));
+      if (blockedChecks.some(Boolean)) {
+        socket.emit("chat_blocked", { rideId, receiverId: normalizedReceiverId });
         return;
       }
 
       const createdMessage = await Message.create({
         rideId,
         senderId: socket.user._id,
-        receiverId,
+        receiverId: normalizedReceiverId || null,
         message: text.trim(),
         timestamp: new Date(),
         isSeen: false,
@@ -198,26 +270,32 @@ export const initializeSocket = (httpServer) => {
 
       io.to(`ride:${rideId}`).emit("receive_message", messagePayload);
       io.to(`ride:${rideId}`).emit("new_message", messagePayload);
-      io.to(`user:${String(receiverId)}`).emit("receive_message", messagePayload);
-
-      await createUserNotification({
-        userId: receiverId,
-        type: "message",
-        title: "New message",
-        body: `${socket.user.name} sent you a message`,
-        data: { rideId, messageId: String(createdMessage._id) },
-        pushFallback: false,
+      recipients.forEach((targetId) => {
+        io.to(`user:${String(targetId)}`).emit("receive_message", messagePayload);
       });
 
-      if (!isUserOnline(receiverId)) {
-        const receiver = await User.findById(receiverId).select("fcmToken");
-        await sendPushNotification({
-          token: receiver?.fcmToken,
-          title: `New message from ${socket.user.name}`,
-          body: text.trim().slice(0, 80),
-          data: { rideId, messageId: String(createdMessage._id) },
-        });
-      }
+      await Promise.all(
+        recipients.map(async (targetId) => {
+          await createUserNotification({
+            userId: targetId,
+            type: "message",
+            title: "New message",
+            body: `${socket.user.name} sent a message in ride chat`,
+            data: { rideId, messageId: String(createdMessage._id) },
+            pushFallback: false,
+          });
+
+          if (!isUserOnline(targetId)) {
+            const receiver = await User.findById(targetId).select("fcmToken");
+            await sendPushNotification({
+              token: receiver?.fcmToken,
+              title: `New message from ${socket.user.name}`,
+              body: text.trim().slice(0, 80),
+              data: { rideId, messageId: String(createdMessage._id) },
+            });
+          }
+        })
+      );
 
       socket.emit("message_sent", messagePayload);
     });
@@ -272,7 +350,7 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const pendingBookings = await Booking.find({ rideId, driverNearNotified: false, status: { $in: ["accepted", "ongoing"] } })
+      const pendingBookings = await Booking.find({ rideId, driverNearNotified: false, status: { $in: ["accepted", "booked", "ongoing"] } })
         .select("_id passengerId");
 
       if (!pendingBookings.length) {

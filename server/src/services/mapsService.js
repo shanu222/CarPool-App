@@ -1,4 +1,5 @@
 const GEOCODE_ENDPOINT = "https://nominatim.openstreetmap.org/search";
+const OSRM_ROUTE_ENDPOINT = "https://router.project-osrm.org/route/v1/driving";
 
 const toRad = (value) => (value * Math.PI) / 180;
 
@@ -59,13 +60,60 @@ export const getDistanceAndDuration = async (fromCoords, toCoords) => {
     return null;
   }
 
-  const distanceKm = calculateDistanceKm(fromCoords, toCoords);
-  const averageSpeedKmH = 45;
-  const durationHours = distanceKm / averageSpeedKmH;
-  const durationMinutes = Math.max(1, Math.round(durationHours * 60));
+  const routeMetrics = await getRouteDistanceAndDuration(fromCoords, toCoords);
+  const distanceKm = routeMetrics?.distanceKm ?? calculateDistanceKm(fromCoords, toCoords);
+  const durationMinutes = routeMetrics?.durationMinutes ?? Math.max(1, Math.round((distanceKm / 45) * 60));
 
   return {
     distanceText: `${distanceKm.toFixed(1)} km`,
     durationText: `${durationMinutes} mins`,
   };
+};
+
+export const getRouteDistanceAndDuration = async (fromCoords, toCoords) => {
+  if (!fromCoords || !toCoords) {
+    return null;
+  }
+
+  const fallbackDistanceKm = calculateDistanceKm(fromCoords, toCoords);
+  const fallbackDurationMinutes = Math.max(1, Math.round((fallbackDistanceKm / 45) * 60));
+
+  try {
+    const coordinates = `${Number(fromCoords.lng)},${Number(fromCoords.lat)};${Number(toCoords.lng)},${Number(toCoords.lat)}`;
+    const url = new URL(`${OSRM_ROUTE_ENDPOINT}/${coordinates}`);
+    url.searchParams.set("overview", "false");
+    url.searchParams.set("alternatives", "false");
+    url.searchParams.set("steps", "false");
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      return {
+        distanceKm: fallbackDistanceKm,
+        durationMinutes: fallbackDurationMinutes,
+      };
+    }
+
+    const data = await response.json();
+    const firstRoute = Array.isArray(data?.routes) ? data.routes[0] : null;
+
+    if (!firstRoute) {
+      return {
+        distanceKm: fallbackDistanceKm,
+        durationMinutes: fallbackDurationMinutes,
+      };
+    }
+
+    const distanceKm = Number(firstRoute.distance || 0) / 1000;
+    const durationMinutes = Math.max(1, Math.round(Number(firstRoute.duration || 0) / 60));
+
+    return {
+      distanceKm: Number.isFinite(distanceKm) && distanceKm > 0 ? distanceKm : fallbackDistanceKm,
+      durationMinutes,
+    };
+  } catch {
+    return {
+      distanceKm: fallbackDistanceKm,
+      durationMinutes: fallbackDurationMinutes,
+    };
+  }
 };

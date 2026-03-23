@@ -6,7 +6,6 @@ import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { PaymentModal } from '../components/PaymentModal';
 import { CityAutocomplete } from '../components/CityAutocomplete';
 import { Button } from '../components/Button';
 import { pakistanCities } from '../../data/pakistanCities';
@@ -16,7 +15,6 @@ export function PostRide() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [formData, setFormData] = useState({
     fromCity: '',
     toCity: '',
@@ -42,12 +40,6 @@ export function PostRide() {
 
     if (!user?.isVerified) {
       setError('Driver verification is required before posting rides. Upload your CNIC and profile in Profile.');
-      return;
-    }
-
-    if (user?.canPostRide !== true) {
-      setError('Payment approval is required before posting rides.');
-      setShowPaymentModal(true);
       return;
     }
 
@@ -213,29 +205,12 @@ export function PostRide() {
           variant="success"
           loading={loading}
           loadingText="Processing..."
-          disabled={!isFormValid || user?.role !== 'driver' || user?.canPostRide !== true}
+          disabled={!isFormValid || user?.role !== 'driver'}
           className="responsive-action"
         >
           Post Ride
         </Button>
-
-        {user?.role === 'driver' && user?.canPostRide !== true ? (
-          <Button
-            type="button"
-            onClick={() => setShowPaymentModal(true)}
-            variant="secondary"
-            className="responsive-action border border-green-300 text-green-700"
-          >
-            Pay now to unlock ride posting
-          </Button>
-        ) : null}
       </form>
-
-      <PaymentModal
-        open={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        paymentType="ride_post"
-      />
     </div>
   );
 }
