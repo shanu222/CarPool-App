@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { PasswordInput } from '../components/PasswordInput';
+import OtpAuth from '../../components/OtpAuth';
 import type { AuthResponse } from '../types';
 
 export function Auth() {
@@ -19,7 +20,6 @@ export function Auth() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
-  const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [role, setRole] = useState<'passenger' | 'driver'>('passenger');
   const [loading, setLoading] = useState(false);
@@ -89,17 +89,7 @@ export function Auth() {
         }
         return;
       } else if (mode === 'otp') {
-        await api.post('/api/auth/reset-password', {
-          email: email || undefined,
-          phone: phone || undefined,
-          otp,
-          newPassword,
-        });
-        setError('Password reset successful. Please login.');
-        setMode('login');
-        setOtp('');
-        setNewPassword('');
-        setPassword('');
+        setError('Use Firebase OTP panel below to verify and reset your password.');
         return;
       } else if (mode === 'reset') {
         await api.post('/api/auth/reset-password', {
@@ -111,7 +101,6 @@ export function Auth() {
         setMode('login');
         setPassword('');
         setResetToken('');
-        setOtp('');
         setNewPassword('');
         return;
       } else {
@@ -153,7 +142,7 @@ export function Auth() {
       : mode === 'forgot'
       ? Boolean(email || phone)
       : mode === 'otp'
-      ? Boolean((email || phone) && otp && newPassword)
+      ? false
       : Boolean(email && resetToken && newPassword);
 
   return (
@@ -199,7 +188,7 @@ export function Auth() {
             />
           )}
 
-          {mode === 'login' ? (
+          {mode !== 'otp' && mode === 'login' ? (
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -211,7 +200,7 @@ export function Auth() {
                 required
               />
             </div>
-          ) : (
+          ) : mode !== 'otp' ? (
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -223,9 +212,9 @@ export function Auth() {
                 required={mode === 'signup' || mode === 'reset'}
               />
             </div>
-          )}
+          ) : null}
 
-          {mode !== 'login' ? (
+          {mode !== 'login' && mode !== 'otp' ? (
             <div className="relative">
               <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -238,7 +227,7 @@ export function Auth() {
             </div>
           ) : null}
 
-          {mode !== 'forgot' && (
+          {mode !== 'forgot' && mode !== 'otp' && (
             <PasswordInput
               value={mode === 'reset' || mode === 'otp' ? newPassword : password}
               onChange={(e) => (mode === 'reset' || mode === 'otp' ? setNewPassword(e.target.value) : setPassword(e.target.value))}
@@ -247,15 +236,13 @@ export function Auth() {
             />
           )}
 
-          {mode === 'otp' && (
-            <input
-              type="text"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              placeholder="6-digit OTP"
-              className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          )}
+          {mode === 'otp' ? <OtpAuth onComplete={() => {
+            setError('Password reset successful. Please login.');
+            setMode('login');
+            setPhone('');
+            setPassword('');
+            setNewPassword('');
+          }} /> : null}
 
           {mode === 'reset' && (
             <input
@@ -327,24 +314,24 @@ export function Auth() {
             </button>
           ) : null}
 
-          <Button
-            type="submit"
-            variant="primary"
-            loading={loading}
-            loadingText="Processing..."
-            disabled={!canSubmit}
-            className="responsive-action"
-          >
-            {mode === 'signup'
-              ? 'Create account'
-              : mode === 'forgot'
-              ? 'Send reset'
-              : mode === 'otp'
-              ? 'Verify OTP & Reset'
-              : mode === 'reset'
-              ? 'Reset password'
-              : 'Login'}
-          </Button>
+          {mode !== 'otp' ? (
+            <Button
+              type="submit"
+              variant="primary"
+              loading={loading}
+              loadingText="Processing..."
+              disabled={!canSubmit}
+              className="responsive-action"
+            >
+              {mode === 'signup'
+                ? 'Create account'
+                : mode === 'forgot'
+                ? 'Send reset'
+                : mode === 'reset'
+                ? 'Reset password'
+                : 'Login'}
+            </Button>
+          ) : null}
         </motion.form>
         </div>
       </div>
