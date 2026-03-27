@@ -268,7 +268,16 @@ export function AdminDashboard() {
     }
   };
 
-  const desktopMainStyle = viewport === "desktop" ? { marginLeft: `${SIDEBAR_WIDTH}px` } : undefined;
+  const mainOffset =
+    viewport === "desktop" ? SIDEBAR_WIDTH : viewport === "tablet" ? (tabletSidebarCollapsed ? 80 : 256) : 0;
+
+  const mainStyle =
+    mainOffset > 0
+      ? {
+          marginLeft: `${mainOffset}px`,
+          width: `calc(100% - ${mainOffset}px)`,
+        }
+      : undefined;
 
   return (
     <div
@@ -366,12 +375,10 @@ export function AdminDashboard() {
       ) : null}
 
       <main
-        className="min-w-0 px-3 pb-6 pt-3 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
-        style={desktopMainStyle}
+        className="min-w-0 px-3 pb-6 pt-3 transition-[margin,width] duration-300 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
+        style={mainStyle}
       >
         <div className="mx-auto max-w-7xl">
-          {viewport === "tablet" ? <div style={{ width: tabletSidebarCollapsed ? 80 : 256 }} className="float-left h-0" /> : null}
-
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {metrics.map((item) => (
               <MetricCard key={item.label} label={item.label} value={item.value} />
@@ -383,7 +390,7 @@ export function AdminDashboard() {
 
           {!loading && section === "active" ? (
             <SectionCard title="Active Users" subtitle="Filter by role and run quick moderation actions">
-              <div className="mb-3 inline-flex rounded-xl border border-white/20 bg-white/10 p-1">
+              <div className="mb-3 flex flex-wrap rounded-xl border border-white/20 bg-white/10 p-1">
                 {(["all", "passenger", "driver"] as RoleFilter[]).map((value) => (
                   <button
                     key={value}
