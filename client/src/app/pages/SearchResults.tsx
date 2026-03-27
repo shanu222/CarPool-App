@@ -11,10 +11,9 @@ export function SearchResults() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sortBy, setSortBy] = useState<'price' | 'time' | 'rating'>('price');
-  const [viewType, setViewType] = useState<'all' | 'live' | 'nearby' | 'scheduled'>('all');
+  const [viewType, setViewType] = useState<'all' | 'live' | 'scheduled'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [liveRides, setLiveRides] = useState<Ride[]>([]);
-  const [nearbyRides, setNearbyRides] = useState<Ride[]>([]);
   const [scheduledRides, setScheduledRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,6 +21,7 @@ export function SearchResults() {
   const from = searchParams.get('from') || searchParams.get('fromCity') || '';
   const to = searchParams.get('to') || searchParams.get('toCity') || '';
   const date = searchParams.get('date') || '';
+  const time = searchParams.get('time') || '';
 
   useEffect(() => {
     const fetchRides = async () => {
@@ -43,12 +43,12 @@ export function SearchResults() {
             fromCity: from,
             toCity: to,
             date,
+            time,
             type: viewType === 'all' ? undefined : viewType,
           },
         });
 
         setLiveRides(response.data.liveRides || response.data.ongoingRides || []);
-        setNearbyRides(response.data.nearbyRides || response.data.nearbyWindowRides || []);
         setScheduledRides(response.data.scheduledRides || response.data.upcomingRides || []);
       } catch (requestError: any) {
         const apiMessage = requestError?.response?.data?.message;
@@ -66,7 +66,7 @@ export function SearchResults() {
     };
 
     fetchRides();
-  }, [from, to, date, viewType]);
+  }, [from, to, date, time, viewType]);
 
   const sortRides = useMemo(() => (items: Ride[]) => {
     const copy = [...items];
@@ -84,8 +84,7 @@ export function SearchResults() {
 
   const sortedLiveRides = useMemo(() => sortRides(liveRides), [liveRides, sortRides]);
   const sortedScheduledRides = useMemo(() => sortRides(scheduledRides), [scheduledRides, sortRides]);
-  const sortedNearbyRides = useMemo(() => sortRides(nearbyRides), [nearbyRides, sortRides]);
-  const totalRides = sortedLiveRides.length + sortedNearbyRides.length + sortedScheduledRides.length;
+  const totalRides = sortedLiveRides.length + sortedScheduledRides.length;
 
   return (
     <div className="min-h-screen bg-transparent pb-24">
@@ -147,12 +146,6 @@ export function SearchResults() {
               Live
             </button>
             <button
-              onClick={() => setViewType('nearby')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'nearby' ? 'active' : ''}`}
-            >
-              Nearby
-            </button>
-            <button
               onClick={() => setViewType('scheduled')}
               className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'scheduled' ? 'active' : ''}`}
             >
@@ -177,15 +170,6 @@ export function SearchResults() {
               <div className="space-y-2">
                 <h3 className="text-sm text-emerald-200">Live Rides</h3>
                 {sortedLiveRides.map((ride) => (
-                  <RideCard key={ride._id} ride={ride} />
-                ))}
-              </div>
-            ) : null}
-
-            {sortedNearbyRides.length > 0 ? (
-              <div className="space-y-2 pt-2">
-                <h3 className="text-sm text-amber-200">Nearby Rides</h3>
-                {sortedNearbyRides.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>

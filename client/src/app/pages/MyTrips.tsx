@@ -7,7 +7,7 @@ import type { Booking, MyRidesResponse, Ride, RideRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
-type MyRidesTab = 'live' | 'nearby' | 'scheduled' | 'completed';
+type MyRidesTab = 'live' | 'scheduled' | 'completed';
 
 export function MyTrips() {
   const navigate = useNavigate();
@@ -15,7 +15,6 @@ export function MyTrips() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [requests, setRequests] = useState<RideRequest[]>([]);
   const [driverLiveRides, setDriverLiveRides] = useState<Ride[]>([]);
-  const [driverNearbyRides, setDriverNearbyRides] = useState<Ride[]>([]);
   const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
   const [driverCompletedRides, setDriverCompletedRides] = useState<Ride[]>([]);
   const [tab, setTab] = useState<MyRidesTab>('live');
@@ -39,7 +38,6 @@ export function MyTrips() {
         setBookings(bookingResponse.data);
         setRequests(requestResponse.data);
         setDriverLiveRides([]);
-        setDriverNearbyRides([]);
         setDriverScheduledRides([]);
         setDriverCompletedRides([]);
       }
@@ -47,7 +45,6 @@ export function MyTrips() {
       if (role === 'driver') {
         const response = await api.get<MyRidesResponse>('/api/rides/my');
         setDriverLiveRides(response.data.liveRides || response.data.ongoingRides || []);
-        setDriverNearbyRides(response.data.nearbyRides || []);
         setDriverScheduledRides(response.data.scheduledRides || []);
         setDriverCompletedRides(response.data.completedRides || []);
         setBookings([]);
@@ -123,7 +120,6 @@ export function MyTrips() {
   const showDriverView = role === 'driver';
 
   const passengerLiveBookings = bookings.filter((trip) => trip.ride?.status === 'live');
-  const passengerNearbyBookings = bookings.filter((trip) => trip.ride?.status === 'nearby');
   const passengerScheduledBookings = bookings.filter((trip) => trip.ride?.status === 'scheduled');
 
   const passengerCompletedBookings = bookings.filter((trip) => {
@@ -131,31 +127,24 @@ export function MyTrips() {
   });
 
   const passengerLiveRequests = requests.filter((item) => item.timeClass === 'live');
-  const passengerNearbyRequests = requests.filter((item) => item.timeClass === 'nearby');
   const passengerScheduledRequests = requests.filter((item) => item.timeClass === 'scheduled');
   const passengerCompletedRequests = requests.filter((item) => item.timeClass === 'completed' || item.status === 'completed');
 
   const activePassengerTrips =
     tab === 'live'
       ? passengerLiveBookings
-      : tab === 'nearby'
-      ? passengerNearbyBookings
       : tab === 'scheduled'
       ? passengerScheduledBookings
       : passengerCompletedBookings;
   const activePassengerRequests =
     tab === 'live'
       ? passengerLiveRequests
-      : tab === 'nearby'
-      ? passengerNearbyRequests
       : tab === 'scheduled'
       ? passengerScheduledRequests
       : passengerCompletedRequests;
   const activeDriverTrips =
     tab === 'live'
       ? driverLiveRides
-      : tab === 'nearby'
-      ? driverNearbyRides
       : tab === 'scheduled'
       ? driverScheduledRides
       : driverCompletedRides;
@@ -175,13 +164,6 @@ export function MyTrips() {
               className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'live' ? 'active' : ''}`}
             >
               Live
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('nearby')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'nearby' ? 'active' : ''}`}
-            >
-              Nearby
             </button>
             <button
               type="button"
@@ -240,8 +222,8 @@ export function MyTrips() {
 
         {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'nearby' ? 'No nearby rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'nearby' ? 'Your next 24-hour rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : 'Your ride history will appear here after completion.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
@@ -249,8 +231,8 @@ export function MyTrips() {
 
         {!loading && showDriverView && activeDriverTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'nearby' ? 'No nearby rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'nearby' ? 'Rides in the next 24 hours appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : 'Completed rides appear here as history.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
