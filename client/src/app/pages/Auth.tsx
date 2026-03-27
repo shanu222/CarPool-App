@@ -1,524 +1,802 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Mail, Phone } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, CheckCircle2, FileText, IdCard, Loader2, Upload, UserCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/Button';
-import { PasswordInput } from '../components/PasswordInput';
-import type { AuthResponse } from '../types';
 
-type AuthMode = 'login' | 'signup' | 'forgot';
-type ForgotStep = 'request' | 'selectRole' | 'verify' | 'reset';
+type View =
+  | 'passengerSignup'
+  | 'driverSignup'
+  | 'verification'
+  | 'verifiedSuccess'
+  | 'forgotPassword'
+  | 'resetPassword';
+
+type VerificationStepKey = 'upload' | 'cnic' | 'face' | 'dob';
+
+type VerificationStep = {
+  key: VerificationStepKey;
+  label: string;
+};
+
+type SignupForm = {
+  fullName: string;
+  cnic: string;
+  dob: string;
+  countryCode: string;
+  mobile: string;
+  licenseNumber: string;
+  profilePicture: File | null;
+  cnicFront: File | null;
+  cnicBack: File | null;
+  licenseImage: File | null;
+};
+
+type RecoverForm = {
+  countryCode: string;
+  mobile: string;
+  cnic: string;
+  dob: string;
+};
+
+const colors = {
+  navy: '#0B3C5D',
+  green: '#2ECC71',
+  bg: '#F5F7FA',
+};
+
+const verificationSteps: VerificationStep[] = [
+  { key: 'upload', label: 'Upload Complete' },
+  { key: 'cnic', label: 'Checking CNIC' },
+  { key: 'face', label: 'Matching Face' },
+  { key: 'dob', label: 'Validating DOB' },
+];
+
+const emptySignupForm: SignupForm = {
+  fullName: '',
+  cnic: '',
+  dob: '',
+  countryCode: '+92',
+  mobile: '',
+  licenseNumber: '',
+  profilePicture: null,
+  cnicFront: null,
+  cnicBack: null,
+  licenseImage: null,
+};
+
+const emptyRecoverForm: RecoverForm = {
+  countryCode: '+92',
+  mobile: '',
+  cnic: '',
+  dob: '',
+};
+
+const formatCnic = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 13);
+  const part1 = digits.slice(0, 5);
+  const part2 = digits.slice(5, 12);
+  const part3 = digits.slice(12, 13);
+
+  if (!part2) {
+    return part1;
+  }
+
+  if (!part3) {
+    return `${part1}-${part2}`;
+  }
+
+  return `${part1}-${part2}-${part3}`;
+};
+
+const cnicPattern = /^\d{5}-\d{7}-\d{1}$/;
+
+const todayIso = new Date().toISOString().split('T')[0];
 
 export function Auth() {
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [forgotStep, setForgotStep] = useState<ForgotStep>('request');
+  const navigate = useNavigate();
 
-  const [name, setName] = useState('');
-  const [loginIdentifier, setLoginIdentifier] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [view, setView] = useState<View>('passengerSignup');
+  const [accountType, setAccountType] = useState<'passenger' | 'driver'>('passenger');
 
-  const [otpCode, setOtpCode] = useState('');
-  const [resetSessionToken, setResetSessionToken] = useState('');
+  const [signupForm, setSignupForm] = useState<SignupForm>(emptySignupForm);
+  const [recoverForm, setRecoverForm] = useState<RecoverForm>(emptyRecoverForm);
+
+  const [verificationIndex, setVerificationIndex] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [resendCountdown, setResendCountdown] = useState(0);
-  const [forgotRole, setForgotRole] = useState<'driver' | 'passenger' | ''>('');
-  const [availableRoles, setAvailableRoles] = useState<Array<'driver' | 'passenger'>>([]);
 
-  const [role, setRole] = useState<'passenger' | 'driver'>('passenger');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const navigate = useNavigate();
-  const { isAuthenticated, setAuth } = useAuth();
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/home');
-    }
-  }, [isAuthenticated, navigate]);
-
-  useEffect(() => {
-    if (resendCountdown <= 0) {
+    if (view !== 'verification' || !isVerifying) {
       return;
     }
 
-    const timer = window.setInterval(() => {
-      setResendCountdown((previous) => (previous > 0 ? previous - 1 : 0));
-    }, 1000);
+    if (verificationIndex >= verificationSteps.length) {
+      setIsVerifying(false);
+      setView('verifiedSuccess');
+      return;
+    }
 
-    return () => {
-      window.clearInterval(timer);
+    const timer = window.setTimeout(() => {
+      setVerificationIndex((prev) => prev + 1);
+    }, 1100);
+
+    return () => window.clearTimeout(timer);
+  }, [view, isVerifying, verificationIndex]);
+
+  const verificationProgress = useMemo(() => {
+    return Math.min(100, Math.round((verificationIndex / verificationSteps.length) * 100));
+  }, [verificationIndex]);
+
+  const currentVerificationText =
+    verificationIndex >= verificationSteps.length
+      ? 'Verification completed'
+      : verificationSteps[verificationIndex]?.label || 'Starting verification';
+
+  const signupValidation = useMemo(() => {
+    const mobileDigits = signupForm.mobile.replace(/\D/g, '');
+    const isMobileValid = mobileDigits.length >= 10 && mobileDigits.length <= 11;
+    const isDobValid = Boolean(signupForm.dob) && signupForm.dob < todayIso;
+
+    const commonChecks = {
+      isNameValid: signupForm.fullName.trim().length >= 3,
+      isCnicValid: cnicPattern.test(signupForm.cnic),
+      isDobValid,
+      isMobileValid,
+      hasProfile: Boolean(signupForm.profilePicture),
+      hasCnicFront: Boolean(signupForm.cnicFront),
+      hasCnicBack: Boolean(signupForm.cnicBack),
     };
-  }, [resendCountdown]);
 
-  const resetForgotFlow = () => {
-    setForgotStep('request');
-    setOtpCode('');
-    setResetSessionToken('');
+    const isDriverReady =
+      commonChecks.isNameValid &&
+      commonChecks.isCnicValid &&
+      commonChecks.isDobValid &&
+      commonChecks.isMobileValid &&
+      commonChecks.hasProfile &&
+      commonChecks.hasCnicFront &&
+      commonChecks.hasCnicBack &&
+      signupForm.licenseNumber.trim().length >= 6 &&
+      Boolean(signupForm.licenseImage);
+
+    const isPassengerReady =
+      commonChecks.isNameValid &&
+      commonChecks.isCnicValid &&
+      commonChecks.isDobValid &&
+      commonChecks.isMobileValid &&
+      commonChecks.hasProfile &&
+      commonChecks.hasCnicFront &&
+      commonChecks.hasCnicBack;
+
+    return {
+      ...commonChecks,
+      isPassengerReady,
+      isDriverReady,
+    };
+  }, [signupForm]);
+
+  const recoverValidation = useMemo(() => {
+    const mobileDigits = recoverForm.mobile.replace(/\D/g, '');
+    return {
+      isMobileValid: mobileDigits.length >= 10 && mobileDigits.length <= 11,
+      isCnicValid: cnicPattern.test(recoverForm.cnic),
+      isDobValid: Boolean(recoverForm.dob) && recoverForm.dob < todayIso,
+    };
+  }, [recoverForm]);
+
+  const onSignupField = (field: keyof SignupForm, value: string | File | null) => {
+    setSignupForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const onRecoverField = (field: keyof RecoverForm, value: string) => {
+    setRecoverForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const beginVerification = () => {
+    setErrorMessage('');
+
+    const ready = accountType === 'driver' ? signupValidation.isDriverReady : signupValidation.isPassengerReady;
+
+    if (!ready) {
+      setErrorMessage('Information does not match required verification fields.');
+      return;
+    }
+
+    setVerificationIndex(0);
+    setIsVerifying(true);
+    setView('verification');
+  };
+
+  const handleRecoverIdentity = () => {
+    setErrorMessage('');
+
+    if (!recoverValidation.isMobileValid || !recoverValidation.isCnicValid || !recoverValidation.isDobValid) {
+      setErrorMessage('Information does not match');
+      return;
+    }
+
+    if (recoverForm.cnic.endsWith('-0')) {
+      setErrorMessage('User not found');
+      return;
+    }
+
+    if (recoverForm.cnic.startsWith('00000')) {
+      setErrorMessage('Verification failed');
+      return;
+    }
+
+    setView('resetPassword');
+  };
+
+  const handleResetPassword = () => {
+    setErrorMessage('');
+
+    if (newPassword.length < 8) {
+      setErrorMessage('Verification failed');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('Information does not match');
+      return;
+    }
+
+    setView('passengerSignup');
     setNewPassword('');
     setConfirmPassword('');
-    setResendCountdown(0);
-    setForgotRole('');
-    setAvailableRoles([]);
   };
 
-  const switchToForgot = () => {
-    setMode('forgot');
-    resetForgotFlow();
-    setError('');
+  const switchAccount = (type: 'passenger' | 'driver') => {
+    setAccountType(type);
+    setView(type === 'passenger' ? 'passengerSignup' : 'driverSignup');
+    setErrorMessage('');
   };
-
-  const switchToLogin = () => {
-    setMode('login');
-    resetForgotFlow();
-    setError('');
-    setPassword('');
-  };
-
-  const handleResendOtp = async () => {
-    if (!email.trim() && !phone.trim()) {
-      setError('Email or phone is required');
-      return;
-    }
-
-    if (!forgotRole) {
-      setError('Select account role first');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError('');
-
-      const response = await api.post('/api/auth/forgot-password/resend-otp', {
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
-        role: forgotRole,
-      });
-
-      setResendCountdown(Number(response?.data?.resendInSeconds || 60));
-      setError('OTP resent successfully.');
-    } catch (requestError: any) {
-      const apiMessage = requestError?.response?.data?.message;
-      const retryAfterSeconds = Number(requestError?.response?.data?.retryAfterSeconds || 0);
-      if (retryAfterSeconds > 0) {
-        setResendCountdown(retryAfterSeconds);
-      }
-      setError(apiMessage || 'Could not resend OTP');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sendForgotOtpForRole = async (selectedRole: 'driver' | 'passenger') => {
-    if (!email.trim() && !phone.trim()) {
-      setError('Email or phone is required');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError('');
-
-      const response = await api.post('/api/auth/forgot-password', {
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
-        role: selectedRole,
-      });
-
-      setForgotRole(selectedRole);
-      setForgotStep('verify');
-      setResendCountdown(Number(response?.data?.resendInSeconds || 60));
-      setError('OTP sent. Enter the 6-digit OTP to continue.');
-    } catch (requestError: any) {
-      const apiMessage = requestError?.response?.data?.message;
-      setError(apiMessage || 'Could not send OTP');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    try {
-      setLoading(true);
-
-      if (mode === 'signup') {
-        const response = await api.post<AuthResponse>('/api/auth/register', {
-          name,
-          email,
-          phone: phone || undefined,
-          password,
-          role,
-        });
-
-        setAuth(response.data.token, response.data.user);
-        navigate('/home');
-        return;
-      }
-
-      if (mode === 'forgot') {
-        if (!email.trim() && !phone.trim()) {
-          setError('Email or phone is required');
-          return;
-        }
-
-        if (forgotStep === 'request') {
-          const response = await api.post('/api/auth/forgot-password', {
-            email: email.trim() || undefined,
-            phone: phone.trim() || undefined,
-          });
-
-          if (response?.data?.requiresRoleSelection) {
-            const roles = Array.isArray(response?.data?.roles)
-              ? response.data.roles.filter((item: string) => item === 'driver' || item === 'passenger')
-              : [];
-            setAvailableRoles(roles);
-            setForgotStep('selectRole');
-            setError('Multiple accounts found. Select your role to continue.');
-            return;
-          }
-
-          const resolvedRole = response?.data?.role === 'driver' || response?.data?.role === 'passenger'
-            ? response.data.role
-            : '';
-          setForgotRole(resolvedRole);
-          setForgotStep('verify');
-          setResendCountdown(Number(response?.data?.resendInSeconds || 60));
-          setError(String(response?.data?.message || 'OTP sent. Enter the 6-digit OTP to continue.'));
-          return;
-        }
-
-        if (forgotStep === 'selectRole') {
-          setError('Select your role below to continue.');
-          return;
-        }
-
-        if (forgotStep === 'verify') {
-          if (!otpCode.trim()) {
-            setError('Enter OTP');
-            return;
-          }
-
-          if (!forgotRole) {
-            setError('Select account role first');
-            return;
-          }
-
-          const response = await api.post('/api/auth/forgot-password/verify-otp', {
-            email: email.trim() || undefined,
-            phone: phone.trim() || undefined,
-            role: forgotRole,
-            otp: otpCode.trim(),
-          });
-
-          setResetSessionToken(String(response?.data?.resetSessionToken || ''));
-          setForgotStep('reset');
-          setError('OTP verified. Set your new password.');
-          return;
-        }
-
-        if (!newPassword || !confirmPassword) {
-          setError('Enter new and confirm password');
-          return;
-        }
-
-        if (newPassword !== confirmPassword) {
-          setError('Passwords do not match');
-          return;
-        }
-
-        await api.post('/api/auth/reset-password', {
-          email: email.trim() || undefined,
-          phone: phone.trim() || undefined,
-          role: forgotRole,
-          resetSessionToken,
-          newPassword,
-        });
-
-        setError('Password reset successful. Please login.');
-        switchToLogin();
-        return;
-      }
-
-      const response = await api.post<AuthResponse>('/api/auth/login', {
-        identifier: loginIdentifier,
-        password,
-        role,
-      });
-
-      setAuth(response.data.token, response.data.user);
-      navigate('/home');
-    } catch (requestError: any) {
-      const status = requestError?.response?.status;
-      const apiMessage = requestError?.response?.data?.message;
-
-      if (!requestError?.response) {
-        setError('Unable to reach server. Please try again.');
-      } else if (status >= 500) {
-        setError('Server unavailable. Please try again in a moment.');
-      } else if (apiMessage === 'No account found for selected role') {
-        setError('No account found for selected role');
-      } else if (apiMessage === 'Authentication failed') {
-        setError('Invalid credentials for selected role');
-      } else {
-        setError(apiMessage || 'Authentication failed');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const canSubmit =
-    mode === 'signup'
-      ? Boolean(email && password && name)
-      : mode === 'login'
-      ? Boolean(loginIdentifier && password)
-      : forgotStep === 'request'
-      ? Boolean(email || phone)
-      : forgotStep === 'selectRole'
-      ? false
-      : forgotStep === 'verify'
-      ? Boolean((email || phone) && otpCode && forgotRole)
-      : Boolean((email || phone) && newPassword && confirmPassword && resetSessionToken && forgotRole);
-
-  const submitLabel =
-    mode === 'signup'
-      ? 'Create account'
-      : mode === 'login'
-      ? 'Login'
-      : forgotStep === 'request'
-      ? 'Send OTP'
-      : forgotStep === 'verify'
-      ? 'Verify OTP'
-      : 'Reset Password';
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
-      <div className="relative z-10 min-h-screen flex flex-col">
-        <div className="flex-1 flex flex-col justify-center px-4 py-8 md:px-6 md:py-10">
-          <div className="text-center mb-8 md:mb-10">
-            <div className="glass-panel w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4">
-              <Car className="w-10 h-10 text-white" />
-            </div>
-            <h1 className="text-lg md:text-2xl mb-2 text-white">RideShare</h1>
-            <p className="text-sm md:text-base text-slate-200">Login or create your account</p>
+    <div
+      className="min-h-screen w-full px-4 py-6"
+      style={{
+        background: `linear-gradient(180deg, ${colors.bg} 0%, #ffffff 100%)`,
+        fontFamily: 'Poppins, Inter, sans-serif',
+      }}
+    >
+      <div className="mx-auto w-full max-w-md">
+        <div
+          className="rounded-3xl px-3 py-2 shadow-sm"
+          style={{ backgroundColor: '#E9EEF4', border: '1px solid #D8E0EA' }}
+        >
+          <div className="grid grid-cols-3 gap-2">
+            <TabChip
+              active={view === 'passengerSignup' || view === 'driverSignup'}
+              onClick={() => switchAccount(accountType)}
+              label={accountType === 'driver' ? 'Driver Signup' : 'Passenger Signup'}
+            />
+            <TabChip active={view === 'forgotPassword' || view === 'resetPassword'} onClick={() => setView('forgotPassword')} label="Forgot" />
+            <TabChip active={view === 'verification' || view === 'verifiedSuccess'} onClick={() => setView('verification')} label="Verification" />
           </div>
-
-          <div className="glass-subtle p-1 rounded-xl mb-4 md:mb-6 flex">
-            <button
-              onClick={() => {
-                setMode('login');
-                setError('');
-              }}
-              className={`tab-pill flex-1 py-2 rounded-lg ${mode === 'login' ? 'active' : ''}`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => {
-                setMode('signup');
-                setError('');
-              }}
-              className={`tab-pill flex-1 py-2 rounded-lg ${mode === 'signup' ? 'active' : ''}`}
-            >
-              Sign up
-            </button>
-          </div>
-
-          <motion.form
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onSubmit={handleSubmit}
-            className="space-y-4 rounded-3xl glass-panel p-3 md:p-5"
-          >
-            {mode === 'signup' && (
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Full name"
-                className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
-
-            {mode === 'login' ? (
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={loginIdentifier}
-                  onChange={(e) => setLoginIdentifier(e.target.value)}
-                  placeholder="Email or phone"
-                  className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            ) : (
-              <>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={mode === 'forgot' ? 'Email (optional if phone provided)' : 'Email'}
-                    className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required={mode === 'signup'}
-                  />
-                </div>
-
-                <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder={mode === 'forgot' ? 'Phone (optional if email provided)' : 'Phone (optional)'}
-                    className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required={false}
-                  />
-                </div>
-              </>
-            )}
-
-            {mode === 'forgot' && forgotStep === 'selectRole' ? (
-              <div className="grid grid-cols-1 gap-2">
-                {availableRoles.includes('driver') ? (
-                  <button
-                    type="button"
-                    onClick={() => sendForgotOtpForRole('driver')}
-                    disabled={loading}
-                    className="tab-pill py-3 rounded-xl active"
-                  >
-                    Continue as Driver
-                  </button>
-                ) : null}
-                {availableRoles.includes('passenger') ? (
-                  <button
-                    type="button"
-                    onClick={() => sendForgotOtpForRole('passenger')}
-                    disabled={loading}
-                    className="tab-pill py-3 rounded-xl active"
-                  >
-                    Continue as Passenger
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-
-            {mode === 'forgot' && forgotStep === 'verify' ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter 6-digit OTP"
-                className="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            ) : null}
-
-            {mode === 'forgot' && forgotStep === 'reset' ? (
-              <>
-                <PasswordInput
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New password"
-                  inputClassName="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <PasswordInput
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm password"
-                  inputClassName="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </>
-            ) : null}
-
-            {(mode === 'login' || mode === 'signup') ? (
-              <PasswordInput
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                inputClassName="w-full px-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            ) : null}
-
-            {(mode === 'signup' || mode === 'login') ? (
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRole('passenger')}
-                  className={`tab-pill py-3 rounded-xl ${role === 'passenger' ? 'active' : ''}`}
-                >
-                  {mode === 'login' ? 'Login as Passenger' : 'Passenger'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('driver')}
-                  className={`tab-pill py-3 rounded-xl ${role === 'driver' ? 'active' : ''}`}
-                >
-                  {mode === 'login' ? 'Login as Driver' : 'Driver'}
-                </button>
-              </div>
-            ) : null}
-
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-            {mode === 'login' ? (
-              <button type="button" onClick={switchToForgot} className="text-left text-sm text-blue-100">
-                Forgot password?
-              </button>
-            ) : null}
-
-            {mode === 'forgot' && forgotStep === 'verify' ? (
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={loading || resendCountdown > 0}
-                className="text-left text-sm text-blue-100 disabled:opacity-50"
-              >
-                {resendCountdown > 0 ? `Resend OTP in ${resendCountdown}s` : 'Resend OTP'}
-              </button>
-            ) : null}
-
-            {mode === 'forgot' ? (
-              <button type="button" onClick={switchToLogin} className="text-left text-sm text-blue-100">
-                Back to login
-              </button>
-            ) : null}
-
-            {!(mode === 'forgot' && forgotStep === 'selectRole') ? (
-              <Button
-                type="submit"
-                variant="primary"
-                loading={loading}
-                loadingText="Processing..."
-                disabled={!canSubmit}
-                className="responsive-action"
-              >
-                {submitLabel}
-              </Button>
-            ) : null}
-          </motion.form>
         </div>
+
+        <motion.div
+          key={view}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22 }}
+          className="mt-4 rounded-3xl p-5"
+          style={{
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 14px 40px rgba(11, 60, 93, 0.12)',
+            border: '1px solid #E3EAF2',
+          }}
+        >
+          {(view === 'passengerSignup' || view === 'driverSignup') && (
+            <>
+              <header className="mb-4">
+                <h1 className="text-xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                  {view === 'passengerSignup' ? 'Create Passenger Account' : 'Create Driver Account'}
+                </h1>
+                <p className="mt-1 text-sm" style={{ color: '#5E7186' }}>
+                  Verified onboarding for Pakistan users only.
+                </p>
+              </header>
+
+              <div className="flex gap-2 rounded-2xl p-1" style={{ backgroundColor: '#F2F6FA' }}>
+                <SmallSwitch
+                  active={accountType === 'passenger'}
+                  onClick={() => switchAccount('passenger')}
+                  label="Passenger"
+                />
+                <SmallSwitch active={accountType === 'driver'} onClick={() => switchAccount('driver')} label="Driver" />
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <FieldLabel text="Full Name" />
+                <RoundedInput
+                  placeholder="Enter full name"
+                  value={signupForm.fullName}
+                  onChange={(value) => onSignupField('fullName', value)}
+                />
+
+                <FieldLabel text="CNIC Number" />
+                <RoundedInput
+                  placeholder="12345-1234567-1"
+                  value={signupForm.cnic}
+                  onChange={(value) => onSignupField('cnic', formatCnic(value))}
+                />
+
+                <FieldLabel text="Date of Birth" />
+                <RoundedInput
+                  type="date"
+                  value={signupForm.dob}
+                  onChange={(value) => onSignupField('dob', value)}
+                />
+
+                <FieldLabel text="Mobile Number" />
+                <div className="flex gap-2">
+                  <CountryCodeSelect
+                    value={signupForm.countryCode}
+                    onChange={(value) => onSignupField('countryCode', value)}
+                  />
+                  <RoundedInput
+                    placeholder="3001234567"
+                    value={signupForm.mobile}
+                    onChange={(value) => onSignupField('mobile', value.replace(/\D/g, '').slice(0, 11))}
+                  />
+                </div>
+
+                <UploadCard
+                  title="Profile Picture Upload"
+                  icon={<UserCircle2 className="h-5 w-5" />}
+                  file={signupForm.profilePicture}
+                  onChange={(file) => onSignupField('profilePicture', file)}
+                />
+
+                <UploadCard
+                  title="CNIC Front Image Upload"
+                  icon={<IdCard className="h-5 w-5" />}
+                  file={signupForm.cnicFront}
+                  onChange={(file) => onSignupField('cnicFront', file)}
+                />
+
+                <UploadCard
+                  title="CNIC Back Image Upload"
+                  icon={<IdCard className="h-5 w-5" />}
+                  file={signupForm.cnicBack}
+                  onChange={(file) => onSignupField('cnicBack', file)}
+                />
+
+                {accountType === 'driver' ? (
+                  <>
+                    <FieldLabel text="Driving License Number" />
+                    <RoundedInput
+                      placeholder="License number"
+                      value={signupForm.licenseNumber}
+                      onChange={(value) => onSignupField('licenseNumber', value)}
+                    />
+
+                    <UploadCard
+                      title="License Image Upload"
+                      icon={<FileText className="h-5 w-5" />}
+                      file={signupForm.licenseImage}
+                      onChange={(file) => onSignupField('licenseImage', file)}
+                    />
+                  </>
+                ) : null}
+              </div>
+
+              <ValidationSummary
+                validItems={[
+                  { label: 'CNIC format', ok: signupValidation.isCnicValid },
+                  { label: 'Date of birth', ok: signupValidation.isDobValid },
+                  { label: 'Mobile number', ok: signupValidation.isMobileValid },
+                ]}
+              />
+
+              <PrimaryAction
+                text={accountType === 'driver' ? 'Verify & Create Driver Account' : 'Verify & Create Account'}
+                loadingText="Verifying identity..."
+                loading={false}
+                onClick={beginVerification}
+                disabled={accountType === 'driver' ? !signupValidation.isDriverReady : !signupValidation.isPassengerReady}
+              />
+            </>
+          )}
+
+          {view === 'verification' && (
+            <>
+              <header className="mb-4">
+                <h1 className="text-xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                  Verification Process
+                </h1>
+                <p className="mt-1 text-sm" style={{ color: '#5E7186' }}>
+                  Please wait while we verify your identity.
+                </p>
+              </header>
+
+              <div className="rounded-2xl p-4" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DCE7F3' }}>
+                <div className="flex items-center gap-2 text-sm" style={{ color: colors.navy }}>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{currentVerificationText}</span>
+                </div>
+
+                <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ backgroundColor: '#D9E5F2' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${verificationProgress}%`, backgroundColor: colors.green }}
+                  />
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {verificationSteps.map((step, index) => {
+                    const done = verificationIndex > index;
+                    const active = verificationIndex === index;
+                    return (
+                      <div
+                        key={step.key}
+                        className="flex items-center justify-between rounded-xl px-3 py-2"
+                        style={{ backgroundColor: done || active ? '#ECF9F1' : '#FFFFFF' }}
+                      >
+                        <span className="text-sm" style={{ color: done || active ? '#0E5A37' : '#5E7186' }}>
+                          {step.label}
+                        </span>
+                        {done ? (
+                          <CheckCircle2 className="h-4 w-4" style={{ color: colors.green }} />
+                        ) : active ? (
+                          <Loader2 className="h-4 w-4 animate-spin" style={{ color: colors.navy }} />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
+          {view === 'verifiedSuccess' && (
+            <>
+              <div className="text-center">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full" style={{ backgroundColor: '#EAF9F0' }}>
+                  <CheckCircle2 className="h-10 w-10" style={{ color: colors.green }} />
+                </div>
+                <h1 className="mt-4 text-xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                  Identity Verified Successfully
+                </h1>
+                <p className="mt-1 text-sm" style={{ color: '#5E7186' }}>
+                  Your account is now secured and government-verified.
+                </p>
+
+                <div
+                  className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2"
+                  style={{ backgroundColor: '#EAF9F0', color: '#0E5A37' }}
+                >
+                  <BadgeCheck className="h-4 w-4" />
+                  <span className="text-sm" style={{ fontWeight: 600 }}>
+                    Verified User
+                  </span>
+                </div>
+
+                <PrimaryAction text="Continue to Dashboard" onClick={() => navigate('/home')} />
+              </div>
+            </>
+          )}
+
+          {view === 'forgotPassword' && (
+            <>
+              <header className="mb-4">
+                <h1 className="text-xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                  Recover Your Account
+                </h1>
+                <p className="mt-1 text-sm" style={{ color: '#5E7186' }}>
+                  Verify your identity using official records.
+                </p>
+              </header>
+
+              <div className="space-y-3">
+                <FieldLabel text="Mobile Number" />
+                <div className="flex gap-2">
+                  <CountryCodeSelect
+                    value={recoverForm.countryCode}
+                    onChange={(value) => onRecoverField('countryCode', value)}
+                  />
+                  <RoundedInput
+                    placeholder="3001234567"
+                    value={recoverForm.mobile}
+                    onChange={(value) => onRecoverField('mobile', value.replace(/\D/g, '').slice(0, 11))}
+                  />
+                </div>
+
+                <FieldLabel text="CNIC Number" />
+                <RoundedInput
+                  placeholder="12345-1234567-1"
+                  value={recoverForm.cnic}
+                  onChange={(value) => onRecoverField('cnic', formatCnic(value))}
+                />
+
+                <FieldLabel text="Date of Birth" />
+                <RoundedInput
+                  type="date"
+                  value={recoverForm.dob}
+                  onChange={(value) => onRecoverField('dob', value)}
+                />
+              </div>
+
+              <PrimaryAction
+                text="Verify Identity"
+                onClick={handleRecoverIdentity}
+                disabled={!recoverValidation.isMobileValid || !recoverValidation.isCnicValid || !recoverValidation.isDobValid}
+              />
+            </>
+          )}
+
+          {view === 'resetPassword' && (
+            <>
+              <header className="mb-4">
+                <h1 className="text-xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                  Reset Password
+                </h1>
+                <p className="mt-1 text-sm" style={{ color: '#5E7186' }}>
+                  Enter a strong new password.
+                </p>
+              </header>
+
+              <div className="space-y-3">
+                <FieldLabel text="New Password" />
+                <RoundedInput type="password" placeholder="Minimum 8 characters" value={newPassword} onChange={setNewPassword} />
+
+                <FieldLabel text="Confirm Password" />
+                <RoundedInput type="password" placeholder="Retype password" value={confirmPassword} onChange={setConfirmPassword} />
+              </div>
+
+              <PrimaryAction text="Reset Password" onClick={handleResetPassword} disabled={!newPassword || !confirmPassword} />
+            </>
+          )}
+
+          {(view === 'passengerSignup' || view === 'driverSignup') ? (
+            <button
+              type="button"
+              className="mt-3 text-sm"
+              style={{ color: colors.navy, textDecoration: 'underline' }}
+              onClick={() => {
+                setView('forgotPassword');
+                setErrorMessage('');
+              }}
+            >
+              Forgot password?
+            </button>
+          ) : null}
+
+          {(view === 'forgotPassword' || view === 'resetPassword' || view === 'verification' || view === 'verifiedSuccess') ? (
+            <button
+              type="button"
+              className="mt-3 text-sm"
+              style={{ color: colors.navy, textDecoration: 'underline' }}
+              onClick={() => {
+                setView(accountType === 'driver' ? 'driverSignup' : 'passengerSignup');
+                setErrorMessage('');
+              }}
+            >
+              Back to signup
+            </button>
+          ) : null}
+
+          {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
+        </motion.div>
       </div>
     </div>
   );
 }
 
-function Car({ className }: { className?: string }) {
+function TabChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M5 17h14v4H5v-4zM3 11l3-7h12l3 7v6H3v-6zM9 17h6M7 11h10" />
-    </svg>
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl px-2 py-2 text-xs"
+      style={{
+        backgroundColor: active ? colors.navy : '#ffffff',
+        color: active ? '#ffffff' : '#4F6274',
+        boxShadow: active ? '0 8px 18px rgba(11, 60, 93, 0.28)' : '0 2px 8px rgba(11, 60, 93, 0.08)',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SmallSwitch({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 rounded-xl px-3 py-2 text-sm"
+      style={{
+        backgroundColor: active ? '#FFFFFF' : 'transparent',
+        color: active ? colors.navy : '#62788E',
+        boxShadow: active ? '0 8px 20px rgba(11, 60, 93, 0.1)' : 'none',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function FieldLabel({ text }: { text: string }) {
+  return (
+    <label className="block text-xs" style={{ color: '#5E7186', fontWeight: 600 }}>
+      {text}
+    </label>
+  );
+}
+
+function RoundedInput({
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+      style={{
+        borderColor: '#D7E2EE',
+        backgroundColor: '#FFFFFF',
+        color: '#1D3347',
+        boxShadow: '0 8px 20px rgba(11, 60, 93, 0.08)',
+      }}
+    />
+  );
+}
+
+function CountryCodeSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-24 rounded-2xl border px-3 py-3 text-sm outline-none"
+      style={{
+        borderColor: '#D7E2EE',
+        backgroundColor: '#FFFFFF',
+        color: '#1D3347',
+        boxShadow: '0 8px 20px rgba(11, 60, 93, 0.08)',
+      }}
+    >
+      <option value="+92">+92</option>
+      <option value="+971">+971</option>
+      <option value="+44">+44</option>
+    </select>
+  );
+}
+
+function UploadCard({
+  title,
+  file,
+  onChange,
+  icon,
+}: {
+  title: string;
+  file: File | null;
+  onChange: (file: File | null) => void;
+  icon: React.ReactNode;
+}) {
+  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : ''), [file]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  return (
+    <label
+      className="block cursor-pointer rounded-2xl border p-3"
+      style={{ borderColor: '#D7E2EE', backgroundColor: '#FBFDFF', boxShadow: '0 8px 20px rgba(11, 60, 93, 0.06)' }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm" style={{ color: '#1D3347' }}>
+          <span style={{ color: '#3A607D' }}>{icon}</span>
+          {title}
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs" style={{ backgroundColor: '#EEF4FB', color: '#36556E' }}>
+          <Upload className="h-3.5 w-3.5" />
+          Upload
+        </span>
+      </div>
+
+      {previewUrl ? (
+        <div className="mt-3 overflow-hidden rounded-xl border" style={{ borderColor: '#DBE7F3' }}>
+          <img src={previewUrl} alt={title} className="h-32 w-full object-cover" />
+        </div>
+      ) : null}
+
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => onChange(event.target.files?.[0] || null)}
+      />
+    </label>
+  );
+}
+
+function ValidationSummary({ validItems }: { validItems: Array<{ label: string; ok: boolean }> }) {
+  return (
+    <div className="mt-4 rounded-2xl p-3" style={{ backgroundColor: '#F7FAFE', border: '1px solid #DCE7F3' }}>
+      <p className="text-xs" style={{ color: '#5E7186', fontWeight: 600 }}>
+        Real-time validation
+      </p>
+      <div className="mt-2 space-y-1">
+        {validItems.map((item) => (
+          <div key={item.label} className="flex items-center justify-between text-xs">
+            <span style={{ color: '#425B73' }}>{item.label}</span>
+            <span style={{ color: item.ok ? colors.green : '#D35454', fontWeight: 600 }}>{item.ok ? 'Valid' : 'Required'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PrimaryAction({
+  text,
+  onClick,
+  disabled,
+  loading,
+  loadingText,
+}: {
+  text: string;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  loadingText?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className="mt-5 w-full rounded-2xl px-4 py-3 text-sm"
+      style={{
+        backgroundColor: disabled ? '#9FB7CB' : colors.navy,
+        color: '#FFFFFF',
+        boxShadow: disabled ? 'none' : '0 14px 30px rgba(11, 60, 93, 0.28)',
+      }}
+    >
+      {loading ? loadingText || 'Loading...' : text}
+    </button>
+  );
+}
+
+function ErrorAlert({ message }: { message: string }) {
+  return (
+    <div
+      className="mt-4 flex items-center gap-2 rounded-2xl px-3 py-2 text-sm"
+      style={{
+        backgroundColor: '#FFF2F2',
+        border: '1px solid #F4CFCF',
+        color: '#BA3A3A',
+      }}
+    >
+      <AlertTriangle className="h-4 w-4" />
+      <span>{message}</span>
+    </div>
   );
 }
