@@ -11,10 +11,19 @@ import {
 	verifyResetOtp,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/auth.js";
+import { upload } from "../middleware/upload.js";
 
 const router = Router();
 
-router.post("/register", register);
+router.post(
+	"/register",
+	upload.fields([
+		{ name: "cnicFrontImage", maxCount: 1 },
+		{ name: "cnicBackImage", maxCount: 1 },
+		{ name: "selfieImage", maxCount: 1 },
+	]),
+	register
+);
 router.post("/login", login);
 router.post("/admin/login", adminLogin);
 router.post("/forgot-password", forgotPassword);

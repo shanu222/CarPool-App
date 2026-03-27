@@ -95,7 +95,7 @@ export const verifyUser = async (req, res, next) => {
 
     const user = await User.findByIdAndUpdate(
       req.params.userId,
-      { isVerified: verified, verificationStatus: verified ? "approved" : "rejected" },
+      { isVerified: verified, verificationStatus: verified ? "verified" : "rejected" },
       { new: true }
     ).select("name email isVerified verificationStatus role");
 

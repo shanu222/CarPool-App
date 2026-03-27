@@ -78,11 +78,27 @@ const userSchema = new mongoose.Schema(
     },
     verificationStatus: {
       type: String,
-      enum: ["none", "pending", "approved", "rejected"],
-      default: "none",
+      enum: ["none", "pending", "approved", "verified", "rejected"],
+      default: "pending",
       index: true,
     },
     cnicNumber: {
+      type: String,
+      trim: true,
+    },
+    dob: {
+      type: String,
+      trim: true,
+    },
+    cnicFrontImage: {
+      type: String,
+      trim: true,
+    },
+    cnicBackImage: {
+      type: String,
+      trim: true,
+    },
+    selfieImage: {
       type: String,
       trim: true,
     },
@@ -268,7 +284,7 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
     this.paymentApproved = true;
     this.accountStatus = "active";
     this.isVerified = true;
-    this.verificationStatus = "approved";
+    this.verificationStatus = "verified";
     this.isDeleted = false;
     this.hasPurchased = true;
   }
@@ -302,6 +318,10 @@ userSchema.index(
 userSchema.index(
   { phone: 1, role: 1 },
   { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: "" } } }
+);
+userSchema.index(
+  { cnicNumber: 1 },
+  { unique: true, partialFilterExpression: { cnicNumber: { $exists: true, $ne: "" } } }
 );
 
 export const User = mongoose.model("User", userSchema);

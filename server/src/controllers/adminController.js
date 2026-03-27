@@ -54,7 +54,7 @@ export const getAdminUsers = async (req, res, next) => {
 
     const users = await User.find(query)
       .select(
-        "name email phone role status rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason bannedAt isBlocked tokenBalance freeRideCredits freeChatCredits canPostRide canBookRide canChat paymentApproved createdAt"
+        "name email phone role status rating isVerified verificationStatus cnicNumber cnic dob cnicFrontImage cnicBackImage selfieImage profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason bannedAt isBlocked tokenBalance freeRideCredits freeChatCredits canPostRide canBookRide canChat paymentApproved createdAt"
       )
       .sort({ createdAt: -1 });
 
@@ -96,7 +96,7 @@ export const verifyUserByAdmin = async (req, res, next) => {
     }
 
     user.isVerified = action === "approve";
-    user.verificationStatus = action === "approve" ? "approved" : "rejected";
+    user.verificationStatus = action === "approve" ? "verified" : "rejected";
     user.status = action === "approve" ? "approved" : "pending";
     user.accountStatus = action === "approve" ? "active" : "active";
     user.isBlocked = false;
@@ -135,7 +135,7 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       user.accountStatus = "active";
       user.isBlocked = false;
       user.isVerified = true;
-      user.verificationStatus = "approved";
+      user.verificationStatus = "verified";
       user.suspensionReason = "";
       user.bannedAt = null;
     }

@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
+import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
+import { isNameMatch, isSameDate, normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
 
 const getAdminEmails = () =>
   (process.env.ADMIN_EMAILS || "")
@@ -18,6 +20,17 @@ const ADMIN_FAIL_DELAY_MS = Number(process.env.ADMIN_LOGIN_FAIL_DELAY_MS || 700)
 const adminLoginAttempts = new Map();
 
 const normalizeEmail = (value) => (value || "").trim().toLowerCase();
+const normalizePhone = (value) => String(value || "").trim();
+
+const buildFilePath = (req, file) => {
+  if (!file?.filename) {
+    return "";
+  }
+
+  return `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+};
+
+const toStoredUploadPath = (file) => (file?.path ? file.path : "");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -217,6 +230,7 @@ const signToken = (user, expiresIn = "7d") => {
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
+  email: user.email,
   phone: user.phone,
   maskedPhone: user.phone ? `${String(user.phone).slice(0, 4)}****${String(user.phone).slice(-3)}` : undefined,
   role: user.role,
@@ -228,6 +242,11 @@ const sanitizeUser = (user) => ({
   isVerified: user.isVerified,
   isFeatured: Boolean(user.isFeatured),
   verificationStatus: user.verificationStatus,
+  cnicNumber: user.cnicNumber,
+  dob: user.dob,
+  cnicFrontImage: user.cnicFrontImage,
+  cnicBackImage: user.cnicBackImage,
+  selfieImage: user.selfieImage,
   profilePhoto: user.profilePhoto,
   carPhoto: user.carPhoto,
   carMake: user.carMake,
@@ -298,7 +317,7 @@ export const logoutAllDevices = async (req, res, next) => {
 
 export const register = async (req, res, next) => {
   try {
-    const { name, email, phone, password, role } = req.body;
+    const { name, email, phone, password, role, cnicNumber, dob } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "name, email and password are required" });
@@ -310,7 +329,7 @@ export const register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const normalizedEmail = email.toLowerCase().trim();
-    const normalizedPhone = phone ? phone.trim() : "";
+    const normalizedPhone = normalizePhone(phone);
     const selectedRole = String(role || "").trim();
     const finalRole = isAdminEmail(normalizedEmail) ? "admin" : selectedRole;
 
@@ -330,6 +349,94 @@ export const register = async (req, res, next) => {
       }
     }
 
+    const normalizedInputCnic = normalizeCnic(cnicNumber);
+    const normalizedInputDob = normalizeDob(dob);
+
+    if (finalRole !== "admin") {
+      if (!normalizedInputCnic) {
+        return res.status(400).json({ message: "Valid cnicNumber is required" });
+      }
+
+      if (!normalizedInputDob) {
+        return res.status(400).json({ message: "Valid dob is required in YYYY-MM-DD format" });
+      }
+
+      const existingCnic = await User.findOne({ cnicNumber: normalizedInputCnic });
+      if (existingCnic) {
+        return res.status(409).json({ message: "Account already exists for this CNIC" });
+      }
+
+      const cnicFrontFile = req.files?.cnicFrontImage?.[0];
+      const cnicBackFile = req.files?.cnicBackImage?.[0];
+      const selfieFile = req.files?.selfieImage?.[0];
+
+      if (!cnicFrontFile || !cnicBackFile || !selfieFile) {
+        return res
+          .status(400)
+          .json({ message: "cnicFrontImage, cnicBackImage and selfieImage are required" });
+      }
+
+      const ocrResult = await extractCnicDataFromImages({
+        cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+        cnicBackPath: toStoredUploadPath(cnicBackFile),
+      });
+
+      if (!ocrResult.success) {
+        return res.status(400).json({ message: ocrResult.errorMessage || "Unable to extract CNIC data" });
+      }
+
+      const extractedName = ocrResult.parsed.name;
+      const extractedCnic = normalizeCnic(ocrResult.parsed.cnic);
+      const extractedDob = normalizeDob(ocrResult.parsed.dob);
+
+      if (normalizedInputCnic !== extractedCnic) {
+        return res.status(400).json({ message: "CNIC mismatch" });
+      }
+
+      if (!isSameDate(normalizedInputDob, extractedDob)) {
+        return res.status(400).json({ message: "DOB does not match" });
+      }
+
+      if (!isNameMatch(normalizeName(name), extractedName)) {
+        return res.status(400).json({ message: "Name does not match CNIC" });
+      }
+
+      const faceResult = await compareFaceWithSelfie({
+        cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+        selfiePath: toStoredUploadPath(selfieFile),
+        threshold: Number(process.env.FACE_MATCH_THRESHOLD || 80),
+      });
+
+      if (!faceResult.matched) {
+        return res.status(400).json({ message: "Face verification failed" });
+      }
+
+      const user = await User.create({
+        name: name.trim(),
+        email: normalizedEmail,
+        phone: normalizedPhone || undefined,
+        password: hashedPassword,
+        role: finalRole,
+        cnicNumber: normalizedInputCnic,
+        cnic: normalizedInputCnic,
+        dob: normalizedInputDob,
+        cnicFrontImage: buildFilePath(req, cnicFrontFile),
+        cnicBackImage: buildFilePath(req, cnicBackFile),
+        selfieImage: buildFilePath(req, selfieFile),
+        status: "approved",
+        isBlocked: false,
+        canPostRide: false,
+        canBookRide: false,
+        canChat: false,
+        accountStatus: "active",
+        verificationStatus: "verified",
+        isVerified: true,
+      });
+
+      const token = signToken(user);
+      return res.status(201).json({ token, user: sanitizeUser(user) });
+    }
+
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
@@ -342,7 +449,7 @@ export const register = async (req, res, next) => {
       canBookRide: finalRole === "admin",
       canChat: finalRole === "admin",
       accountStatus: "active",
-      verificationStatus: finalRole === "admin" ? "approved" : "none",
+      verificationStatus: finalRole === "admin" ? "verified" : "pending",
       isVerified: finalRole === "admin",
     });
 
@@ -357,12 +464,8 @@ export const login = async (req, res, next) => {
   try {
     const { email, phone, identifier, password, role } = req.body;
 
-    if (!password || !role) {
-      return res.status(400).json({ message: "identifier, password and role are required" });
-    }
-
-    if (!["passenger", "driver"].includes(role)) {
-      return res.status(400).json({ message: "role must be passenger or driver" });
+    if (!password) {
+      return res.status(400).json({ message: "email and password are required" });
     }
 
     const rawIdentifier = String(identifier || email || phone || "").trim();
@@ -381,6 +484,10 @@ export const login = async (req, res, next) => {
       return res.status(400).json({ message: "email or phone is required" });
     }
 
+    if (role && !["passenger", "driver"].includes(role)) {
+      return res.status(400).json({ message: "role must be passenger or driver" });
+    }
+
     const normalizedEmail = emailCandidate;
     const configuredAdmin = getConfiguredAdminCredential();
 
@@ -389,7 +496,14 @@ export const login = async (req, res, next) => {
       return res.status(403).json({ message: "Use the admin login portal" });
     }
 
-    const user = await User.findOne({ role, $or: identifierConditions });
+    const roleSelector = role ? { role } : { role: { $in: ["passenger", "driver"] } };
+    const candidates = await User.find({ ...roleSelector, $or: identifierConditions }).limit(2);
+
+    if (!role && candidates.length > 1) {
+      return res.status(400).json({ message: "Multiple accounts found. Please provide role" });
+    }
+
+    const user = candidates[0];
 
     if (!user) {
       return res.status(404).json({ message: "No account found for selected role" });
@@ -403,6 +517,13 @@ export const login = async (req, res, next) => {
 
     if (user.isBlocked) {
       return res.status(403).json({ message: "This account is blocked for selected role" });
+    }
+
+    const isVerificationApproved =
+      user.isVerified === true && ["verified", "approved"].includes(String(user.verificationStatus || ""));
+
+    if (!isVerificationApproved) {
+      return res.status(403).json({ message: "Account is not verified" });
     }
 
     if (user.status === "pending") {

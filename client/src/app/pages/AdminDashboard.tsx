@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Ban, FileWarning, LogOut, Trash2, UserCheck, UserMinus, Users } from "lucide-react";
+import {
+  Ban,
+  CreditCard,
+  FileWarning,
+  LogOut,
+  Menu,
+  Trash2,
+  UserCheck,
+  UserMinus,
+  Users,
+  X,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import type { DeletedUserArchiveItem, Payment, User, UserReportItem } from "../types";
 
 type SectionKey = "active" | "banned" | "deleted" | "passengers" | "drivers" | "payments" | "reports";
 type RoleFilter = "all" | "passenger" | "driver";
+type Viewport = "mobile" | "tablet" | "desktop";
 
 type ConfirmAction =
   | { kind: "ban-user"; userId: string; userName: string }
@@ -14,15 +26,18 @@ type ConfirmAction =
   | { kind: "unban-user"; userId: string; userName: string }
   | { kind: "report-ignore"; reportId: string; label: string }
   | { kind: "report-ban"; reportId: string; label: string }
-  | { kind: "report-delete"; reportId: string; label: string };
+  | { kind: "report-delete"; reportId: string; label: string }
+  | { kind: "payment-approve"; paymentId: string }
+  | { kind: "payment-reject"; paymentId: string };
 
-const sidebar: Array<{ key: SectionKey; label: string; icon: ReactNode }> = [
+const SIDEBAR_WIDTH = 280;
+const sidebarItems: Array<{ key: SectionKey; label: string; icon: ReactNode }> = [
   { key: "active", label: "Active Users", icon: <Users className="h-4 w-4" /> },
   { key: "banned", label: "Banned Users", icon: <UserMinus className="h-4 w-4" /> },
   { key: "deleted", label: "Deleted Users", icon: <Trash2 className="h-4 w-4" /> },
   { key: "passengers", label: "Passenger Management", icon: <Users className="h-4 w-4" /> },
   { key: "drivers", label: "Driver Management", icon: <Users className="h-4 w-4" /> },
-  { key: "payments", label: "Payments Panel", icon: <Users className="h-4 w-4" /> },
+  { key: "payments", label: "Payments Panel", icon: <CreditCard className="h-4 w-4" /> },
   { key: "reports", label: "Reports Panel", icon: <FileWarning className="h-4 w-4" /> },
 ];
 
@@ -41,23 +56,61 @@ const formatDateTime = (value?: string) => {
   return parsed.toLocaleString();
 };
 
+const getViewport = (): Viewport => {
+  if (typeof window === "undefined") {
+    return "desktop";
+  }
+
+  if (window.innerWidth < 640) {
+    return "mobile";
+  }
+
+  if (window.innerWidth < 1024) {
+    return "tablet";
+  }
+
+  return "desktop";
+};
+
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
   const [section, setSection] = useState<SectionKey>("active");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [viewport, setViewport] = useState<Viewport>(getViewport());
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [tabletSidebarCollapsed, setTabletSidebarCollapsed] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [banReason, setBanReason] = useState("");
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<UserReportItem[]>([]);
   const [deletedUsers, setDeletedUsers] = useState<DeletedUserArchiveItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
 
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-  const [banReason, setBanReason] = useState("");
+  useEffect(() => {
+    const onResize = () => {
+      const next = getViewport();
+      setViewport(next);
+
+      if (next !== "mobile") {
+        setMobileSidebarOpen(false);
+      }
+
+      if (next === "desktop") {
+        setTabletSidebarCollapsed(false);
+      }
+    };
+
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const loadData = async () => {
     try {
@@ -84,7 +137,7 @@ export function AdminDashboard() {
         return;
       }
 
-      setError(requestError?.response?.data?.message || "Could not load moderation dashboard");
+      setError(requestError?.response?.data?.message || "Could not load admin dashboard");
     } finally {
       setLoading(false);
     }
@@ -99,9 +152,14 @@ export function AdminDashboard() {
       users.filter(
         (item) =>
           (item.status === "approved" || item.accountStatus === "active") &&
-          item.accountStatus !== "banned" &&
-          item.status !== "banned"
+          item.status !== "banned" &&
+          item.accountStatus !== "banned"
       ),
+    [users]
+  );
+
+  const bannedUsers = useMemo(
+    () => users.filter((item) => item.status === "banned" || item.accountStatus === "banned"),
     [users]
   );
 
@@ -113,40 +171,54 @@ export function AdminDashboard() {
     return activeUsers.filter((item) => item.role === roleFilter);
   }, [activeUsers, roleFilter]);
 
-  const bannedUsers = useMemo(
-    () => users.filter((item) => item.status === "banned" || item.accountStatus === "banned"),
-    [users]
-  );
-
   const passengerUsers = useMemo(() => users.filter((item) => item.role === "passenger"), [users]);
   const driverUsers = useMemo(() => users.filter((item) => item.role === "driver"), [users]);
 
-  const doBanUser = async (userId: string, reason: string) => {
-    await api.post("/admin/user-status", {
-      userId,
-      status: "banned",
-      reason: reason.trim() || "Banned by moderator",
-    });
+  const metrics = useMemo(
+    () => [
+      { label: "Active Users", value: activeUsers.length },
+      { label: "Banned Users", value: bannedUsers.length },
+      { label: "Open Reports", value: reports.filter((item) => item.status === "open").length },
+      { label: "Pending Payments", value: payments.filter((item) => item.status === "pending").length },
+    ],
+    [activeUsers.length, bannedUsers.length, reports, payments]
+  );
+
+  const setSectionAndCloseDrawer = (next: SectionKey) => {
+    setSection(next);
+
+    if (viewport === "mobile") {
+      setMobileSidebarOpen(false);
+    }
   };
 
-  const doDeleteUser = async (userId: string) => {
+  const updateUserStatus = async (userId: string, status: "banned" | "approved", reason = "") => {
+    await api.post("/admin/user-status", { userId, status, reason });
+  };
+
+  const deleteUser = async (userId: string) => {
     await api.delete(`/admin/users/${userId}`);
   };
 
-  const doUnbanUser = async (userId: string) => {
+  const unbanUser = async (userId: string) => {
     await api.post(`/admin/users/${userId}/unban`);
   };
 
-  const doReportAction = async (reportId: string, action: "ignore" | "ban" | "delete") => {
+  const performReportAction = async (reportId: string, action: "ignore" | "ban" | "delete") => {
     await api.post(`/admin/reports/${reportId}/action`, { action });
   };
 
-  const reviewPayment = async (paymentId: string, status: "approved" | "rejected") => {
-    const rejectionReason = status === "rejected" ? window.prompt("Rejection reason") || "" : "";
+  const performPaymentReview = async (paymentId: string, status: "approved" | "rejected") => {
+    const rejectionReason = status === "rejected" ? "Rejected by admin" : "";
     await api.post("/admin/approve-payment", { paymentId, status, rejectionReason });
   };
 
-  const handleConfirm = async () => {
+  const openConfirmation = (nextAction: ConfirmAction) => {
+    setBanReason("");
+    setConfirmAction(nextAction);
+  };
+
+  const handleConfirmAction = async () => {
     if (!confirmAction) {
       return;
     }
@@ -155,27 +227,35 @@ export function AdminDashboard() {
       setSubmitting(true);
 
       if (confirmAction.kind === "ban-user") {
-        await doBanUser(confirmAction.userId, banReason);
+        await updateUserStatus(confirmAction.userId, "banned", banReason.trim() || "Banned by admin");
       }
 
       if (confirmAction.kind === "delete-user") {
-        await doDeleteUser(confirmAction.userId);
+        await deleteUser(confirmAction.userId);
       }
 
       if (confirmAction.kind === "unban-user") {
-        await doUnbanUser(confirmAction.userId);
+        await unbanUser(confirmAction.userId);
       }
 
       if (confirmAction.kind === "report-ignore") {
-        await doReportAction(confirmAction.reportId, "ignore");
+        await performReportAction(confirmAction.reportId, "ignore");
       }
 
       if (confirmAction.kind === "report-ban") {
-        await doReportAction(confirmAction.reportId, "ban");
+        await performReportAction(confirmAction.reportId, "ban");
       }
 
       if (confirmAction.kind === "report-delete") {
-        await doReportAction(confirmAction.reportId, "delete");
+        await performReportAction(confirmAction.reportId, "delete");
+      }
+
+      if (confirmAction.kind === "payment-approve") {
+        await performPaymentReview(confirmAction.paymentId, "approved");
+      }
+
+      if (confirmAction.kind === "payment-reject") {
+        await performPaymentReview(confirmAction.paymentId, "rejected");
       }
 
       setConfirmAction(null);
@@ -188,86 +268,138 @@ export function AdminDashboard() {
     }
   };
 
-  const openConfirmation = (action: ConfirmAction) => {
-    setConfirmAction(action);
-    setBanReason("");
-  };
+  const desktopMainStyle = viewport === "desktop" ? { marginLeft: `${SIDEBAR_WIDTH}px` } : undefined;
 
   return (
     <div
-      className="min-h-screen overflow-x-hidden p-3 sm:p-4 md:p-6"
-      style={{
-        background: "linear-gradient(140deg, #08142e 0%, #123760 54%, #14507d 100%)",
-      }}
+      className="min-h-screen overflow-x-hidden"
+      style={{ background: "linear-gradient(140deg, #08142e 0%, #123760 54%, #14507d 100%)" }}
     >
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-3xl border border-white/20 bg-white/10 p-4 backdrop-blur-xl lg:sticky lg:top-6">
-          <div className="mb-6">
-            <h1 className="text-xl font-semibold text-white">Moderation Center</h1>
-            <p className="text-xs text-slate-200">Admin moderation and safety controls</p>
-          </div>
+      {viewport === "mobile" ? (
+        <MobileHeader
+          title={sidebarItems.find((item) => item.key === section)?.label || "Admin Panel"}
+          onMenuToggle={() => setMobileSidebarOpen((prev) => !prev)}
+        />
+      ) : null}
 
-          <nav className="space-y-2">
-            {sidebar.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setSection(item.key)}
-                className={`flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm transition ${
-                  section === item.key
-                    ? "bg-cyan-500 text-white"
-                    : "bg-white/5 text-slate-100 hover:bg-white/15"
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <button
-            type="button"
-            onClick={() => {
+      {viewport === "desktop" ? (
+        <aside
+          className="fixed left-0 top-0 z-30 h-screen overflow-y-auto border-r border-white/20 bg-slate-950/45 p-4 backdrop-blur-xl"
+          style={{ width: SIDEBAR_WIDTH }}
+        >
+          <SidebarContent
+            collapsed={false}
+            activeSection={section}
+            onSelect={setSectionAndCloseDrawer}
+            onLogout={() => {
               logout();
               navigate("/auth", { replace: true });
             }}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/90 px-3 py-2 text-sm font-semibold text-slate-900"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </button>
+          />
         </aside>
+      ) : null}
 
-        <main className="min-w-0 rounded-3xl border border-white/20 bg-white/10 p-3 backdrop-blur-xl sm:p-4 md:p-6">
-          {error ? <p className="mb-3 rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-100">{error}</p> : null}
-          {loading ? <p className="text-sm text-slate-100">Loading moderation dashboard...</p> : null}
+      {viewport === "tablet" ? (
+        <aside
+          className={`fixed left-0 top-0 z-30 h-screen overflow-y-auto border-r border-white/20 bg-slate-950/45 p-4 backdrop-blur-xl transition-all duration-300 ${
+            tabletSidebarCollapsed ? "w-20" : "w-64"
+          }`}
+        >
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setTabletSidebarCollapsed((prev) => !prev)}
+              className="rounded-lg bg-white/10 px-2 py-1 text-xs text-white"
+            >
+              {tabletSidebarCollapsed ? ">" : "<"}
+            </button>
+          </div>
+
+          <SidebarContent
+            collapsed={tabletSidebarCollapsed}
+            activeSection={section}
+            onSelect={setSectionAndCloseDrawer}
+            onLogout={() => {
+              logout();
+              navigate("/auth", { replace: true });
+            }}
+          />
+        </aside>
+      ) : null}
+
+      {viewport === "mobile" ? (
+        <div
+          className={`fixed inset-0 z-40 transition ${mobileSidebarOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+        >
+          <div
+            onClick={() => setMobileSidebarOpen(false)}
+            className={`absolute inset-0 bg-slate-900/60 transition-opacity duration-300 ${
+              mobileSidebarOpen ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          <aside
+            className={`absolute left-0 top-0 h-full w-72 border-r border-white/20 bg-slate-950/95 p-4 backdrop-blur-xl transition-transform duration-300 ${
+              mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-white">Admin Menu</h2>
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                className="rounded-lg bg-white/10 p-1 text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <SidebarContent
+              collapsed={false}
+              activeSection={section}
+              onSelect={setSectionAndCloseDrawer}
+              onLogout={() => {
+                logout();
+                navigate("/auth", { replace: true });
+              }}
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      <main
+        className="min-w-0 px-3 pb-6 pt-3 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
+        style={desktopMainStyle}
+      >
+        <div className="mx-auto max-w-7xl">
+          {viewport === "tablet" ? <div style={{ width: tabletSidebarCollapsed ? 80 : 256 }} className="float-left h-0" /> : null}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {metrics.map((item) => (
+              <MetricCard key={item.label} label={item.label} value={item.value} />
+            ))}
+          </div>
+
+          {error ? <p className="mt-4 rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-100">{error}</p> : null}
+          {loading ? <p className="mt-4 text-sm text-slate-100">Loading admin dashboard...</p> : null}
 
           {!loading && section === "active" ? (
-            <section>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-white sm:text-xl">Active Users</h2>
-                  <p className="text-sm text-slate-200">Filter and moderate active users quickly</p>
-                </div>
-
-                <div className="inline-flex rounded-xl border border-white/20 bg-white/10 p-1">
-                  {(["all", "passenger", "driver"] as RoleFilter[]).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setRoleFilter(value)}
-                      className={`rounded-lg px-3 py-1.5 text-xs capitalize transition ${
-                        roleFilter === value ? "bg-cyan-500 text-white" : "text-slate-100 hover:bg-white/15"
-                      }`}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
+            <SectionCard title="Active Users" subtitle="Filter by role and run quick moderation actions">
+              <div className="mb-3 inline-flex rounded-xl border border-white/20 bg-white/10 p-1">
+                {(["all", "passenger", "driver"] as RoleFilter[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setRoleFilter(value)}
+                    className={`rounded-lg px-3 py-1.5 text-xs capitalize transition sm:text-sm ${
+                      roleFilter === value ? "bg-cyan-500 text-white" : "text-slate-100 hover:bg-white/15"
+                    }`}
+                  >
+                    {value}
+                  </button>
+                ))}
               </div>
 
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -290,7 +422,7 @@ export function AdminDashboard() {
                             <StatusBadge tone="active" label="Active" />
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="danger"
                                 label="Ban"
@@ -311,16 +443,13 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
 
           {!loading && section === "banned" ? (
-            <section>
-              <h2 className="text-lg font-semibold text-white sm:text-xl">Banned Users</h2>
-              <p className="mb-3 text-sm text-slate-200">Unban or permanently remove banned accounts</p>
-
+            <SectionCard title="Banned Users" subtitle="Review ban reason and restore or remove accounts">
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[920px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -342,12 +471,12 @@ export function AdminDashboard() {
                           <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
                           <td className="px-3 py-3 capitalize">{user.role}</td>
                           <td className="px-3 py-3">{user.suspensionReason || "-"}</td>
-                          <td className="px-3 py-3">{formatDateTime((user as any).bannedAt || user.updatedAt)}</td>
+                          <td className="px-3 py-3">{formatDateTime(user.bannedAt || user.updatedAt)}</td>
                           <td className="px-3 py-3">
                             <StatusBadge tone="banned" label="Banned" />
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="success"
                                 label="Unban"
@@ -368,16 +497,13 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
 
           {!loading && section === "deleted" ? (
-            <section>
-              <h2 className="text-lg font-semibold text-white sm:text-xl">Deleted Users</h2>
-              <p className="mb-3 text-sm text-slate-200">Archived list of permanently deleted users</p>
-
+            <SectionCard title="Deleted Users" subtitle="Archived users list">
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -404,16 +530,13 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
 
           {!loading && section === "passengers" ? (
-            <section>
-              <h2 className="text-lg font-semibold text-white sm:text-xl">Passenger Management</h2>
-              <p className="mb-3 text-sm text-slate-200">Manage passenger accounts and moderation actions</p>
-
+            <SectionCard title="Passenger Management" subtitle="Manage passenger records and moderation actions">
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -434,7 +557,7 @@ export function AdminDashboard() {
                           <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
                           <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="danger"
                                 label="Ban"
@@ -453,16 +576,13 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
 
           {!loading && section === "drivers" ? (
-            <section>
-              <h2 className="text-lg font-semibold text-white sm:text-xl">Driver Management</h2>
-              <p className="mb-3 text-sm text-slate-200">Manage driver accounts and moderation actions</p>
-
+            <SectionCard title="Driver Management" subtitle="Manage driver records and approvals">
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -483,8 +603,12 @@ export function AdminDashboard() {
                           <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
                           <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-2">
-                              <ActionButton tone="success" label="Approve" onClick={() => doUnbanUser(userId)} />
+                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                              <ActionButton
+                                tone="success"
+                                label="Approve"
+                                onClick={() => openConfirmation({ kind: "unban-user", userId, userName: user.name })}
+                              />
                               <ActionButton
                                 tone="danger"
                                 label="Ban"
@@ -498,16 +622,13 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
 
           {!loading && section === "payments" ? (
-            <section>
-              <h2 className="text-lg font-semibold text-white sm:text-xl">Payments Panel</h2>
-              <p className="mb-3 text-sm text-slate-200">Review proofs and approve/reject payments</p>
-
+            <SectionCard title="Payments Panel" subtitle="Review proofs and approve/reject transactions">
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[820px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">User</th>
@@ -533,9 +654,17 @@ export function AdminDashboard() {
                         </td>
                         <td className="px-3 py-3">{payment.status}</td>
                         <td className="px-3 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <ActionButton tone="success" label="Approve" onClick={() => reviewPayment(payment._id, "approved")} />
-                            <ActionButton tone="danger" label="Reject" onClick={() => reviewPayment(payment._id, "rejected")} />
+                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <ActionButton
+                              tone="success"
+                              label="Approve"
+                              onClick={() => openConfirmation({ kind: "payment-approve", paymentId: payment._id })}
+                            />
+                            <ActionButton
+                              tone="danger"
+                              label="Reject"
+                              onClick={() => openConfirmation({ kind: "payment-reject", paymentId: payment._id })}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -543,21 +672,18 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
 
           {!loading && section === "reports" ? (
-            <section>
-              <h2 className="text-lg font-semibold text-white sm:text-xl">Reports Panel</h2>
-              <p className="mb-3 text-sm text-slate-200">Review comments and apply moderation actions</p>
-
+            <SectionCard title="Reports Panel" subtitle="Review report comments and take action">
               <TableWrap>
-                <table className="min-w-full text-left text-sm text-slate-100">
+                <table className="min-w-[860px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Reported User</th>
                       <th className="px-3 py-3">Reporter</th>
-                      <th className="px-3 py-3">Comments</th>
+                      <th className="px-3 py-3">Comment</th>
                       <th className="px-3 py-3">Status</th>
                       <th className="px-3 py-3">Actions</th>
                     </tr>
@@ -567,7 +693,7 @@ export function AdminDashboard() {
                       <tr key={report._id} className="border-b border-white/10 align-top">
                         <td className="px-3 py-3">{report.targetUserId?.name || "Unknown"}</td>
                         <td className="px-3 py-3">{report.reporterId?.name || "Unknown"}</td>
-                        <td className="px-3 py-3 max-w-xs break-words">{report.reason}</td>
+                        <td className="max-w-[360px] break-words px-3 py-3">{report.reason}</td>
                         <td className="px-3 py-3">
                           {report.status === "reviewed" ? (
                             <StatusBadge tone="deleted" label="Reviewed" />
@@ -576,7 +702,7 @@ export function AdminDashboard() {
                           )}
                         </td>
                         <td className="px-3 py-3">
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                             <ActionButton
                               tone="neutral"
                               label="Ignore"
@@ -591,7 +717,6 @@ export function AdminDashboard() {
                             <ActionButton
                               tone="danger"
                               label="Ban User"
-                              icon={<Ban className="h-3.5 w-3.5" />}
                               onClick={() =>
                                 openConfirmation({
                                   kind: "report-ban",
@@ -603,7 +728,6 @@ export function AdminDashboard() {
                             <ActionButton
                               tone="danger"
                               label="Delete User"
-                              icon={<Trash2 className="h-3.5 w-3.5" />}
                               onClick={() =>
                                 openConfirmation({
                                   kind: "report-delete",
@@ -619,15 +743,15 @@ export function AdminDashboard() {
                   </tbody>
                 </table>
               </TableWrap>
-            </section>
+            </SectionCard>
           ) : null}
-        </main>
-      </div>
+        </div>
+      </main>
 
       {confirmAction ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 px-4">
           <div className="w-full max-w-md rounded-2xl border border-white/20 bg-slate-900/95 p-4 text-white">
-            <h3 className="text-lg font-semibold">Confirm Action</h3>
+            <h3 className="text-base font-semibold sm:text-lg">Confirm Action</h3>
             <p className="mt-2 text-sm text-slate-200">{getConfirmMessage(confirmAction)}</p>
 
             {confirmAction.kind === "ban-user" ? (
@@ -643,12 +767,12 @@ export function AdminDashboard() {
               </div>
             ) : null}
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
-                onClick={handleConfirm}
+                onClick={handleConfirmAction}
                 disabled={submitting}
-                className="h-10 flex-1 rounded-xl bg-red-500 px-3 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-60"
+                className="h-10 w-full rounded-xl bg-red-500 px-3 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-60"
               >
                 {submitting ? "Processing..." : "Confirm"}
               </button>
@@ -659,7 +783,7 @@ export function AdminDashboard() {
                   setBanReason("");
                 }}
                 disabled={submitting}
-                className="h-10 flex-1 rounded-xl bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/20"
+                className="h-10 w-full rounded-xl bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/20"
               >
                 Cancel
               </button>
@@ -667,6 +791,86 @@ export function AdminDashboard() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function MobileHeader({ title, onMenuToggle }: { title: string; onMenuToggle: () => void }) {
+  return (
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/15 bg-slate-950/60 px-3 py-2 backdrop-blur-xl sm:hidden">
+      <button type="button" onClick={onMenuToggle} className="rounded-lg bg-white/10 p-2 text-white">
+        <Menu className="h-4 w-4" />
+      </button>
+      <h1 className="text-sm font-semibold text-white">{title}</h1>
+      <span className="w-8" />
+    </header>
+  );
+}
+
+function SidebarContent({
+  collapsed,
+  activeSection,
+  onSelect,
+  onLogout,
+}: {
+  collapsed: boolean;
+  activeSection: SectionKey;
+  onSelect: (value: SectionKey) => void;
+  onLogout: () => void;
+}) {
+  return (
+    <>
+      <div className={`mb-6 ${collapsed ? "text-center" : ""}`}>
+        <h1 className={`font-semibold text-white ${collapsed ? "text-sm" : "text-xl"}`}>Admin Panel</h1>
+        {!collapsed ? <p className="text-xs text-slate-200">Moderation and operations</p> : null}
+      </div>
+
+      <nav className="space-y-2">
+        {sidebarItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onSelect(item.key)}
+            className={`flex w-full items-center rounded-2xl px-3 py-2 text-left text-sm transition ${
+              collapsed ? "justify-center" : "gap-2"
+            } ${activeSection === item.key ? "bg-cyan-500 text-white" : "bg-white/5 text-slate-100 hover:bg-white/15"}`}
+            title={item.label}
+          >
+            {item.icon}
+            {!collapsed ? <span>{item.label}</span> : null}
+          </button>
+        ))}
+      </nav>
+
+      <button
+        type="button"
+        onClick={onLogout}
+        className={`mt-6 flex w-full items-center justify-center rounded-2xl bg-white/90 px-3 py-2 text-sm font-semibold text-slate-900 ${
+          collapsed ? "" : "gap-2"
+        }`}
+      >
+        <LogOut className="h-4 w-4" />
+        {!collapsed ? "Logout" : null}
+      </button>
+    </>
+  );
+}
+
+function SectionCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <section className="mt-4 rounded-2xl border border-white/20 bg-white/8 p-3 sm:p-4 md:p-5">
+      <h2 className="text-lg font-semibold text-white sm:text-xl">{title}</h2>
+      <p className="mb-3 text-sm text-slate-200">{subtitle}</p>
+      {children}
+    </section>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/20 bg-white/10 p-3 sm:p-4">
+      <p className="text-xs text-slate-200 sm:text-sm">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-white sm:text-xl">{value}</p>
     </div>
   );
 }
@@ -697,7 +901,7 @@ function ActionButton({
   onClick: () => void;
   icon?: ReactNode;
 }) {
-  const cls =
+  const toneClass =
     tone === "success"
       ? "bg-emerald-500/85 text-white hover:bg-emerald-400"
       : tone === "danger"
@@ -708,7 +912,7 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:w-auto ${cls}`}
+      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium transition sm:w-auto ${toneClass}`}
     >
       {icon}
       {label}
@@ -735,6 +939,14 @@ function getConfirmMessage(action: ConfirmAction) {
 
   if (action.kind === "report-ban") {
     return `Ban ${action.label} based on this report?`;
+  }
+
+  if (action.kind === "payment-approve") {
+    return "Approve this payment proof?";
+  }
+
+  if (action.kind === "payment-reject") {
+    return "Reject this payment proof?";
   }
 
   return `Delete ${action.label} based on this report?`;
