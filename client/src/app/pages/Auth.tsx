@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { BadgeCheck, CheckCircle2, Eye, EyeOff, IdCard, Loader2, Lock, Phone, Upload, UserCircle2 } from 'lucide-react';
+import { BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import backgroundImage from '../../assets/carpool-bg.png';
 
 type Screen = 'login' | 'signup' | 'forgot' | 'reset' | 'success';
-type AuthTab = 'signup' | 'forgot';
 type VerifyStep = 'Checking CNIC' | 'Matching Face' | 'Validating DOB';
 
 type SignupForm = {
@@ -14,9 +13,11 @@ type SignupForm = {
   dob: string;
   countryCode: string;
   mobile: string;
+  licenseNumber: string;
   profileImage: File | null;
   cnicFront: File | null;
   cnicBack: File | null;
+  licenseImage: File | null;
 };
 
 type RecoverForm = {
@@ -40,9 +41,11 @@ const emptySignup: SignupForm = {
   dob: '',
   countryCode: '+92',
   mobile: '',
+  licenseNumber: '',
   profileImage: null,
   cnicFront: null,
   cnicBack: null,
+  licenseImage: null,
 };
 
 const emptyRecover: RecoverForm = {
@@ -76,7 +79,8 @@ export function Auth() {
   const navigate = useNavigate();
 
   const [screen, setScreen] = useState<Screen>('login');
-  const [authTab, setAuthTab] = useState<AuthTab>('signup');
+  const [loginRole, setLoginRole] = useState<'passenger' | 'driver'>('passenger');
+  const [signupRole, setSignupRole] = useState<'passenger' | 'driver'>('passenger');
 
   const [loginMobileCode, setLoginMobileCode] = useState('+92');
   const [loginMobile, setLoginMobile] = useState('');
@@ -119,7 +123,7 @@ export function Auth() {
 
   const signupValid = useMemo(() => {
     const mobileDigits = signup.mobile.replace(/\D/g, '');
-    return {
+    const baseValidation = {
       name: signup.fullName.trim().length >= 3,
       cnic: cnicPattern.test(signup.cnic),
       dob: Boolean(signup.dob) && signup.dob < today,
@@ -127,10 +131,26 @@ export function Auth() {
       profile: Boolean(signup.profileImage),
       front: Boolean(signup.cnicFront),
       back: Boolean(signup.cnicBack),
+      licenseNumber: signup.licenseNumber.trim().length >= 6,
+      licenseImage: Boolean(signup.licenseImage),
     };
-  }, [signup]);
 
-  const isSignupReady = Object.values(signupValid).every(Boolean);
+    return {
+      ...baseValidation,
+      ready:
+        signupRole === 'driver'
+          ? Object.values(baseValidation).every(Boolean)
+          : baseValidation.name &&
+            baseValidation.cnic &&
+            baseValidation.dob &&
+            baseValidation.mobile &&
+            baseValidation.profile &&
+            baseValidation.front &&
+            baseValidation.back,
+    };
+  }, [signup, signupRole]);
+
+  const isSignupReady = signupValid.ready;
 
   const forgotValid = useMemo(() => {
     const mobileDigits = recover.mobile.replace(/\D/g, '');
@@ -151,6 +171,17 @@ export function Auth() {
       return;
     }
 
+    const signupPayloadForBackend = {
+      role: signupRole,
+      fullName: signup.fullName,
+      cnic: signup.cnic,
+      dob: signup.dob,
+      mobile: `${signup.countryCode}${signup.mobile}`,
+      licenseNumber: signupRole === 'driver' ? signup.licenseNumber : undefined,
+    };
+
+    console.log('DEV HANDOFF signup payload:', signupPayloadForBackend);
+
     resetError('');
     setIsLoading(true);
     setVerifyIndex(0);
@@ -164,6 +195,14 @@ export function Auth() {
       resetError('Information does not match');
       return;
     }
+
+    const loginPayloadForBackend = {
+      role: loginRole,
+      mobile: `${loginMobileCode}${loginMobile}`,
+      password: loginPassword,
+    };
+
+    console.log('DEV HANDOFF login payload:', loginPayloadForBackend);
 
     setIsLoading(true);
     window.setTimeout(() => {
@@ -212,6 +251,7 @@ export function Auth() {
   };
 
   const verificationProgress = Math.round((verifyIndex / verifySteps.length) * 100);
+  const activeAccent = signupRole === 'driver' ? colors.green : '#1B6FA3';
 
   return (
     <div
@@ -240,6 +280,11 @@ export function Auth() {
         >
           {screen === 'login' ? (
             <>
+              <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl p-1" style={{ backgroundColor: 'rgba(230,237,246,0.85)' }}>
+                <RoleTab active={loginRole === 'passenger'} label="Passenger" onClick={() => setLoginRole('passenger')} accent="#1B6FA3" />
+                <RoleTab active={loginRole === 'driver'} label="Driver" onClick={() => setLoginRole('driver')} accent={colors.green} />
+              </div>
+
               <h1 className="text-2xl" style={{ color: colors.navy, fontWeight: 700 }}>
                 Welcome Back
               </h1>
@@ -278,7 +323,6 @@ export function Auth() {
                   style={{ color: colors.navy, textDecoration: 'underline' }}
                   onClick={() => {
                     setScreen('forgot');
-                    setAuthTab('forgot');
                     resetError('');
                   }}
                 >
@@ -286,7 +330,7 @@ export function Auth() {
                 </button>
               </div>
 
-              <StickyActionButton text="Login" loading={isLoading} onClick={submitLogin} />
+              <StickyActionButton text="Login" loading={isLoading} onClick={submitLogin} theme={loginRole} />
 
               <button
                 type="button"
@@ -294,7 +338,6 @@ export function Auth() {
                 style={{ color: colors.navy, textDecoration: 'underline' }}
                 onClick={() => {
                   setScreen('signup');
-                  setAuthTab('signup');
                   resetError('');
                 }}
               >
@@ -303,44 +346,46 @@ export function Auth() {
             </>
           ) : null}
 
-          {(screen === 'signup' || screen === 'forgot') ? (
+          {screen === 'signup' ? (
             <>
               <div className="grid grid-cols-2 gap-2 rounded-2xl p-1" style={{ backgroundColor: 'rgba(230,237,246,0.85)' }}>
-                <HeaderTab
-                  active={authTab === 'signup'}
+                <RoleTab
+                  active={signupRole === 'passenger'}
                   label="Passenger Signup"
+                  accent="#1B6FA3"
                   onClick={() => {
-                    setAuthTab('signup');
-                    setScreen('signup');
+                    setSignupRole('passenger');
                     resetError('');
                   }}
                 />
-                <HeaderTab
-                  active={authTab === 'forgot'}
-                  label="Forgot Password"
+                <RoleTab
+                  active={signupRole === 'driver'}
+                  label="Driver Signup"
+                  accent={colors.green}
                   onClick={() => {
-                    setAuthTab('forgot');
-                    setScreen('forgot');
+                    setSignupRole('driver');
                     resetError('');
                   }}
                 />
               </div>
 
-              {screen === 'signup' ? (
-                <>
-                  <h1 className="mt-4 text-2xl" style={{ color: colors.navy, fontWeight: 700 }}>
-                    Create Passenger Account
-                  </h1>
+              <>
+                <h1 className="mt-4 text-2xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                  {signupRole === 'driver' ? 'Create Driver Account' : 'Create Passenger Account'}
+                </h1>
+                <p className="mt-1 text-xs" style={{ color: activeAccent, fontWeight: 600 }}>
+                  Signing up as {signupRole === 'driver' ? 'Driver' : 'Passenger'}
+                </p>
 
-                  <div className="mt-3 space-y-3">
-                    <FloatingField label="Full Name">
-                      <IconInput
-                        icon={<UserCircle2 className="h-4 w-4" />}
-                        placeholder="Enter full name"
-                        value={signup.fullName}
-                        onChange={(value) => setSignup((prev) => ({ ...prev, fullName: value }))}
-                      />
-                    </FloatingField>
+                <div className="mt-3 space-y-3">
+                  <FloatingField label="Full Name">
+                    <IconInput
+                      icon={<UserCircle2 className="h-4 w-4" />}
+                      placeholder="Enter full name"
+                      value={signup.fullName}
+                      onChange={(value) => setSignup((prev) => ({ ...prev, fullName: value }))}
+                    />
+                  </FloatingField>
 
                     <FloatingField label="CNIC">
                       <IconInput
@@ -382,69 +427,102 @@ export function Auth() {
                       file={signup.cnicFront}
                       onChange={(file) => setSignup((prev) => ({ ...prev, cnicFront: file }))}
                     />
-                    <UploadRow
-                      title="CNIC Back Upload"
-                      file={signup.cnicBack}
-                      onChange={(file) => setSignup((prev) => ({ ...prev, cnicBack: file }))}
+                  <UploadRow
+                    title="CNIC Back Upload"
+                    file={signup.cnicBack}
+                    onChange={(file) => setSignup((prev) => ({ ...prev, cnicBack: file }))}
+                  />
+
+                  {signupRole === 'driver' ? (
+                    <>
+                      <FloatingField label="Driving License Number">
+                        <IconInput
+                          icon={<FileText className="h-4 w-4" />}
+                          placeholder="License number"
+                          value={signup.licenseNumber}
+                          onChange={(value) => setSignup((prev) => ({ ...prev, licenseNumber: value }))}
+                        />
+                      </FloatingField>
+
+                      <UploadRow
+                        title="License Image Upload"
+                        file={signup.licenseImage}
+                        onChange={(file) => setSignup((prev) => ({ ...prev, licenseImage: file }))}
+                      />
+                    </>
+                  ) : null}
+                </div>
+
+                <StickyActionButton
+                  text="Create & Verify Account"
+                  loading={isLoading}
+                  loadingText="Verifying identity..."
+                  disabled={!isSignupReady}
+                  onClick={startAutoVerification}
+                  theme={signupRole}
+                />
+              </>
+
+              <button
+                type="button"
+                className="mt-3 w-full text-center text-sm"
+                style={{ color: colors.navy, textDecoration: 'underline' }}
+                onClick={() => {
+                  setScreen('forgot');
+                  resetError('');
+                }}
+              >
+                Forgot Password
+              </button>
+            </>
+          ) : null}
+
+          {screen === 'forgot' ? (
+            <>
+              <h1 className="mt-1 text-2xl" style={{ color: colors.navy, fontWeight: 700 }}>
+                Recover Your Account
+              </h1>
+
+              <div className="mt-3 space-y-3">
+                <FloatingField label="Mobile Number">
+                  <div className="flex items-center gap-2">
+                    <CountryCodeSelect
+                      value={recover.countryCode}
+                      onChange={(value) => setRecover((prev) => ({ ...prev, countryCode: value }))}
+                    />
+                    <IconInput
+                      icon={<Phone className="h-4 w-4" />}
+                      placeholder="3001234567"
+                      value={recover.mobile}
+                      onChange={(value) => setRecover((prev) => ({ ...prev, mobile: value.replace(/\D/g, '').slice(0, 11) }))}
                     />
                   </div>
+                </FloatingField>
 
-                  <StickyActionButton
-                    text="Create & Verify Account"
-                    loading={isLoading}
-                    loadingText="Verifying identity..."
-                    disabled={!isSignupReady}
-                    onClick={startAutoVerification}
+                <FloatingField label="CNIC Number">
+                  <IconInput
+                    icon={<IdCard className="h-4 w-4" />}
+                    placeholder="12345-1234567-1"
+                    value={recover.cnic}
+                    onChange={(value) => setRecover((prev) => ({ ...prev, cnic: formatCnic(value) }))}
                   />
-                </>
-              ) : (
-                <>
-                  <h1 className="mt-4 text-2xl" style={{ color: colors.navy, fontWeight: 700 }}>
-                    Recover Your Account
-                  </h1>
+                </FloatingField>
 
-                  <div className="mt-3 space-y-3">
-                    <FloatingField label="Mobile Number">
-                      <div className="flex items-center gap-2">
-                        <CountryCodeSelect
-                          value={recover.countryCode}
-                          onChange={(value) => setRecover((prev) => ({ ...prev, countryCode: value }))}
-                        />
-                        <IconInput
-                          icon={<Phone className="h-4 w-4" />}
-                          placeholder="3001234567"
-                          value={recover.mobile}
-                          onChange={(value) => setRecover((prev) => ({ ...prev, mobile: value.replace(/\D/g, '').slice(0, 11) }))}
-                        />
-                      </div>
-                    </FloatingField>
-
-                    <FloatingField label="CNIC Number">
-                      <IconInput
-                        icon={<IdCard className="h-4 w-4" />}
-                        placeholder="12345-1234567-1"
-                        value={recover.cnic}
-                        onChange={(value) => setRecover((prev) => ({ ...prev, cnic: formatCnic(value) }))}
-                      />
-                    </FloatingField>
-
-                    <FloatingField label="Date of Birth">
-                      <IconInput
-                        icon={<IdCard className="h-4 w-4" />}
-                        type="date"
-                        value={recover.dob}
-                        onChange={(value) => setRecover((prev) => ({ ...prev, dob: value }))}
-                      />
-                    </FloatingField>
-                  </div>
-
-                  <StickyActionButton
-                    text="Verify Identity"
-                    disabled={!forgotValid.mobile || !forgotValid.cnic || !forgotValid.dob}
-                    onClick={verifyIdentity}
+                <FloatingField label="Date of Birth">
+                  <IconInput
+                    icon={<IdCard className="h-4 w-4" />}
+                    type="date"
+                    value={recover.dob}
+                    onChange={(value) => setRecover((prev) => ({ ...prev, dob: value }))}
                   />
-                </>
-              )}
+                </FloatingField>
+              </div>
+
+              <StickyActionButton
+                text="Verify Identity"
+                disabled={!forgotValid.mobile || !forgotValid.cnic || !forgotValid.dob}
+                onClick={verifyIdentity}
+              />
 
               <button
                 type="button"
@@ -576,14 +654,24 @@ export function Auth() {
   );
 }
 
-function HeaderTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function RoleTab({
+  active,
+  label,
+  onClick,
+  accent,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  accent: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="rounded-xl px-2 py-2 text-xs"
       style={{
-        background: active ? 'linear-gradient(135deg, #0B3C5D 0%, #14618E 100%)' : 'rgba(255,255,255,0.65)',
+        background: active ? `linear-gradient(135deg, ${accent} 0%, #0B3C5D 120%)` : 'rgba(255,255,255,0.65)',
         color: active ? '#FFFFFF' : '#486077',
         boxShadow: active ? '0 10px 24px rgba(11,60,93,0.28)' : '0 6px 16px rgba(11,60,93,0.08)',
       }}
@@ -741,13 +829,20 @@ function StickyActionButton({
   loading,
   loadingText,
   disabled,
+  theme = 'passenger',
 }: {
   text: string;
   onClick: () => void;
   loading?: boolean;
   loadingText?: string;
   disabled?: boolean;
+  theme?: 'passenger' | 'driver';
 }) {
+  const primaryGradient =
+    theme === 'driver'
+      ? 'linear-gradient(135deg, #2ECC71 0%, #0B3C5D 125%)'
+      : 'linear-gradient(135deg, #0B3C5D 0%, #1B6FA3 125%)';
+
   return (
     <div className="sticky bottom-0 mt-5 pt-2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 35%, rgba(255,255,255,0.95) 100%)' }}>
       <button
@@ -758,7 +853,7 @@ function StickyActionButton({
         style={{
           background: disabled
             ? 'linear-gradient(135deg, #9CB6C8 0%, #AFC3D0 100%)'
-            : 'linear-gradient(135deg, #0B3C5D 0%, #2ECC71 120%)',
+            : primaryGradient,
           color: '#FFFFFF',
           boxShadow: disabled ? 'none' : '0 14px 28px rgba(11,60,93,0.32)',
         }}
