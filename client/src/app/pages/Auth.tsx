@@ -192,7 +192,7 @@ export function Auth() {
           setForgotRole(resolvedRole);
           setForgotStep('verify');
           setResendCountdown(Number(response?.data?.resendInSeconds || 60));
-          setError('OTP sent. Enter the 6-digit OTP to continue.');
+          setError(String(response?.data?.message || 'OTP sent. Enter the 6-digit OTP to continue.'));
           return;
         }
 

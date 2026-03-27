@@ -149,7 +149,15 @@ const sendOtpEmail = async ({ to, otp }) => {
   const transport = getResetEmailTransport();
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.SMTP_USER;
 
+  if (!to) {
+    return false;
+  }
+
   if (!transport || !from) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`Mock Email OTP for ${to}: ${otp}`);
+      return true;
+    }
     return false;
   }
 
@@ -596,17 +604,42 @@ export const forgotPassword = async (req, res, next) => {
     user.resetTokenExpiry = undefined;
     await user.save();
 
+    const shouldSendEmail = Boolean(normalizedEmail);
+    const shouldSendSms = Boolean(normalizedPhone);
+
+    const accountEmail = normalizeEmail(user.email || "");
+    const accountPhone = String(user.phone || "").trim();
+
+    const emailTarget = shouldSendEmail && accountEmail === normalizedEmail ? user.email : undefined;
+    const smsTarget = shouldSendSms && accountPhone === normalizedPhone ? user.phone : undefined;
+
+    if (shouldSendEmail && !emailTarget) {
+      return res.status(404).json({ message: "No account found for selected role with this email" });
+    }
+
+    if (shouldSendSms && !smsTarget) {
+      return res.status(404).json({ message: "No account found for selected role with this phone" });
+    }
+
     const [emailSent, smsSent] = await Promise.all([
-      sendOtpEmail({ to: user.email, otp: rawOtp }),
-      sendOtpSms({ to: user.phone, otp: rawOtp }),
+      shouldSendEmail ? sendOtpEmail({ to: emailTarget, otp: rawOtp }) : Promise.resolve(false),
+      shouldSendSms ? sendOtpSms({ to: smsTarget, otp: rawOtp }) : Promise.resolve(false),
     ]);
 
-    if (!emailSent && !smsSent) {
-      return res.status(503).json({ message: "Could not send OTP right now. Please try again." });
+    if ((shouldSendEmail && !emailSent) || (shouldSendSms && !smsSent)) {
+      return res.status(503).json({
+        message: "Could not send OTP right now. Please try again.",
+        emailSent,
+        smsSent,
+      });
     }
 
     const responsePayload = {
-      message: "OTP sent to your email and phone",
+      message: shouldSendEmail && shouldSendSms
+        ? "OTP sent to your email and phone"
+        : shouldSendEmail
+        ? "OTP sent to your email"
+        : "OTP sent to your phone",
       role: user.role,
       requiresRoleSelection: false,
       expiresInSeconds: FORGOT_OTP_EXPIRY_MINUTES * 60,
