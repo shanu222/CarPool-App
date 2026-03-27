@@ -180,6 +180,18 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    otpResendAvailableAt: {
+      type: Date,
+      select: false,
+    },
+    resetSessionToken: {
+      type: String,
+      select: false,
+    },
+    resetSessionExpiry: {
+      type: Date,
+      select: false,
+    },
   },
   {
     timestamps: true,

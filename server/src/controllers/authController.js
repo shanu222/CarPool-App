@@ -141,7 +141,11 @@ const getResetEmailTransport = () => {
   });
 };
 
-const sendResetEmail = async ({ to, resetUrl, token }) => {
+const FORGOT_OTP_EXPIRY_MINUTES = 5;
+const FORGOT_OTP_RESEND_COOLDOWN_SECONDS = Number(process.env.FORGOT_OTP_RESEND_COOLDOWN_SECONDS || 60);
+const FORGOT_OTP_VERIFIED_SESSION_MINUTES = Number(process.env.FORGOT_OTP_VERIFIED_SESSION_MINUTES || 10);
+
+const sendOtpEmail = async ({ to, otp }) => {
   const transport = getResetEmailTransport();
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.SMTP_USER;
 
@@ -152,16 +156,44 @@ const sendResetEmail = async ({ to, resetUrl, token }) => {
   await transport.sendMail({
     from,
     to,
-    subject: "Reset your Carpool password",
-    text: resetUrl
-      ? `Reset your password using this link: ${resetUrl}`
-      : `Use this reset token: ${token}`,
-    html: resetUrl
-      ? `<p>Reset your password using this link:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`
-      : `<p>Use this reset token:</p><p><strong>${token}</strong></p>`,
+    subject: "Your Carpool password reset OTP",
+    text: `Use this OTP to reset your password: ${otp}. It expires in ${FORGOT_OTP_EXPIRY_MINUTES} minutes.`,
+    html: `<p>Use this OTP to reset your password:</p><p><strong style="font-size:20px;letter-spacing:2px;">${otp}</strong></p><p>This OTP expires in ${FORGOT_OTP_EXPIRY_MINUTES} minutes.</p>`,
   });
 
   return true;
+};
+
+const sendOtpSms = async ({ to, otp }) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_FROM_NUMBER;
+
+  if (!accountSid || !authToken || !from || !to) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`Mock SMS OTP for ${to}: ${otp}`);
+      return true;
+    }
+    return false;
+  }
+
+  const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const body = new URLSearchParams({
+    To: to,
+    From: from,
+    Body: `Your Carpool password reset OTP is ${otp}. Expires in ${FORGOT_OTP_EXPIRY_MINUTES} minutes.`,
+  });
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+
+  return response.ok;
 };
 
 const signToken = (user, expiresIn = "7d") => {
@@ -499,66 +531,116 @@ export const forgotPassword = async (req, res, next) => {
   try {
     const { email, phone } = req.body;
 
-    if (!email && !phone) {
-      return res.status(400).json({ message: "email or phone is required" });
+    if (!email || !phone) {
+      return res.status(400).json({ message: "email and phone are required" });
     }
 
-    const normalizedEmail = email ? normalizeEmail(email) : "";
-    const normalizedPhone = phone ? String(phone).trim() : "";
-    const user = await User.findOne(
-      normalizedEmail ? { email: normalizedEmail } : { phone: normalizedPhone }
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = String(phone).trim();
+    const user = await User.findOne({ email: normalizedEmail, phone: normalizedPhone }).select(
+      "+otp +otpExpiry +otpResendAvailableAt +resetSessionToken +resetSessionExpiry +resetToken +resetTokenExpiry"
     );
 
-    const channel = normalizedEmail ? "email" : "phone";
-    const genericMessage =
-      channel === "email"
-        ? "If that email exists, a reset link has been sent"
-        : "If that phone exists, an OTP has been sent";
-
-    // Always return generic response to avoid account enumeration.
     if (!user) {
-      return res.json({ message: genericMessage, channel });
+      return res.status(404).json({ message: "No user found with provided email and phone" });
     }
 
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const rawOtp = String(Math.floor(100000 + Math.random() * 900000));
-    const otpHash = crypto.createHash("sha256").update(rawOtp).digest("hex");
-    const tokenExpiryMinutes = 10;
-    const otpExpiryMinutes = 5;
-
-    user.resetToken = tokenHash;
-    user.resetTokenExpiry = new Date(Date.now() + tokenExpiryMinutes * 60 * 1000);
-    user.otp = otpHash;
-    user.otpExpiry = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
-    await user.save();
-
-    const frontendBase = (process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)[0];
-    const resetUrl = frontendBase
-      ? `${frontendBase.replace(/\/$/, "")}/auth?mode=reset&token=${rawToken}&email=${encodeURIComponent(
-          user.email
-        )}`
-      : "";
-
-    let emailSent = false;
-    if (channel === "email") {
-      emailSent = await sendResetEmail({ to: user.email, resetUrl, token: rawToken });
-    } else {
-      console.log(`Mock SMS OTP for ${user.phone}: ${rawOtp}`);
-    }
-
-    if (process.env.NODE_ENV !== "production") {
-      return res.json({
-        message: genericMessage,
-        channel,
-        ...(channel === "email" ? { resetToken: rawToken, resetUrl, emailSent } : { otp: rawOtp }),
+    const now = new Date();
+    const resendAllowedAt = user.otpResendAvailableAt ? new Date(user.otpResendAvailableAt) : null;
+    if (resendAllowedAt && resendAllowedAt > now) {
+      const retryAfterSeconds = Math.ceil((resendAllowedAt.getTime() - now.getTime()) / 1000);
+      return res.status(429).json({
+        message: `Please wait ${retryAfterSeconds}s before requesting another OTP`,
+        retryAfterSeconds,
       });
     }
 
-    return res.json({ message: genericMessage, channel });
+    const rawOtp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpHash = crypto.createHash("sha256").update(rawOtp).digest("hex");
+
+    user.otp = otpHash;
+    user.otpExpiry = new Date(Date.now() + FORGOT_OTP_EXPIRY_MINUTES * 60 * 1000);
+    user.otpResendAvailableAt = new Date(Date.now() + FORGOT_OTP_RESEND_COOLDOWN_SECONDS * 1000);
+    user.resetSessionToken = undefined;
+    user.resetSessionExpiry = undefined;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    await user.save();
+
+    const [emailSent, smsSent] = await Promise.all([
+      sendOtpEmail({ to: user.email, otp: rawOtp }),
+      sendOtpSms({ to: user.phone, otp: rawOtp }),
+    ]);
+
+    if (!emailSent && !smsSent) {
+      return res.status(503).json({ message: "Could not send OTP right now. Please try again." });
+    }
+
+    const responsePayload = {
+      message: "OTP sent to your email and phone",
+      expiresInSeconds: FORGOT_OTP_EXPIRY_MINUTES * 60,
+      resendInSeconds: FORGOT_OTP_RESEND_COOLDOWN_SECONDS,
+      emailSent,
+      smsSent,
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      return res.json({
+        ...responsePayload,
+        otp: rawOtp,
+      });
+    }
+
+    return res.json(responsePayload);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resendForgotPasswordOtp = async (req, res, next) => {
+  return forgotPassword(req, res, next);
+};
+
+export const verifyResetOtp = async (req, res, next) => {
+  try {
+    const { email, phone, otp } = req.body;
+
+    if (!email || !phone || !otp) {
+      return res.status(400).json({ message: "email, phone and otp are required" });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = String(phone).trim();
+    const otpHash = crypto.createHash("sha256").update(String(otp)).digest("hex");
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      otp: otpHash,
+      otpExpiry: { $gt: new Date() },
+    }).select("+otp +otpExpiry +resetSessionToken +resetSessionExpiry +otpResendAvailableAt +resetToken +resetTokenExpiry");
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    const rawResetSessionToken = crypto.randomBytes(32).toString("hex");
+    const resetSessionTokenHash = crypto.createHash("sha256").update(rawResetSessionToken).digest("hex");
+
+    user.resetSessionToken = resetSessionTokenHash;
+    user.resetSessionExpiry = new Date(Date.now() + FORGOT_OTP_VERIFIED_SESSION_MINUTES * 60 * 1000);
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+    user.otpResendAvailableAt = undefined;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    await user.save();
+
+    return res.json({
+      message: "OTP verified",
+      resetSessionToken: rawResetSessionToken,
+      resetSessionExpiresInSeconds: FORGOT_OTP_VERIFIED_SESSION_MINUTES * 60,
+    });
   } catch (error) {
     return next(error);
   }
@@ -566,57 +648,42 @@ export const forgotPassword = async (req, res, next) => {
 
 export const resetPassword = async (req, res, next) => {
   try {
-    const { email, phone, token, otp, newPassword } = req.body;
+    const { email, phone, resetSessionToken, newPassword } = req.body;
 
-    if ((!token && !otp) || !newPassword) {
-      return res.status(400).json({ message: "token or otp and newPassword are required" });
+    if (!email || !phone || !resetSessionToken || !newPassword) {
+      return res.status(400).json({ message: "email, phone, resetSessionToken and newPassword are required" });
     }
 
     if (String(newPassword).length < 6) {
       return res.status(400).json({ message: "password must be at least 6 characters" });
     }
 
-    let user = null;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = String(phone).trim();
+    const resetSessionTokenHash = crypto
+      .createHash("sha256")
+      .update(String(resetSessionToken))
+      .digest("hex");
 
-    if (token) {
-      const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
-      const normalizedEmail = email ? normalizeEmail(email) : null;
-
-      user = await User.findOne({
-        ...(normalizedEmail ? { email: normalizedEmail } : {}),
-        resetToken: tokenHash,
-        resetTokenExpiry: { $gt: new Date() },
-      });
-    }
-
-    if (!user && otp) {
-      const otpHash = crypto.createHash("sha256").update(String(otp)).digest("hex");
-      const normalizedEmail = email ? normalizeEmail(email) : null;
-      const normalizedPhone = phone ? String(phone).trim() : null;
-
-      const candidates = await User.find({
-        ...(normalizedEmail ? { email: normalizedEmail } : {}),
-        ...(normalizedPhone ? { phone: normalizedPhone } : {}),
-        otp: otpHash,
-        otpExpiry: { $gt: new Date() },
-      }).limit(2);
-
-      if (candidates.length > 1 && !normalizedEmail && !normalizedPhone) {
-        return res.status(400).json({ message: "Provide email or phone with OTP" });
-      }
-
-      user = candidates[0] || null;
-    }
+    const user = await User.findOne({
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      resetSessionToken: resetSessionTokenHash,
+      resetSessionExpiry: { $gt: new Date() },
+    }).select("+password +resetSessionToken +resetSessionExpiry +otp +otpExpiry +otpResendAvailableAt +resetToken +resetTokenExpiry");
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid or expired reset credential" });
+      return res.status(400).json({ message: "Invalid or expired reset session" });
     }
 
     user.password = await bcrypt.hash(String(newPassword), 10);
+    user.resetSessionToken = undefined;
+    user.resetSessionExpiry = undefined;
     user.resetToken = undefined;
     user.resetTokenExpiry = undefined;
     user.otp = undefined;
     user.otpExpiry = undefined;
+    user.otpResendAvailableAt = undefined;
     await user.save();
 
     return res.json({ message: "Password reset successful" });
