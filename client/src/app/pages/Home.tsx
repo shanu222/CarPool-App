@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { MapPin, Calendar, Search, Plus } from 'lucide-react';
+import { MapPin, Calendar, Clock, Search, Plus, Users, Banknote } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -25,9 +25,13 @@ export function Home() {
   const [to, setTo] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [seats, setSeats] = useState('1');
+  const [price, setPrice] = useState('100');
   const [liveRides, setLiveRides] = useState<Ride[]>([]);
   const [scheduledRides, setScheduledRides] = useState<Ride[]>([]);
   const [ridesError, setRidesError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   const isDriver = user?.role === 'driver';
@@ -35,14 +39,82 @@ export function Home() {
   const [driverTab, setDriverTab] = useState<DriverHomeTab>('live');
   const [passengerTab, setPassengerTab] = useState<PassengerHomeTab>('search');
 
+  const isRequestTabSelected = isPassenger && passengerTab === 'request';
+  const isSearchTabSelected = isDriver ? driverTab === 'search' : isPassenger && passengerTab === 'search';
   const isLiveTabSelected = isDriver ? driverTab === 'live' : passengerTab === 'live';
   const isScheduledTabSelected = isDriver ? driverTab === 'scheduled' : passengerTab === 'scheduled';
-  const isSearchOrRequestTabSelected = isDriver
-    ? driverTab === 'search'
-    : passengerTab === 'search' || passengerTab === 'request';
+  const isSearchOrRequestTabSelected = isSearchTabSelected || isRequestTabSelected;
 
   const handleSearch = () => {
     navigate('/search?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + '&date=' + date + '&time=' + time);
+  };
+
+  const submitRideRequest = async () => {
+    if (user?.role !== 'passenger') {
+      setSubmitError('Passengers only');
+      return;
+    }
+
+    if (!from || !to || !date || !time || !seats || !price) {
+      setSubmitError('All fields are required');
+      return;
+    }
+
+    try {
+      setIsSubmittingRequest(true);
+      setSubmitError('');
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
+      });
+
+      const dateTime = new Date(`${date}T${time}:00`).toISOString();
+
+      await api.post('/api/requests/create', {
+        fromCity: from,
+        toCity: to,
+        fromCoordinates: {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        },
+        toCoordinates: {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        },
+        dateTime,
+        seatsNeeded: Number(seats),
+        preferredPrice: Number(price),
+      });
+
+      toast.success('Ride request posted');
+      setFrom('');
+      setTo('');
+      setDate('');
+      setTime('');
+      setSeats('1');
+      setPrice('100');
+      navigate('/trips');
+    } catch (requestError: any) {
+      const message = requestError?.response?.data?.message || 'Could not post request';
+      setSubmitError(message);
+      if (message === 'Only Pakistani cities allowed') {
+        toast.error('Please enter a valid Pakistani city');
+      }
+      if (message === 'Enable location access to post a nearby request') {
+        toast.error(message);
+      }
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
+
+  const handlePrimaryAction = () => {
+    if (isRequestTabSelected) {
+      submitRideRequest();
+      return;
+    }
+
+    handleSearch();
   };
 
   useEffect(() => {
@@ -159,7 +231,7 @@ export function Home() {
             <div>
                 <label className="block text-sm mb-2 text-gray-700">Time</label>
               <div className="relative">
-                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="time"
                   value={time}
@@ -169,13 +241,52 @@ export function Home() {
               </div>
             </div>
 
+            {isRequestTabSelected ? (
+              <>
+                <div>
+                  <label className="block text-sm mb-2 text-gray-700">Seats Needed</label>
+                  <div className="relative">
+                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={seats}
+                      onChange={(e) => setSeats(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="1">1 seat</option>
+                      <option value="2">2 seats</option>
+                      <option value="3">3 seats</option>
+                      <option value="4">4 seats</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-2 text-gray-700">Price</label>
+                  <div className="relative">
+                    <Banknote className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Price per seat"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+
             <button
-              onClick={() => (isPassenger && passengerTab === 'request' ? navigate('/post-request') : handleSearch())}
-              disabled={!from || !to || !date || !time}
+              onClick={handlePrimaryAction}
+              disabled={!from || !to || !date || !time || isSubmittingRequest || (isRequestTabSelected && (!seats || !price))}
               className="responsive-action w-full rounded-2xl bg-blue-600 py-3 md:py-4 text-white shadow-lg shadow-blue-600/30 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Search className="mr-2 inline-block h-5 w-5" />
-              {isPassenger && passengerTab === 'request' ? 'Create Ride Request' : 'Search Rides'}
+              {isRequestTabSelected ? (isSubmittingRequest ? 'Posting...' : 'Create Ride Request') : 'Search Rides'}
             </button>
           </motion.div>
         ) : null}

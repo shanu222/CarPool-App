@@ -17,7 +17,6 @@ import { AdminDashboard } from "./pages/AdminDashboard";
 import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 import { RideRequests } from "./pages/RideRequests";
 import { RideRequestDetails } from "./pages/RideRequestDetails";
-import { PostRequest } from "./pages/PostRequest";
 import { Notifications } from "./pages/Notifications";
 import { PaymentMethods } from "./pages/PaymentMethods";
 import { Privacy } from "./pages/Privacy";
@@ -80,10 +79,6 @@ export const router = createBrowserRouter(
                 {
                   path: "/post-ride",
                   element: <PostRide />,
-                },
-                {
-                  path: "/post-request",
-                  element: <PostRequest />,
                 },
                 {
                   path: "/ride-requests",
