@@ -9,7 +9,7 @@ import { PasswordInput } from '../components/PasswordInput';
 import type { AuthResponse } from '../types';
 
 type AuthMode = 'login' | 'signup' | 'forgot';
-type ForgotStep = 'request' | 'verify' | 'reset';
+type ForgotStep = 'request' | 'selectRole' | 'verify' | 'reset';
 
 export function Auth() {
   const [mode, setMode] = useState<AuthMode>('login');
@@ -26,6 +26,8 @@ export function Auth() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [forgotRole, setForgotRole] = useState<'driver' | 'passenger' | ''>('');
+  const [availableRoles, setAvailableRoles] = useState<Array<'driver' | 'passenger'>>([]);
 
   const [role, setRole] = useState<'passenger' | 'driver'>('passenger');
   const [loading, setLoading] = useState(false);
@@ -61,6 +63,8 @@ export function Auth() {
     setNewPassword('');
     setConfirmPassword('');
     setResendCountdown(0);
+    setForgotRole('');
+    setAvailableRoles([]);
   };
 
   const switchToForgot = () => {
@@ -77,8 +81,13 @@ export function Auth() {
   };
 
   const handleResendOtp = async () => {
-    if (!email.trim() || !phone.trim()) {
-      setError('Email and phone are required');
+    if (!email.trim() && !phone.trim()) {
+      setError('Email or phone is required');
+      return;
+    }
+
+    if (!forgotRole) {
+      setError('Select account role first');
       return;
     }
 
@@ -87,8 +96,9 @@ export function Auth() {
       setError('');
 
       const response = await api.post('/api/auth/forgot-password/resend-otp', {
-        email: email.trim(),
-        phone: phone.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        role: forgotRole,
       });
 
       setResendCountdown(Number(response?.data?.resendInSeconds || 60));
@@ -100,6 +110,34 @@ export function Auth() {
         setResendCountdown(retryAfterSeconds);
       }
       setError(apiMessage || 'Could not resend OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendForgotOtpForRole = async (selectedRole: 'driver' | 'passenger') => {
+    if (!email.trim() && !phone.trim()) {
+      setError('Email or phone is required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await api.post('/api/auth/forgot-password', {
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        role: selectedRole,
+      });
+
+      setForgotRole(selectedRole);
+      setForgotStep('verify');
+      setResendCountdown(Number(response?.data?.resendInSeconds || 60));
+      setError('OTP sent. Enter the 6-digit OTP to continue.');
+    } catch (requestError: any) {
+      const apiMessage = requestError?.response?.data?.message;
+      setError(apiMessage || 'Could not send OTP');
     } finally {
       setLoading(false);
     }
@@ -127,20 +165,39 @@ export function Auth() {
       }
 
       if (mode === 'forgot') {
-        if (!email.trim() || !phone.trim()) {
-          setError('Email and phone are required');
+        if (!email.trim() && !phone.trim()) {
+          setError('Email or phone is required');
           return;
         }
 
         if (forgotStep === 'request') {
           const response = await api.post('/api/auth/forgot-password', {
-            email: email.trim(),
-            phone: phone.trim(),
+            email: email.trim() || undefined,
+            phone: phone.trim() || undefined,
           });
 
+          if (response?.data?.requiresRoleSelection) {
+            const roles = Array.isArray(response?.data?.roles)
+              ? response.data.roles.filter((item: string) => item === 'driver' || item === 'passenger')
+              : [];
+            setAvailableRoles(roles);
+            setForgotStep('selectRole');
+            setError('Multiple accounts found. Select your role to continue.');
+            return;
+          }
+
+          const resolvedRole = response?.data?.role === 'driver' || response?.data?.role === 'passenger'
+            ? response.data.role
+            : '';
+          setForgotRole(resolvedRole);
           setForgotStep('verify');
           setResendCountdown(Number(response?.data?.resendInSeconds || 60));
           setError('OTP sent. Enter the 6-digit OTP to continue.');
+          return;
+        }
+
+        if (forgotStep === 'selectRole') {
+          setError('Select your role below to continue.');
           return;
         }
 
@@ -150,9 +207,15 @@ export function Auth() {
             return;
           }
 
+          if (!forgotRole) {
+            setError('Select account role first');
+            return;
+          }
+
           const response = await api.post('/api/auth/forgot-password/verify-otp', {
-            email: email.trim(),
-            phone: phone.trim(),
+            email: email.trim() || undefined,
+            phone: phone.trim() || undefined,
+            role: forgotRole,
             otp: otpCode.trim(),
           });
 
@@ -173,8 +236,9 @@ export function Auth() {
         }
 
         await api.post('/api/auth/reset-password', {
-          email: email.trim(),
-          phone: phone.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          role: forgotRole,
           resetSessionToken,
           newPassword,
         });
@@ -218,10 +282,12 @@ export function Auth() {
       : mode === 'login'
       ? Boolean(loginIdentifier && password)
       : forgotStep === 'request'
-      ? Boolean(email && phone)
+      ? Boolean(email || phone)
+      : forgotStep === 'selectRole'
+      ? false
       : forgotStep === 'verify'
-      ? Boolean(email && phone && otpCode)
-      : Boolean(email && phone && newPassword && confirmPassword && resetSessionToken);
+      ? Boolean((email || phone) && otpCode && forgotRole)
+      : Boolean((email || phone) && newPassword && confirmPassword && resetSessionToken && forgotRole);
 
   const submitLabel =
     mode === 'signup'
@@ -303,9 +369,9 @@ export function Auth() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={mode === 'forgot' ? 'Email' : 'Email'}
+                    placeholder={mode === 'forgot' ? 'Email (optional if phone provided)' : 'Email'}
                     className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required={mode === 'signup' || mode === 'forgot'}
+                    required={mode === 'signup'}
                   />
                 </div>
 
@@ -315,13 +381,38 @@ export function Auth() {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder={mode === 'forgot' ? 'Phone number' : 'Phone (optional)'}
+                    placeholder={mode === 'forgot' ? 'Phone (optional if email provided)' : 'Phone (optional)'}
                     className="w-full pl-12 pr-4 py-3 md:py-4 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required={mode === 'forgot'}
+                    required={false}
                   />
                 </div>
               </>
             )}
+
+            {mode === 'forgot' && forgotStep === 'selectRole' ? (
+              <div className="grid grid-cols-1 gap-2">
+                {availableRoles.includes('driver') ? (
+                  <button
+                    type="button"
+                    onClick={() => sendForgotOtpForRole('driver')}
+                    disabled={loading}
+                    className="tab-pill py-3 rounded-xl active"
+                  >
+                    Continue as Driver
+                  </button>
+                ) : null}
+                {availableRoles.includes('passenger') ? (
+                  <button
+                    type="button"
+                    onClick={() => sendForgotOtpForRole('passenger')}
+                    disabled={loading}
+                    className="tab-pill py-3 rounded-xl active"
+                  >
+                    Continue as Passenger
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
 
             {mode === 'forgot' && forgotStep === 'verify' ? (
               <input
@@ -405,16 +496,18 @@ export function Auth() {
               </button>
             ) : null}
 
-            <Button
-              type="submit"
-              variant="primary"
-              loading={loading}
-              loadingText="Processing..."
-              disabled={!canSubmit}
-              className="responsive-action"
-            >
-              {submitLabel}
-            </Button>
+            {!(mode === 'forgot' && forgotStep === 'selectRole') ? (
+              <Button
+                type="submit"
+                variant="primary"
+                loading={loading}
+                loadingText="Processing..."
+                disabled={!canSubmit}
+                className="responsive-action"
+              >
+                {submitLabel}
+              </Button>
+            ) : null}
           </motion.form>
         </div>
       </div>

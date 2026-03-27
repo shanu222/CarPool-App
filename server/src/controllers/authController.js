@@ -529,20 +529,49 @@ export const adminLogin = async (req, res, next) => {
 
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { email, phone } = req.body;
+    const { email, phone, role } = req.body;
 
-    if (!email || !phone) {
-      return res.status(400).json({ message: "email and phone are required" });
+    const normalizedEmail = email ? normalizeEmail(email) : "";
+    const normalizedPhone = phone ? String(phone).trim() : "";
+    const requestedRole = String(role || "").trim();
+
+    if (!normalizedEmail && !normalizedPhone) {
+      return res.status(400).json({ message: "email or phone is required" });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const normalizedPhone = String(phone).trim();
-    const user = await User.findOne({ email: normalizedEmail, phone: normalizedPhone }).select(
-      "+otp +otpExpiry +otpResendAvailableAt +resetSessionToken +resetSessionExpiry +resetToken +resetTokenExpiry"
-    );
+    if (requestedRole && !["driver", "passenger"].includes(requestedRole)) {
+      return res.status(400).json({ message: "role must be driver or passenger" });
+    }
+
+    const identifierConditions = [
+      ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+      ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
+    ];
+
+    const matches = await User.find({
+      role: { $in: ["driver", "passenger"] },
+      $or: identifierConditions,
+    }).select("+otp +otpExpiry +otpResendAvailableAt +resetSessionToken +resetSessionExpiry +resetToken +resetTokenExpiry");
+
+    if (!matches.length) {
+      return res.status(404).json({ message: "No account found for provided email or phone" });
+    }
+
+    if (!requestedRole && matches.length > 1) {
+      const roles = [...new Set(matches.map((item) => String(item.role || "")).filter((item) => ["driver", "passenger"].includes(item)))];
+      return res.json({
+        message: "Multiple accounts found. Select a role to continue.",
+        requiresRoleSelection: true,
+        roles,
+      });
+    }
+
+    const user = requestedRole
+      ? matches.find((item) => String(item.role) === requestedRole)
+      : matches[0];
 
     if (!user) {
-      return res.status(404).json({ message: "No user found with provided email and phone" });
+      return res.status(404).json({ message: "No account found for selected role" });
     }
 
     const now = new Date();
@@ -578,6 +607,8 @@ export const forgotPassword = async (req, res, next) => {
 
     const responsePayload = {
       message: "OTP sent to your email and phone",
+      role: user.role,
+      requiresRoleSelection: false,
       expiresInSeconds: FORGOT_OTP_EXPIRY_MINUTES * 60,
       resendInSeconds: FORGOT_OTP_RESEND_COOLDOWN_SECONDS,
       emailSent,
@@ -603,19 +634,30 @@ export const resendForgotPasswordOtp = async (req, res, next) => {
 
 export const verifyResetOtp = async (req, res, next) => {
   try {
-    const { email, phone, otp } = req.body;
+    const { email, phone, role, otp } = req.body;
 
-    if (!email || !phone || !otp) {
-      return res.status(400).json({ message: "email, phone and otp are required" });
+    if ((!email && !phone) || !role || !otp) {
+      return res.status(400).json({ message: "email or phone, role and otp are required" });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const normalizedPhone = String(phone).trim();
+    const normalizedEmail = email ? normalizeEmail(email) : "";
+    const normalizedPhone = phone ? String(phone).trim() : "";
+    const requestedRole = String(role || "").trim();
+
+    if (!["driver", "passenger"].includes(requestedRole)) {
+      return res.status(400).json({ message: "role must be driver or passenger" });
+    }
+
     const otpHash = crypto.createHash("sha256").update(String(otp)).digest("hex");
 
+    const identifierConditions = [
+      ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+      ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
+    ];
+
     const user = await User.findOne({
-      email: normalizedEmail,
-      phone: normalizedPhone,
+      role: requestedRole,
+      $or: identifierConditions,
       otp: otpHash,
       otpExpiry: { $gt: new Date() },
     }).select("+otp +otpExpiry +resetSessionToken +resetSessionExpiry +otpResendAvailableAt +resetToken +resetTokenExpiry");
@@ -638,6 +680,7 @@ export const verifyResetOtp = async (req, res, next) => {
 
     return res.json({
       message: "OTP verified",
+      role: user.role,
       resetSessionToken: rawResetSessionToken,
       resetSessionExpiresInSeconds: FORGOT_OTP_VERIFIED_SESSION_MINUTES * 60,
     });
@@ -648,26 +691,37 @@ export const verifyResetOtp = async (req, res, next) => {
 
 export const resetPassword = async (req, res, next) => {
   try {
-    const { email, phone, resetSessionToken, newPassword } = req.body;
+    const { email, phone, role, resetSessionToken, newPassword } = req.body;
 
-    if (!email || !phone || !resetSessionToken || !newPassword) {
-      return res.status(400).json({ message: "email, phone, resetSessionToken and newPassword are required" });
+    if ((!email && !phone) || !role || !resetSessionToken || !newPassword) {
+      return res.status(400).json({ message: "email or phone, role, resetSessionToken and newPassword are required" });
     }
 
     if (String(newPassword).length < 6) {
       return res.status(400).json({ message: "password must be at least 6 characters" });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const normalizedPhone = String(phone).trim();
+    const normalizedEmail = email ? normalizeEmail(email) : "";
+    const normalizedPhone = phone ? String(phone).trim() : "";
+    const requestedRole = String(role || "").trim();
+
+    if (!["driver", "passenger"].includes(requestedRole)) {
+      return res.status(400).json({ message: "role must be driver or passenger" });
+    }
+
+    const identifierConditions = [
+      ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+      ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
+    ];
+
     const resetSessionTokenHash = crypto
       .createHash("sha256")
       .update(String(resetSessionToken))
       .digest("hex");
 
     const user = await User.findOne({
-      email: normalizedEmail,
-      phone: normalizedPhone,
+      role: requestedRole,
+      $or: identifierConditions,
       resetSessionToken: resetSessionTokenHash,
       resetSessionExpiry: { $gt: new Date() },
     }).select("+password +resetSessionToken +resetSessionExpiry +otp +otpExpiry +otpResendAvailableAt +resetToken +resetTokenExpiry");
