@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router";
 import { Onboarding } from "./pages/Onboarding";
 import { Auth } from "./pages/Auth";
+import { IdentityAuth } from "./pages/IdentityAuth";
 import { Home } from "./pages/Home";
 import { SearchResults } from "./pages/SearchResults";
 import { RideDetails } from "./pages/RideDetails";
@@ -53,6 +54,10 @@ export const router = createBrowserRouter(
         {
           path: "/auth",
           element: <Auth />,
+        },
+        {
+          path: "/identity-auth",
+          element: <IdentityAuth />,
         },
         {
           element: <ProtectedRoute />,
