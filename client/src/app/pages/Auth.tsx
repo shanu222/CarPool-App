@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import backgroundImage from '../../assets/carpool-bg.png';
 
@@ -86,6 +86,11 @@ export function Auth() {
   const [loginMobile, setLoginMobile] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
+  const [signupAttempted, setSignupAttempted] = useState(false);
 
   const [signup, setSignup] = useState<SignupForm>(emptySignup);
   const [recover, setRecover] = useState<RecoverForm>(emptyRecover);
@@ -137,6 +142,11 @@ export function Auth() {
 
     return {
       ...baseValidation,
+      passwordLength: signupPassword.length >= 8,
+      passwordUpper: /[A-Z]/.test(signupPassword),
+      passwordNumber: /\d/.test(signupPassword),
+      passwordSpecial: /[^A-Za-z0-9]/.test(signupPassword),
+      passwordMatch: signupPassword.length > 0 && signupPassword === signupConfirmPassword,
       ready:
         signupRole === 'driver'
           ? Object.values(baseValidation).every(Boolean)
@@ -146,11 +156,27 @@ export function Auth() {
             baseValidation.mobile &&
             baseValidation.profile &&
             baseValidation.front &&
-            baseValidation.back,
+            baseValidation.back &&
+            signupPassword.length >= 8 &&
+            /[A-Z]/.test(signupPassword) &&
+            /\d/.test(signupPassword) &&
+            /[^A-Za-z0-9]/.test(signupPassword) &&
+            signupPassword === signupConfirmPassword,
     };
-  }, [signup, signupRole]);
+  }, [signup, signupRole, signupPassword, signupConfirmPassword]);
 
   const isSignupReady = signupValid.ready;
+
+  const passwordStrength = useMemo(() => {
+    const checks = [signupValid.passwordLength, signupValid.passwordUpper, signupValid.passwordNumber, signupValid.passwordSpecial].filter(Boolean).length;
+    if (checks <= 1) {
+      return { label: 'Weak', color: '#E74C3C', width: '33%' };
+    }
+    if (checks <= 3) {
+      return { label: 'Medium', color: '#F1C40F', width: '66%' };
+    }
+    return { label: 'Strong', color: '#2ECC71', width: '100%' };
+  }, [signupValid.passwordLength, signupValid.passwordNumber, signupValid.passwordSpecial, signupValid.passwordUpper]);
 
   const forgotValid = useMemo(() => {
     const mobileDigits = recover.mobile.replace(/\D/g, '');
@@ -166,6 +192,18 @@ export function Auth() {
   };
 
   const startAutoVerification = () => {
+    setSignupAttempted(true);
+
+    if (!signupValid.passwordLength || !signupValid.passwordUpper || !signupValid.passwordNumber || !signupValid.passwordSpecial) {
+      resetError('Password too weak');
+      return;
+    }
+
+    if (!signupValid.passwordMatch) {
+      resetError('Passwords do not match');
+      return;
+    }
+
     if (!isSignupReady) {
       resetError('Information does not match');
       return;
@@ -177,6 +215,7 @@ export function Auth() {
       cnic: signup.cnic,
       dob: signup.dob,
       mobile: `${signup.countryCode}${signup.mobile}`,
+      password: signupPassword,
       licenseNumber: signupRole === 'driver' ? signup.licenseNumber : undefined,
     };
 
@@ -348,6 +387,19 @@ export function Auth() {
 
           {screen === 'signup' ? (
             <>
+              <button
+                type="button"
+                className="mb-2 inline-flex items-center gap-1 rounded-xl px-2 py-1 text-sm"
+                style={{ color: colors.navy, backgroundColor: 'rgba(255,255,255,0.6)' }}
+                onClick={() => {
+                  setScreen('login');
+                  resetError('');
+                }}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Login
+              </button>
+
               <div className="grid grid-cols-2 gap-2 rounded-2xl p-1" style={{ backgroundColor: 'rgba(230,237,246,0.85)' }}>
                 <RoleTab
                   active={signupRole === 'passenger'}
@@ -392,6 +444,7 @@ export function Auth() {
                         icon={<IdCard className="h-4 w-4" />}
                         placeholder="12345-1234567-1"
                         value={signup.cnic}
+                        invalid={signupAttempted && !signupValid.cnic}
                         onChange={(value) => setSignup((prev) => ({ ...prev, cnic: formatCnic(value) }))}
                       />
                     </FloatingField>
@@ -412,9 +465,42 @@ export function Auth() {
                           icon={<Phone className="h-4 w-4" />}
                           placeholder="3001234567"
                           value={signup.mobile}
+                          invalid={signupAttempted && !signupValid.mobile}
                           onChange={(value) => setSignup((prev) => ({ ...prev, mobile: value.replace(/\D/g, '').slice(0, 11) }))}
                         />
                       </div>
+                    </FloatingField>
+
+                    <FloatingField label="Password">
+                      <PasswordField
+                        placeholder="Create strong password"
+                        value={signupPassword}
+                        onChange={setSignupPassword}
+                        show={showSignupPassword}
+                        invalid={signupAttempted && (!signupValid.passwordLength || !signupValid.passwordUpper || !signupValid.passwordNumber || !signupValid.passwordSpecial)}
+                        onToggleShow={() => setShowSignupPassword((prev) => !prev)}
+                      />
+                    </FloatingField>
+
+                    <div className="rounded-xl border px-3 py-2" style={{ borderColor: '#C8D8E8', backgroundColor: 'rgba(255,255,255,0.75)' }}>
+                      <div className="flex items-center justify-between text-xs" style={{ color: '#4C6378' }}>
+                        <span>Password strength</span>
+                        <span style={{ color: passwordStrength.color, fontWeight: 700 }}>{passwordStrength.label}</span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ backgroundColor: '#DCE8F4' }}>
+                        <div className="h-full rounded-full transition-all duration-300" style={{ width: passwordStrength.width, backgroundColor: passwordStrength.color }} />
+                      </div>
+                    </div>
+
+                    <FloatingField label="Confirm Password">
+                      <PasswordField
+                        placeholder="Re-enter password"
+                        value={signupConfirmPassword}
+                        onChange={setSignupConfirmPassword}
+                        show={showSignupConfirmPassword}
+                        invalid={signupAttempted && !signupValid.passwordMatch}
+                        onToggleShow={() => setShowSignupConfirmPassword((prev) => !prev)}
+                      />
                     </FloatingField>
 
                     <UploadRow
@@ -454,7 +540,7 @@ export function Auth() {
                 </div>
 
                 <StickyActionButton
-                  text="Create & Verify Account"
+                  text="Create Account & Verify Identity"
                   loading={isLoading}
                   loadingText="Verifying identity..."
                   disabled={!isSignupReady}
@@ -698,19 +784,21 @@ function IconInput({
   placeholder,
   icon,
   type = 'text',
+  invalid = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   icon: React.ReactNode;
   type?: string;
+  invalid?: boolean;
 }) {
   return (
     <div
       className="flex w-full items-center gap-2 rounded-2xl border px-3"
       style={{
         backgroundColor: 'rgba(255,255,255,0.82)',
-        borderColor: '#C8D8E8',
+        borderColor: invalid ? '#E74C3C' : '#C8D8E8',
         boxShadow: '0 8px 18px rgba(11,60,93,0.08)',
       }}
     >
@@ -753,19 +841,21 @@ function PasswordField({
   placeholder,
   show,
   onToggleShow,
+  invalid = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   show: boolean;
   onToggleShow: () => void;
+  invalid?: boolean;
 }) {
   return (
     <div
       className="flex w-full items-center gap-2 rounded-2xl border px-3"
       style={{
         backgroundColor: 'rgba(255,255,255,0.82)',
-        borderColor: '#C8D8E8',
+        borderColor: invalid ? '#E74C3C' : '#C8D8E8',
         boxShadow: '0 8px 18px rgba(11,60,93,0.08)',
       }}
     >
