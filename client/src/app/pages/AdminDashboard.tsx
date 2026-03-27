@@ -181,13 +181,13 @@ export function AdminDashboard() {
 
   return (
     <div
-      className="min-h-screen p-4 md:p-6"
+      className="min-h-screen overflow-x-hidden p-3 sm:p-4 md:p-6"
       style={{
         background: "linear-gradient(140deg, #08142e 0%, #123760 54%, #14507d 100%)",
       }}
     >
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-[260px_1fr]">
-        <aside className="rounded-3xl border border-white/20 bg-white/10 p-4 backdrop-blur-xl">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-3xl border border-white/20 bg-white/10 p-4 backdrop-blur-xl lg:sticky lg:top-6">
           <div className="mb-6">
             <h1 className="text-xl font-semibold text-white">Moderation Center</h1>
             <p className="text-xs text-slate-200">Admin moderation and safety controls</p>
@@ -224,7 +224,7 @@ export function AdminDashboard() {
           </button>
         </aside>
 
-        <main className="rounded-3xl border border-white/20 bg-white/10 p-4 backdrop-blur-xl md:p-6">
+        <main className="min-w-0 rounded-3xl border border-white/20 bg-white/10 p-3 backdrop-blur-xl sm:p-4 md:p-6">
           {error ? <p className="mb-3 rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-100">{error}</p> : null}
           {loading ? <p className="text-sm text-slate-100">Loading moderation dashboard...</p> : null}
 
@@ -232,7 +232,7 @@ export function AdminDashboard() {
             <section>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Active Users</h2>
+                  <h2 className="text-lg font-semibold text-white sm:text-xl">Active Users</h2>
                   <p className="text-sm text-slate-200">Filter and moderate active users quickly</p>
                 </div>
 
@@ -302,7 +302,7 @@ export function AdminDashboard() {
 
           {!loading && section === "banned" ? (
             <section>
-              <h2 className="text-xl font-semibold text-white">Banned Users</h2>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">Banned Users</h2>
               <p className="mb-3 text-sm text-slate-200">Unban or permanently remove banned accounts</p>
 
               <TableWrap>
@@ -359,7 +359,7 @@ export function AdminDashboard() {
 
           {!loading && section === "deleted" ? (
             <section>
-              <h2 className="text-xl font-semibold text-white">Deleted Users</h2>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">Deleted Users</h2>
               <p className="mb-3 text-sm text-slate-200">Archived list of permanently deleted users</p>
 
               <TableWrap>
@@ -395,7 +395,7 @@ export function AdminDashboard() {
 
           {!loading && section === "reports" ? (
             <section>
-              <h2 className="text-xl font-semibold text-white">Reports Panel</h2>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">Reports Panel</h2>
               <p className="mb-3 text-sm text-slate-200">Review comments and apply moderation actions</p>
 
               <TableWrap>
@@ -519,7 +519,7 @@ export function AdminDashboard() {
 }
 
 function TableWrap({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto rounded-2xl border border-white/20 bg-white/5">{children}</div>;
+  return <div className="w-full overflow-x-auto rounded-2xl border border-white/20 bg-white/5">{children}</div>;
 }
 
 function StatusBadge({ tone, label }: { tone: "active" | "banned" | "deleted"; label: string }) {
@@ -555,7 +555,7 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${cls}`}
+      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:w-auto ${cls}`}
     >
       {icon}
       {label}
