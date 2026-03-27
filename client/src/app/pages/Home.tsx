@@ -118,16 +118,13 @@ export function Home() {
   };
 
   useEffect(() => {
-    const fetchNearby = async (lat: number, lng: number) => {
+    const fetchHomeRides = async () => {
       try {
-        await api.post('/api/user/location', { lat, lng });
-        const response = await api.get<NearbyRideResponse>('/api/rides/nearby', {
-          params: { lat, lng },
-        });
+        const response = await api.get<NearbyRideResponse>('/api/rides/nearby');
         setLiveRides(response.data.liveRides || []);
         setScheduledRides(response.data.scheduledRides || []);
       } catch (error: any) {
-        const message = error?.response?.data?.message || 'Could not load nearby rides';
+        const message = error?.response?.data?.message || 'Could not load rides';
         setRidesError(message);
         if (message === 'Only Pakistani cities allowed') {
           toast.error('Please enter a valid Pakistani city');
@@ -135,20 +132,26 @@ export function Home() {
       }
     };
 
-    if (!navigator.geolocation) {
-      setRidesError('Geolocation is not supported in this browser');
-      return;
-    }
+    fetchHomeRides();
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        fetchNearby(position.coords.latitude, position.coords.longitude);
-      },
-      () => {
-        setRidesError('Allow location access to discover rides');
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            await api.post('/api/user/location', {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+          } catch {
+            // Location sync is best-effort only; home rides list should still load.
+          }
+        },
+        () => {
+          // Ignore geolocation denial for the home feed.
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
   }, []);
 
   return (
@@ -297,7 +300,7 @@ export function Home() {
             <h2 className="mb-2 text-sm md:text-base text-emerald-200">Live Rides</h2>
             {liveRides.length > 0 ? (
               <div className="space-y-3">
-                {liveRides.slice(0, 3).map((ride) => (
+                {liveRides.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>
@@ -312,7 +315,7 @@ export function Home() {
             <h2 className="mb-2 text-sm md:text-base text-sky-200">Scheduled Rides</h2>
             {scheduledRides.length > 0 ? (
               <div className="space-y-3">
-                {scheduledRides.slice(0, 3).map((ride) => (
+                {scheduledRides.map((ride) => (
                   <RideCard key={ride._id} ride={ride} />
                 ))}
               </div>

@@ -29,17 +29,8 @@ export function SearchResults() {
         setLoading(true);
         setError('');
 
-        const location = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-          });
-        });
-
         const response = await api.get<RideSearchResponse>('/api/rides/search', {
           params: {
-            userLat: location.coords.latitude,
-            userLng: location.coords.longitude,
             fromCity: from,
             toCity: to,
             date,
