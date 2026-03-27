@@ -12,6 +12,7 @@ export interface User {
   suspensionReason?: string;
   rating: number;
   ratingCount?: number;
+  tokenBalance?: number;
   isVerified?: boolean;
   isFeatured?: boolean;
   verificationStatus?: "none" | "pending" | "approved" | "rejected";
@@ -32,6 +33,8 @@ export interface User {
   canChat?: boolean;
   paymentApproved?: boolean;
   blockedUsers?: string[];
+  bannedAt?: string;
+  updatedAt?: string;
   notificationSettings?: {
     messages: boolean;
     rides: boolean;
@@ -223,6 +226,27 @@ export interface PaymentSettings {
   jazzcashNumber: string;
   bankAccount: string;
   accountTitle: string;
+}
+
+export interface UserReportItem {
+  _id: string;
+  reporterId?: Pick<User, "id" | "_id" | "name" | "role">;
+  targetUserId?: Pick<User, "id" | "_id" | "name" | "role" | "status" | "accountStatus">;
+  rideId?: Pick<Ride, "_id" | "fromCity" | "toCity" | "date" | "time">;
+  reason: string;
+  status: "open" | "reviewed";
+  createdAt: string;
+}
+
+export interface DeletedUserArchiveItem {
+  _id: string;
+  originalUserId: string;
+  name: string;
+  cnic?: string;
+  role: "admin" | "passenger" | "driver";
+  banReason?: string;
+  deletedBy?: Pick<User, "id" | "_id" | "name" | "role">;
+  createdAt: string;
 }
 
 export interface AdminAnalytics {

@@ -1,14 +1,20 @@
 import { Router } from "express";
 import {
   approvePaymentByAdmin,
+  deleteUserByAdmin,
   deleteRideByAdmin,
   featureRideByAdmin,
   getAdminAnalytics,
+  getAdminBookings,
   getAdminChangeRequests,
   getAdminPayments,
+  getAdminReports,
   getAdminRides,
   getAdminUsers,
+  getDeletedUsersByAdmin,
   reviewAdminChangeRequest,
+  reviewUserReportByAdmin,
+  unbanUserByAdmin,
   getPaymentSettingsAdmin,
   updatePaymentSettingsAdmin,
   updateUserStatusByAdmin,
@@ -21,11 +27,14 @@ const router = Router();
 router.use(protect, requireAdmin);
 
 router.get("/users", getAdminUsers);
+router.delete("/users/:userId", deleteUserByAdmin);
+router.post("/users/:userId/unban", unbanUserByAdmin);
 router.post("/verify-user", verifyUserByAdmin);
 router.post("/verify", verifyUserByAdmin);
 router.post("/user-status", updateUserStatusByAdmin);
 
 router.get("/rides", getAdminRides);
+router.get("/bookings", getAdminBookings);
 router.delete("/rides/:rideId", deleteRideByAdmin);
 router.post("/feature-ride", featureRideByAdmin);
 
@@ -37,7 +46,10 @@ router.get("/payment-settings", getPaymentSettingsAdmin);
 router.post("/payment-settings", updatePaymentSettingsAdmin);
 
 router.get("/analytics", getAdminAnalytics);
+router.get("/deleted-users", getDeletedUsersByAdmin);
 router.get("/change-requests", getAdminChangeRequests);
 router.post("/change-requests/:id/review", reviewAdminChangeRequest);
+router.get("/reports", getAdminReports);
+router.post("/reports/:reportId/action", reviewUserReportByAdmin);
 
 export default router;

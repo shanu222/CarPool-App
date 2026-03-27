@@ -4,7 +4,34 @@ import { Booking } from "../models/Booking.js";
 import { Payment } from "../models/Payment.js";
 import { PaymentSettings } from "../models/PaymentSettings.js";
 import { ChangeRequest } from "../models/ChangeRequest.js";
+import { UserReport } from "../models/UserReport.js";
+import { DeletedUserArchive } from "../models/DeletedUserArchive.js";
 import { createUserNotification } from "../services/notificationService.js";
+
+const archiveAndDeleteUser = async ({ user, adminUserId }) => {
+  if (!user) {
+    return;
+  }
+
+  await DeletedUserArchive.create({
+    originalUserId: user._id,
+    name: user.name,
+    cnic: user.cnicNumber || user.cnic || "",
+    role: user.role,
+    banReason: user.suspensionReason || "",
+    deletedBy: adminUserId,
+    snapshot: user.toObject ? user.toObject() : user,
+  });
+
+  await Promise.all([
+    Ride.deleteMany({ driver: user._id }),
+    Booking.deleteMany({ $or: [{ user: user._id }, { passengerId: user._id }] }),
+    Payment.deleteMany({ userId: user._id }),
+    ChangeRequest.deleteMany({ userId: user._id }),
+    UserReport.deleteMany({ $or: [{ reporterId: user._id }, { targetUserId: user._id }] }),
+    User.findByIdAndDelete(user._id),
+  ]);
+};
 
 const getOrCreatePaymentSettings = async () => {
   let settings = await PaymentSettings.findOne().sort({ updatedAt: -1 });
@@ -27,7 +54,7 @@ export const getAdminUsers = async (req, res, next) => {
 
     const users = await User.find(query)
       .select(
-        "name email phone role status rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason isBlocked canPostRide canBookRide canChat paymentApproved createdAt"
+        "name email phone role status rating isVerified verificationStatus cnicNumber cnic profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason bannedAt isBlocked tokenBalance freeRideCredits freeChatCredits canPostRide canBookRide canChat paymentApproved createdAt"
       )
       .sort({ createdAt: -1 });
 
@@ -110,6 +137,7 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       user.isVerified = true;
       user.verificationStatus = "approved";
       user.suspensionReason = "";
+      user.bannedAt = null;
     }
 
     if (status === "pending") {
@@ -118,12 +146,14 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       user.isVerified = false;
       user.verificationStatus = "rejected";
       user.suspensionReason = (reason || "").trim();
+      user.bannedAt = null;
     }
 
     if (status === "suspended") {
       user.accountStatus = "suspended";
       user.isBlocked = true;
       user.suspensionReason = (reason || "").trim();
+      user.bannedAt = null;
       user.canPostRide = false;
       user.canBookRide = false;
       user.canChat = false;
@@ -134,6 +164,7 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
       user.accountStatus = "banned";
       user.isBlocked = true;
       user.suspensionReason = (reason || "").trim();
+      user.bannedAt = new Date();
       user.canPostRide = false;
       user.canBookRide = false;
       user.canChat = false;
@@ -142,6 +173,53 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
 
     await user.save();
     return res.json({ message: "User status updated", user });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteUserByAdmin = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await archiveAndDeleteUser({ user, adminUserId: req.user._id });
+
+    return res.json({ message: "User deleted" });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const unbanUserByAdmin = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.status = "approved";
+    user.accountStatus = "active";
+    user.isBlocked = false;
+    user.suspensionReason = "";
+    user.bannedAt = null;
+    user.canPostRide = true;
+    user.canBookRide = true;
+    user.canChat = true;
+
+    await user.save();
+
+    return res.json({ message: "User unbanned", user });
   } catch (error) {
     return next(error);
   }
@@ -160,6 +238,19 @@ export const getAdminRides = async (req, res, next) => {
       .sort({ createdAt: -1 });
 
     return res.json(rides);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAdminBookings = async (_req, res, next) => {
+  try {
+    const bookings = await Booking.find({})
+      .populate("passengerId", "name email phone role")
+      .populate("rideId", "fromCity toCity date time status driver")
+      .sort({ createdAt: -1 });
+
+    return res.json(bookings);
   } catch (error) {
     return next(error);
   }
@@ -243,6 +334,10 @@ export const approvePaymentByAdmin = async (req, res, next) => {
     if (status === "approved") {
       const user = await User.findById(payment.userId);
       if (user) {
+        const paidAmount = Number(payment.amount || 0);
+        const creditedTokens = Math.max(1, Math.floor(paidAmount / 50));
+
+        user.tokenBalance = Number(user.tokenBalance || 0) + creditedTokens;
         user.paymentApproved = true;
         user.canChat = true;
 
@@ -252,8 +347,8 @@ export const approvePaymentByAdmin = async (req, res, next) => {
           userId: user._id,
           type: "payment_update",
           title: "Payment approved",
-          body: "Your payment has been approved and account access has been updated.",
-          data: { paymentId: payment._id, paymentType: payment.type },
+          body: `Your payment has been approved and ${creditedTokens} tokens were added.`,
+          data: { paymentId: payment._id, paymentType: payment.type, creditedTokens },
           pushFallback: true,
         });
       }
@@ -316,6 +411,18 @@ export const getAdminAnalytics = async (_req, res, next) => {
       totalEarnings,
       activeRides: activeRidesAgg,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getDeletedUsersByAdmin = async (_req, res, next) => {
+  try {
+    const archivedUsers = await DeletedUserArchive.find({})
+      .populate("deletedBy", "name role")
+      .sort({ createdAt: -1 });
+
+    return res.json(archivedUsers);
   } catch (error) {
     return next(error);
   }
@@ -388,6 +495,64 @@ export const reviewAdminChangeRequest = async (req, res, next) => {
       .populate("reviewedBy", "name role");
 
     return res.json(populated);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAdminReports = async (_req, res, next) => {
+  try {
+    const reports = await UserReport.find({})
+      .populate("reporterId", "name role")
+      .populate("targetUserId", "name role status accountStatus")
+      .populate("rideId", "fromCity toCity date time")
+      .sort({ createdAt: -1 });
+
+    return res.json(reports);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const reviewUserReportByAdmin = async (req, res, next) => {
+  try {
+    const { reportId } = req.params;
+    const { action } = req.body;
+
+    if (!reportId || !["ignore", "ban", "delete"].includes(action)) {
+      return res.status(400).json({ message: "reportId and valid action (ignore/ban/delete) are required" });
+    }
+
+    const report = await UserReport.findById(reportId);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    const targetUser = await User.findById(report.targetUserId);
+
+    if (action === "ban" && targetUser) {
+      targetUser.status = "banned";
+      targetUser.accountStatus = "banned";
+      targetUser.isBlocked = true;
+      targetUser.suspensionReason = report.reason || "Reported by users";
+      targetUser.bannedAt = new Date();
+      targetUser.canPostRide = false;
+      targetUser.canBookRide = false;
+      targetUser.canChat = false;
+      targetUser.paymentApproved = false;
+      await targetUser.save();
+    }
+
+    if (action === "delete" && targetUser) {
+      await archiveAndDeleteUser({ user: targetUser, adminUserId: req.user._id });
+    }
+
+    if (action !== "delete") {
+      report.status = "reviewed";
+      await report.save();
+    }
+
+    return res.json({ message: `Report action '${action}' applied` });
   } catch (error) {
     return next(error);
   }

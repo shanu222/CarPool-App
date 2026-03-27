@@ -120,6 +120,7 @@ export function IdentityAuth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [duplicatePopupMessage, setDuplicatePopupMessage] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [verificationStep, setVerificationStep] = useState(0);
 
@@ -190,6 +191,7 @@ export function IdentityAuth() {
     event.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
+    setDuplicatePopupMessage('');
 
     if (!validateSignup()) {
       return;
@@ -230,7 +232,14 @@ export function IdentityAuth() {
       setSignup(initialSignupState);
       setAttempted(false);
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      const message = toErrorMessage(error);
+
+      if (message.startsWith('Account already exists as ')) {
+        setDuplicatePopupMessage(message);
+        setErrorMessage('');
+      } else {
+        setErrorMessage(message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -331,6 +340,42 @@ export function IdentityAuth() {
         backgroundSize: 'cover, 240px 240px',
       }}
     >
+      {duplicatePopupMessage ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md rounded-3xl border border-white/20 bg-white/15 p-6 text-white backdrop-blur-xl"
+          >
+            <h2 className="text-xl font-semibold">Duplicate Account Found</h2>
+            <p className="mt-2 text-sm text-white/85">{duplicatePopupMessage}</p>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicatePopupMessage('');
+                  setMode('login');
+                  setErrorMessage('');
+                  setSuccessMessage('Please login with your existing account.');
+                }}
+                className="h-11 flex-1 rounded-xl bg-cyan-500 text-sm font-semibold text-white transition hover:bg-cyan-400"
+              >
+                Go to Login
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDuplicatePopupMessage('')}
+                className="h-11 flex-1 rounded-xl border border-white/35 bg-white/10 text-sm font-semibold text-white transition hover:bg-white/20"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      ) : null}
+
       {isSubmitting && mode === 'signup' ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/70 px-4">
           <motion.div
@@ -394,6 +439,7 @@ export function IdentityAuth() {
                 setMode(value);
                 setErrorMessage('');
                 setSuccessMessage('');
+                setDuplicatePopupMessage('');
               }}
               className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition ${
                 mode === value ? 'bg-emerald-500 text-white' : 'text-white/80 hover:bg-white/10'

@@ -40,6 +40,34 @@ export const ensureIdentitySchema = async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_cnic_role_unique'
+      ) THEN
+        ALTER TABLE users
+        ADD CONSTRAINT users_cnic_role_unique UNIQUE (cnic, role);
+      END IF;
+    END$$;
+  `);
+
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_phone_role_unique'
+      ) THEN
+        ALTER TABLE users
+        ADD CONSTRAINT users_phone_role_unique UNIQUE (phone, role);
+      END IF;
+    END$$;
+  `);
 };
 
 export const getUserByPhoneAndRole = async (phone, role) => {
@@ -70,6 +98,21 @@ export const getUserByIdentity = async ({ phone, cnic, dob, role }) => {
   return result.rows[0] || null;
 };
 
+export const findExistingAccountForRole = async ({ phone, cnic, role }) => {
+  const result = await query(
+    `
+      SELECT id
+      FROM users
+      WHERE role = $1
+        AND (cnic = $2 OR phone = $3)
+      LIMIT 1
+    `,
+    [role, cnic, phone]
+  );
+
+  return result.rowCount > 0;
+};
+
 export const createVerifiedUser = async ({
   name,
   phone,
@@ -90,7 +133,7 @@ export const createVerifiedUser = async ({
     );
 
     if (existing.rowCount > 0) {
-      const conflict = new Error("Account already exists for this role");
+      const conflict = new Error(`Account already exists as ${role}. Please login.`);
       conflict.statusCode = 409;
       throw conflict;
     }

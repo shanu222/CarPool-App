@@ -6,6 +6,7 @@ import {
   consumeVerificationAttempt,
   createVerifiedUser,
   ensureIdentitySchema,
+  findExistingAccountForRole,
   getUserByIdentity,
   getUserByPhoneAndRole,
   saveResetToken,
@@ -68,11 +69,15 @@ const requiredFile = (files, key) => files?.[key]?.[0] || null;
 
 const sendError = (res, status, message) => res.status(status).json({ message });
 
+const duplicateRoleMessage = (role) => `Account already exists as ${role}. Please login.`;
+
 export const signupWithIdentityVerification = async (req, res, next) => {
+  let role = "";
+
   try {
     await initializeSchema();
 
-    const role = parseRole(req.body.role);
+    role = parseRole(req.body.role);
 
     if (!["passenger", "driver"].includes(role)) {
       return sendError(res, 400, "role must be passenger or driver");
@@ -113,6 +118,16 @@ export const signupWithIdentityVerification = async (req, res, next) => {
 
     if (role === "driver" && (!licenseNumber || !licenseImageFile)) {
       return sendError(res, 400, "Driving license details are required for drivers");
+    }
+
+    const duplicateExists = await findExistingAccountForRole({
+      cnic,
+      phone,
+      role,
+    });
+
+    if (duplicateExists) {
+      return sendError(res, 409, duplicateRoleMessage(role));
     }
 
     const attemptIdentifier = `${role}:${phone}:${cnic}`;
@@ -216,7 +231,7 @@ export const signupWithIdentityVerification = async (req, res, next) => {
     }
 
     if (error?.code === "23505") {
-      return sendError(res, 409, "Account already exists for this role");
+      return sendError(res, 409, duplicateRoleMessage(role || "selected role"));
     }
 
     return next(error);

@@ -30,3 +30,27 @@ CREATE TABLE IF NOT EXISTS identity_verification_attempts (
   blocked_until TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'users_cnic_role_unique'
+  ) THEN
+    ALTER TABLE users
+    ADD CONSTRAINT users_cnic_role_unique UNIQUE (cnic, role);
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'users_phone_role_unique'
+  ) THEN
+    ALTER TABLE users
+    ADD CONSTRAINT users_phone_role_unique UNIQUE (phone, role);
+  END IF;
+END$$;

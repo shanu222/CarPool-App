@@ -48,6 +48,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    bannedAt: {
+      type: Date,
+      default: null,
+    },
     rating: {
       type: Number,
       default: 5,
@@ -119,6 +123,21 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    tokenBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    freeRideCredits: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    freeChatCredits: {
       type: Number,
       default: 0,
       min: 0,
