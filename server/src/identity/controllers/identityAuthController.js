@@ -150,14 +150,14 @@ export const signupWithIdentityVerification = async (req, res, next) => {
       });
     } catch (error) {
       if (error?.statusCode === 400) {
-        return sendError(res, 400, "Uploaded image is unclear");
+        return sendError(res, 400, "Uploaded CNIC image is unclear");
       }
 
       throw error;
     }
 
     if (normalizeCnic(parsedCnic.cnic) !== cnic) {
-      return sendError(res, 400, "CNIC number does not match the uploaded CNIC image");
+      return sendError(res, 400, "CNIC number does not match the uploaded CNIC");
     }
 
     if (normalizeName(parsedCnic.name) !== normalizeName(name)) {
@@ -178,7 +178,7 @@ export const signupWithIdentityVerification = async (req, res, next) => {
       });
     } catch (error) {
       if (error?.statusCode === 400) {
-        return sendError(res, 400, "Uploaded image is unclear");
+        return sendError(res, 400, "Uploaded CNIC image is unclear");
       }
 
       throw error;
@@ -254,6 +254,18 @@ export const loginIdentityUser = async (req, res, next) => {
 
     if (!user) {
       return sendError(res, 401, "Invalid credentials");
+    }
+
+    if (!user.is_verified) {
+      return sendError(res, 403, "User is not verified");
+    }
+
+    if (user.is_banned) {
+      return sendError(res, 403, "Account is banned");
+    }
+
+    if (user.is_deleted) {
+      return sendError(res, 403, "Account is deleted");
     }
 
     const passwordOk = await bcrypt.compare(password, user.password_hash);

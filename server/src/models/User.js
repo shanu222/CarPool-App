@@ -66,6 +66,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     isFeatured: {
       type: Boolean,
       default: false,
@@ -132,15 +137,35 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    tokens: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     freeRideCredits: {
       type: Number,
       default: 0,
+      min: 0,
+    },
+    freePostsRemaining: {
+      type: Number,
+      default: 5,
       min: 0,
     },
     freeChatCredits: {
       type: Number,
       default: 0,
       min: 0,
+    },
+    freeChatsRemaining: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    hasPurchased: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     canPostRide: {
       type: Boolean,
@@ -244,6 +269,27 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
     this.accountStatus = "active";
     this.isVerified = true;
     this.verificationStatus = "approved";
+    this.isDeleted = false;
+    this.hasPurchased = true;
+  }
+
+  // Keep legacy and strict token field names synchronized.
+  if (typeof this.tokens === "number") {
+    this.tokenBalance = this.tokens;
+  } else if (typeof this.tokenBalance === "number") {
+    this.tokens = this.tokenBalance;
+  }
+
+  if (typeof this.freePostsRemaining === "number") {
+    this.freeRideCredits = this.freePostsRemaining;
+  } else if (typeof this.freeRideCredits === "number") {
+    this.freePostsRemaining = this.freeRideCredits;
+  }
+
+  if (typeof this.freeChatsRemaining === "number") {
+    this.freeChatCredits = this.freeChatsRemaining;
+  } else if (typeof this.freeChatCredits === "number") {
+    this.freeChatsRemaining = this.freeChatCredits;
   }
 
   return next();

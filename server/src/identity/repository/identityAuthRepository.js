@@ -12,6 +12,12 @@ export const ensureIdentitySchema = async () => {
       password_hash TEXT NOT NULL,
       role VARCHAR(20) NOT NULL CHECK (role IN ('passenger', 'driver')),
       is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+      is_banned BOOLEAN NOT NULL DEFAULT FALSE,
+      is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+      tokens INTEGER NOT NULL DEFAULT 0,
+      free_posts_remaining INTEGER NOT NULL DEFAULT 5,
+      free_chats_remaining INTEGER NOT NULL DEFAULT 5,
+      has_purchased BOOLEAN NOT NULL DEFAULT FALSE,
       profile_image TEXT NOT NULL,
       cnic_front TEXT NOT NULL,
       cnic_back TEXT NOT NULL,
@@ -68,12 +74,19 @@ export const ensureIdentitySchema = async () => {
       END IF;
     END$$;
   `);
+
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens INTEGER NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_posts_remaining INTEGER NOT NULL DEFAULT 5`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_chats_remaining INTEGER NOT NULL DEFAULT 5`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_purchased BOOLEAN NOT NULL DEFAULT FALSE`);
 };
 
 export const getUserByPhoneAndRole = async (phone, role) => {
   const result = await query(
     `
-      SELECT id, name, phone, cnic, dob, role, password_hash, is_verified, profile_image, cnic_front, cnic_back
+      SELECT id, name, phone, cnic, dob, role, password_hash, is_verified, is_banned, is_deleted, profile_image, cnic_front, cnic_back
       FROM users
       WHERE phone = $1 AND role = $2
       LIMIT 1
@@ -87,7 +100,7 @@ export const getUserByPhoneAndRole = async (phone, role) => {
 export const getUserByIdentity = async ({ phone, cnic, dob, role }) => {
   const result = await query(
     `
-      SELECT id, name, phone, cnic, dob, role, password_hash, is_verified
+      SELECT id, name, phone, cnic, dob, role, password_hash, is_verified, is_banned, is_deleted
       FROM users
       WHERE phone = $1 AND cnic = $2 AND dob = $3 AND role = $4
       LIMIT 1

@@ -29,6 +29,10 @@ export const protect = async (req, res, next) => {
       return res.status(403).json({ message: user.suspensionReason || "Account is suspended" });
     }
 
+    if (user.isDeleted) {
+      return res.status(403).json({ message: "Account is deleted" });
+    }
+
     req.user = user;
     next();
   } catch {

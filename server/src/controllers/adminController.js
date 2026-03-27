@@ -335,9 +335,11 @@ export const approvePaymentByAdmin = async (req, res, next) => {
       const user = await User.findById(payment.userId);
       if (user) {
         const paidAmount = Number(payment.amount || 0);
-        const creditedTokens = Math.max(1, Math.floor(paidAmount / 50));
+        const creditedTokens = Math.max(0, Math.floor(paidAmount * 2));
 
-        user.tokenBalance = Number(user.tokenBalance || 0) + creditedTokens;
+        user.tokens = Number(user.tokens || 0) + creditedTokens;
+        user.tokenBalance = user.tokens;
+        user.hasPurchased = true;
         user.paymentApproved = true;
         user.canChat = true;
 

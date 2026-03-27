@@ -3,9 +3,9 @@ import { useNavigate } from "react-router";
 import { Ban, FileWarning, LogOut, Trash2, UserCheck, UserMinus, Users } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import type { DeletedUserArchiveItem, User, UserReportItem } from "../types";
+import type { DeletedUserArchiveItem, Payment, User, UserReportItem } from "../types";
 
-type SectionKey = "active" | "banned" | "deleted" | "reports";
+type SectionKey = "active" | "banned" | "deleted" | "passengers" | "drivers" | "payments" | "reports";
 type RoleFilter = "all" | "passenger" | "driver";
 
 type ConfirmAction =
@@ -20,6 +20,9 @@ const sidebar: Array<{ key: SectionKey; label: string; icon: ReactNode }> = [
   { key: "active", label: "Active Users", icon: <Users className="h-4 w-4" /> },
   { key: "banned", label: "Banned Users", icon: <UserMinus className="h-4 w-4" /> },
   { key: "deleted", label: "Deleted Users", icon: <Trash2 className="h-4 w-4" /> },
+  { key: "passengers", label: "Passenger Management", icon: <Users className="h-4 w-4" /> },
+  { key: "drivers", label: "Driver Management", icon: <Users className="h-4 w-4" /> },
+  { key: "payments", label: "Payments Panel", icon: <Users className="h-4 w-4" /> },
   { key: "reports", label: "Reports Panel", icon: <FileWarning className="h-4 w-4" /> },
 ];
 
@@ -51,6 +54,7 @@ export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<UserReportItem[]>([]);
   const [deletedUsers, setDeletedUsers] = useState<DeletedUserArchiveItem[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [banReason, setBanReason] = useState("");
@@ -60,15 +64,17 @@ export function AdminDashboard() {
       setLoading(true);
       setError("");
 
-      const [usersResponse, reportsResponse, deletedResponse] = await Promise.all([
+      const [usersResponse, reportsResponse, deletedResponse, paymentsResponse] = await Promise.all([
         api.get<User[]>("/admin/users"),
         api.get<UserReportItem[]>("/admin/reports"),
         api.get<DeletedUserArchiveItem[]>("/admin/deleted-users"),
+        api.get<Payment[]>("/admin/payments"),
       ]);
 
       setUsers(usersResponse.data || []);
       setReports(reportsResponse.data || []);
       setDeletedUsers(deletedResponse.data || []);
+      setPayments(paymentsResponse.data || []);
     } catch (requestError: any) {
       const status = requestError?.response?.status;
 
@@ -112,6 +118,9 @@ export function AdminDashboard() {
     [users]
   );
 
+  const passengerUsers = useMemo(() => users.filter((item) => item.role === "passenger"), [users]);
+  const driverUsers = useMemo(() => users.filter((item) => item.role === "driver"), [users]);
+
   const doBanUser = async (userId: string, reason: string) => {
     await api.post("/admin/user-status", {
       userId,
@@ -130,6 +139,11 @@ export function AdminDashboard() {
 
   const doReportAction = async (reportId: string, action: "ignore" | "ban" | "delete") => {
     await api.post(`/admin/reports/${reportId}/action`, { action });
+  };
+
+  const reviewPayment = async (paymentId: string, status: "approved" | "rejected") => {
+    const rejectionReason = status === "rejected" ? window.prompt("Rejection reason") || "" : "";
+    await api.post("/admin/approve-payment", { paymentId, status, rejectionReason });
   };
 
   const handleConfirm = async () => {
@@ -384,6 +398,145 @@ export function AdminDashboard() {
                         <td className="px-3 py-3">{formatDateTime(item.createdAt)}</td>
                         <td className="px-3 py-3">
                           <StatusBadge tone="deleted" label="Deleted" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </section>
+          ) : null}
+
+          {!loading && section === "passengers" ? (
+            <section>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">Passenger Management</h2>
+              <p className="mb-3 text-sm text-slate-200">Manage passenger accounts and moderation actions</p>
+
+              <TableWrap>
+                <table className="min-w-full text-left text-sm text-slate-100">
+                  <thead>
+                    <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
+                      <th className="px-3 py-3">Name</th>
+                      <th className="px-3 py-3">Phone</th>
+                      <th className="px-3 py-3">CNIC</th>
+                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {passengerUsers.map((user) => {
+                      const userId = resolveUserId(user);
+
+                      return (
+                        <tr key={userId} className="border-b border-white/10">
+                          <td className="px-3 py-3">{user.name}</td>
+                          <td className="px-3 py-3">{user.phone || "-"}</td>
+                          <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
+                          <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <ActionButton
+                                tone="danger"
+                                label="Ban"
+                                onClick={() => openConfirmation({ kind: "ban-user", userId, userName: user.name })}
+                              />
+                              <ActionButton
+                                tone="danger"
+                                label="Delete"
+                                onClick={() => openConfirmation({ kind: "delete-user", userId, userName: user.name })}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </section>
+          ) : null}
+
+          {!loading && section === "drivers" ? (
+            <section>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">Driver Management</h2>
+              <p className="mb-3 text-sm text-slate-200">Manage driver accounts and moderation actions</p>
+
+              <TableWrap>
+                <table className="min-w-full text-left text-sm text-slate-100">
+                  <thead>
+                    <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
+                      <th className="px-3 py-3">Name</th>
+                      <th className="px-3 py-3">Phone</th>
+                      <th className="px-3 py-3">CNIC</th>
+                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {driverUsers.map((user) => {
+                      const userId = resolveUserId(user);
+
+                      return (
+                        <tr key={userId} className="border-b border-white/10">
+                          <td className="px-3 py-3">{user.name}</td>
+                          <td className="px-3 py-3">{user.phone || "-"}</td>
+                          <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
+                          <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <ActionButton tone="success" label="Approve" onClick={() => doUnbanUser(userId)} />
+                              <ActionButton
+                                tone="danger"
+                                label="Ban"
+                                onClick={() => openConfirmation({ kind: "ban-user", userId, userName: user.name })}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </section>
+          ) : null}
+
+          {!loading && section === "payments" ? (
+            <section>
+              <h2 className="text-lg font-semibold text-white sm:text-xl">Payments Panel</h2>
+              <p className="mb-3 text-sm text-slate-200">Review proofs and approve/reject payments</p>
+
+              <TableWrap>
+                <table className="min-w-full text-left text-sm text-slate-100">
+                  <thead>
+                    <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
+                      <th className="px-3 py-3">User</th>
+                      <th className="px-3 py-3">Amount</th>
+                      <th className="px-3 py-3">Proof</th>
+                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((payment) => (
+                      <tr key={payment._id} className="border-b border-white/10">
+                        <td className="px-3 py-3">{payment.userId?.name || "User"}</td>
+                        <td className="px-3 py-3">{payment.currency || "PKR"} {payment.amount}</td>
+                        <td className="px-3 py-3">
+                          {payment.screenshot ? (
+                            <a href={payment.screenshot} target="_blank" rel="noreferrer" className="text-cyan-200 underline">
+                              View proof
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td className="px-3 py-3">{payment.status}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <ActionButton tone="success" label="Approve" onClick={() => reviewPayment(payment._id, "approved")} />
+                            <ActionButton tone="danger" label="Reject" onClick={() => reviewPayment(payment._id, "rejected")} />
+                          </div>
                         </td>
                       </tr>
                     ))}

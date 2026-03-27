@@ -2,10 +2,10 @@ import { User } from "../models/User.js";
 
 const ACTION_KEY_MAP = {
   post_ride: {
-    freeCreditField: "freeRideCredits",
+    freeCreditField: "freePostsRemaining",
   },
   chat: {
-    freeCreditField: "freeChatCredits",
+    freeCreditField: "freeChatsRemaining",
   },
 };
 
@@ -18,21 +18,22 @@ export const getActionTokenStatus = async ({ userId, action }) => {
     throw new Error(`Unsupported token action '${action}'`);
   }
 
-  const user = await User.findById(userId).select("tokenBalance freeRideCredits freeChatCredits");
+  const user = await User.findById(userId).select("tokens hasPurchased freePostsRemaining freeChatsRemaining");
 
   if (!user) {
     return { allowed: false, source: null };
   }
 
-  const tokenBalance = Number(user.tokenBalance || 0);
+  const tokenBalance = Number(user.tokens || 0);
   const freeCredits = Number(user[config.freeCreditField] || 0);
-
-  if (tokenBalance > 0) {
-    return { allowed: true, source: "token" };
-  }
+  const hasPurchased = Boolean(user.hasPurchased);
 
   if (freeCredits > 0) {
     return { allowed: true, source: "free" };
+  }
+
+  if (hasPurchased && tokenBalance >= 2) {
+    return { allowed: true, source: "token" };
   }
 
   return { allowed: false, source: null };
@@ -43,23 +44,6 @@ export const reserveActionCredit = async ({ userId, action }) => {
 
   if (!config) {
     throw new Error(`Unsupported token action '${action}'`);
-  }
-
-  const tokenReservation = await User.findOneAndUpdate(
-    {
-      _id: userId,
-      tokenBalance: { $gt: 0 },
-    },
-    {
-      $inc: { tokenBalance: -1 },
-    },
-    {
-      new: true,
-    }
-  ).select("_id");
-
-  if (tokenReservation) {
-    return { reserved: true, source: "token" };
   }
 
   const freeReservation = await User.findOneAndUpdate(
@@ -79,6 +63,24 @@ export const reserveActionCredit = async ({ userId, action }) => {
     return { reserved: true, source: "free" };
   }
 
+  const tokenReservation = await User.findOneAndUpdate(
+    {
+      _id: userId,
+      hasPurchased: true,
+      tokens: { $gte: 2 },
+    },
+    {
+      $inc: { tokens: -2 },
+    },
+    {
+      new: true,
+    }
+  ).select("_id");
+
+  if (tokenReservation) {
+    return { reserved: true, source: "token" };
+  }
+
   return { reserved: false, source: null };
 };
 
@@ -90,7 +92,7 @@ export const refundReservedActionCredit = async ({ userId, action, source }) => 
   }
 
   if (source === "token") {
-    await User.findByIdAndUpdate(userId, { $inc: { tokenBalance: 1 } });
+    await User.findByIdAndUpdate(userId, { $inc: { tokens: 2 } });
     return;
   }
 
