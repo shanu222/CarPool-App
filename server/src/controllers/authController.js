@@ -759,6 +759,9 @@ const strictSignup = async ({ req, res, role }) => {
         hint: "Retake selfie in good light, without blur, sunglasses, or heavy angle.",
         similarity: Number(faceResult?.similarity || 0),
         threshold: Number(process.env.FACE_MATCH_THRESHOLD || 80),
+        source: faceResult?.source || "aws",
+        openAiConfidence: Number(faceResult?.openAiConfidence || 0),
+        openAiReason: faceResult?.openAiReason || "",
       },
     });
   }

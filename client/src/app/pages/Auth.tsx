@@ -108,6 +108,9 @@ const verificationDetailsMessage = (details?: {
   extractedLicense?: string;
   similarity?: number;
   threshold?: number;
+  source?: string;
+  openAiConfidence?: number;
+  openAiReason?: string;
 }) => {
   if (!details) {
     return '';
@@ -149,6 +152,18 @@ const verificationDetailsMessage = (details?: {
 
   if (typeof details.similarity === 'number' && typeof details.threshold === 'number') {
     parts.push(`Face similarity: ${details.similarity.toFixed(1)}% (required: ${details.threshold}%)`);
+  }
+
+  if (details.source) {
+    parts.push(`Verifier: ${details.source}`);
+  }
+
+  if (typeof details.openAiConfidence === 'number' && details.openAiConfidence > 0) {
+    parts.push(`OpenAI confidence: ${(details.openAiConfidence * 100).toFixed(1)}%`);
+  }
+
+  if (details.openAiReason) {
+    parts.push(`OpenAI note: ${details.openAiReason}`);
   }
 
   return parts.join(' ');
@@ -387,6 +402,9 @@ export function Auth() {
               extractedLicense?: string;
               similarity?: number;
               threshold?: number;
+              source?: string;
+              openAiConfidence?: number;
+              openAiReason?: string;
             };
           };
         };
