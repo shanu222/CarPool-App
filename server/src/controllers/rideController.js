@@ -613,6 +613,24 @@ export const getRideById = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
+    if (String(ride.status || "") === "expired") {
+      const isOwner = String(ride.driver?._id || ride.driver) === String(req.user?._id || "");
+
+      if (!isOwner) {
+        const hasBooking = await Booking.findOne({
+          rideId: ride._id,
+          passengerId: req.user?._id,
+          status: { $in: ["pending", "accepted", "booked", "ongoing", "completed"] },
+        })
+          .select("_id")
+          .lean();
+
+        if (!hasBooking) {
+          return res.status(404).json({ message: "Ride not found" });
+        }
+      }
+    }
+
     return res.json(ride);
   } catch (error) {
     return next(error);

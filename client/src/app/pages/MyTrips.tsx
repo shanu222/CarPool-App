@@ -321,7 +321,7 @@ export function MyTrips() {
         {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 && activeMatchedTrips.length === 0 ? (
           <EmptyState
             title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Your ride history will appear here after completion.'}
+            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Ride expired. No match found. Please reschedule.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
@@ -330,7 +330,7 @@ export function MyTrips() {
         {!loading && showDriverView && activeDriverTrips.length === 0 && activeMatchedTrips.length === 0 ? (
           <EmptyState
             title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Completed rides appear here as history.'}
+            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Ride expired. No match found. Please reschedule.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -510,7 +510,7 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm, onReschedule }
 
       {trip.ride?.status === 'expired' ? (
         <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
-          {trip.ride.expiredReason || 'Ride expired: No match found. Please reschedule again.'}
+          {trip.ride.expiredReason || 'Ride expired. No match found. Please reschedule.'}
         </div>
       ) : null}
 
@@ -627,7 +627,7 @@ function DriverTripCard({
       {ride.status === 'expired' ? (
         <>
           <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
-            {ride.expiredReason || 'Ride expired: No match found. Please reschedule again.'}
+            {ride.expiredReason || 'Ride expired. No match found. Please reschedule.'}
           </div>
           <button
             onClick={(e) => {
@@ -677,7 +677,7 @@ function RequestTripCard({
       {request.status === 'expired' ? (
         <>
           <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
-            {request.expiredReason || 'Ride expired: No match found. Please reschedule again.'}
+            {request.expiredReason || 'Ride expired. No match found. Please reschedule.'}
           </div>
           <button
             onClick={(e) => {

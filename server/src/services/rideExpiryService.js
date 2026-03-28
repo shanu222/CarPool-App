@@ -1,60 +1,72 @@
 import { Ride } from "../models/Ride.js";
 import { RideRequest } from "../models/RideRequest.js";
 import { Booking } from "../models/Booking.js";
+import { Match } from "../models/Match.js";
 
-export const EXPIRED_RIDE_REASON = "Ride expired: No match found. Please reschedule again.";
+export const EXPIRED_RIDE_REASON = "Ride expired. No match found. Please reschedule.";
 
-const RIDE_REQUEST_TIMEOUT_MINUTES = Number(process.env.RIDE_REQUEST_TIMEOUT_MINUTES || 60);
-const RIDE_POST_TIMEOUT_MINUTES = Number(process.env.RIDE_POST_TIMEOUT_MINUTES || 60);
 const RIDE_EXPIRY_CHECK_INTERVAL_MINUTES = Number(process.env.RIDE_EXPIRY_CHECK_INTERVAL_MINUTES || 5);
 
 let scheduler = null;
 
-const isTimeoutReached = (createdAt, timeoutMinutes, now) => {
-  if (!createdAt || !Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+const hasDateTimePassed = (dateTime, now) => {
+  if (!dateTime) {
     return false;
   }
 
-  const timeoutAt = new Date(createdAt);
-  timeoutAt.setMinutes(timeoutAt.getMinutes() + timeoutMinutes);
-  return timeoutAt <= now;
-};
+  const parsed = new Date(dateTime);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
 
-const shouldExpireByTimeOrTimeout = ({ dateTime, createdAt, timeoutMinutes, now }) => {
-  const datePassed = dateTime ? new Date(dateTime) <= now : false;
-  const timeoutReached = isTimeoutReached(createdAt, timeoutMinutes, now);
-  return datePassed || timeoutReached;
+  return parsed < now;
 };
 
 const hasRideMatch = async (rideId) => {
-  const booking = await Booking.findOne({
-    rideId,
-    status: { $in: ["pending", "accepted", "booked", "ongoing", "completed"] },
+  const [booking, match] = await Promise.all([
+    Booking.findOne({
+      rideId,
+      status: { $in: ["pending", "accepted", "booked", "ongoing", "completed"] },
+    })
+      .select("_id")
+      .lean(),
+    Match.findOne({
+      rideId,
+      status: { $in: ["pending", "approved"] },
+    })
+      .select("_id")
+      .lean(),
+  ]);
+
+  return Boolean(booking?._id || match?._id);
+};
+
+const hasRequestMatch = async (request) => {
+  if (request?.matchedRideId || request?.matchedBookingId) {
+    return true;
+  }
+
+  const match = await Match.findOne({
+    requestId: request._id,
+    status: { $in: ["pending", "approved"] },
   })
     .select("_id")
     .lean();
 
-  return Boolean(booking?._id);
+  return Boolean(match?._id);
 };
 
 export const checkExpiredRides = async (now = new Date()) => {
   const rideCandidates = await Ride.find({
-    status: { $in: ["scheduled", "nearby"] },
+    status: { $in: ["scheduled", "nearby", "live"] },
   })
-    .select("_id dateTime createdAt")
+    .select("_id dateTime")
     .lean();
 
   let expiredRideCount = 0;
 
   for (const ride of rideCandidates) {
-    const shouldCheck = shouldExpireByTimeOrTimeout({
-      dateTime: ride.dateTime,
-      createdAt: ride.createdAt,
-      timeoutMinutes: RIDE_POST_TIMEOUT_MINUTES,
-      now,
-    });
-
-    if (!shouldCheck) {
+    if (!hasDateTimePassed(ride.dateTime, now)) {
       continue;
     }
 
@@ -62,7 +74,7 @@ export const checkExpiredRides = async (now = new Date()) => {
 
     if (!matched) {
       await Ride.updateOne(
-        { _id: ride._id, status: { $in: ["scheduled", "nearby"] } },
+        { _id: ride._id, status: { $in: ["scheduled", "nearby", "live"] } },
         {
           $set: {
             status: "expired",
@@ -77,24 +89,17 @@ export const checkExpiredRides = async (now = new Date()) => {
   const requestCandidates = await RideRequest.find({
     status: { $in: ["open", "scheduled"] },
   })
-    .select("_id dateTime createdAt matchedRideId matchedBookingId")
+    .select("_id dateTime matchedRideId matchedBookingId")
     .lean();
 
   let expiredRequestCount = 0;
 
   for (const request of requestCandidates) {
-    const shouldCheck = shouldExpireByTimeOrTimeout({
-      dateTime: request.dateTime,
-      createdAt: request.createdAt,
-      timeoutMinutes: RIDE_REQUEST_TIMEOUT_MINUTES,
-      now,
-    });
-
-    if (!shouldCheck) {
+    if (!hasDateTimePassed(request.dateTime, now)) {
       continue;
     }
 
-    const hasMatch = Boolean(request.matchedRideId || request.matchedBookingId);
+    const hasMatch = await hasRequestMatch(request);
 
     if (!hasMatch) {
       await RideRequest.updateOne(
