@@ -8,31 +8,7 @@ import { UserReport } from "../models/UserReport.js";
 import { DeletedUserArchive } from "../models/DeletedUserArchive.js";
 import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { createUserNotification } from "../services/notificationService.js";
-
-const archiveAndDeleteUser = async ({ user, adminUserId }) => {
-  if (!user) {
-    return;
-  }
-
-  await DeletedUserArchive.create({
-    originalUserId: user._id,
-    name: user.name,
-    cnic: user.cnicNumber || user.cnic || "",
-    role: user.role,
-    banReason: user.suspensionReason || "",
-    deletedBy: adminUserId,
-    snapshot: user.toObject ? user.toObject() : user,
-  });
-
-  await Promise.all([
-    Ride.deleteMany({ driver: user._id }),
-    Booking.deleteMany({ $or: [{ user: user._id }, { passengerId: user._id }] }),
-    Payment.deleteMany({ userId: user._id }),
-    ChangeRequest.deleteMany({ userId: user._id }),
-    UserReport.deleteMany({ $or: [{ reporterId: user._id }, { targetUserId: user._id }] }),
-    User.findByIdAndDelete(user._id),
-  ]);
-};
+import { permanentlyDeleteUserAccount } from "../services/accountDeletionService.js";
 
 const getOrCreatePaymentSettings = async () => {
   let settings = await PaymentSettings.findOne().sort({ updatedAt: -1 });
@@ -196,9 +172,14 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
 export const deleteUserByAdmin = async (req, res, next) => {
   try {
     const { userId } = req.params;
+    const deleteReason = String(req.body?.reason || req.body?.deleteReason || "").trim();
 
     if (!userId) {
       return res.status(400).json({ message: "userId is required" });
+    }
+
+    if (!deleteReason) {
+      return res.status(400).json({ message: "Deletion reason is required" });
     }
 
     const user = await User.findById(userId);
@@ -210,7 +191,12 @@ export const deleteUserByAdmin = async (req, res, next) => {
       return res.status(403).json({ message: "Admin account cannot be deleted" });
     }
 
-    await archiveAndDeleteUser({ user, adminUserId: req.user._id });
+    await permanentlyDeleteUserAccount({
+      user,
+      deletedBy: "admin",
+      deleteReason,
+      adminUserId: req.user._id,
+    });
 
     return res.json({ message: "User deleted" });
   } catch (error) {
@@ -597,6 +583,7 @@ export const reviewUserReportByAdmin = async (req, res, next) => {
   try {
     const { reportId } = req.params;
     const { action } = req.body;
+    const deleteReason = String(req.body?.reason || req.body?.deleteReason || "").trim();
 
     if (!reportId || !["ignore", "ban", "delete"].includes(action)) {
       return res.status(400).json({ message: "reportId and valid action (ignore/ban/delete) are required" });
@@ -623,7 +610,16 @@ export const reviewUserReportByAdmin = async (req, res, next) => {
     }
 
     if (action === "delete" && targetUser) {
-      await archiveAndDeleteUser({ user: targetUser, adminUserId: req.user._id });
+      if (!deleteReason) {
+        return res.status(400).json({ message: "Deletion reason is required" });
+      }
+
+      await permanentlyDeleteUserAccount({
+        user: targetUser,
+        deletedBy: "admin",
+        deleteReason,
+        adminUserId: req.user._id,
+      });
     }
 
     if (action !== "delete") {

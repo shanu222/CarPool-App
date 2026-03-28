@@ -50,38 +50,46 @@ export function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-3 py-4 md:px-6">
-      <form onSubmit={handleSubmit} className="glass-panel w-full max-w-md rounded-3xl p-4 md:p-8 space-y-4">
-        <div className="text-center mb-2">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
-            <ShieldCheck className="h-8 w-8 text-white" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1e3c72] to-[#2a5298] px-3 py-6 md:px-6">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md rounded-[20px] border border-white/40 bg-white/95 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur-sm md:p-8"
+      >
+        <div className="text-center mb-4">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+            <ShieldCheck className="h-8 w-8 text-blue-600" />
           </div>
-          <h1 className="text-lg md:text-2xl text-white">Admin Console</h1>
-          <p className="text-sm md:text-base text-slate-100">Sign in with your admin account</p>
+          <h1 className="text-[22px] font-bold text-slate-800 md:text-3xl">Admin Console</h1>
+          <p className="text-sm md:text-base text-slate-500">Sign in with your admin account</p>
         </div>
+
+        <div className="space-y-4">
 
         <input
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="Admin email"
-          className="w-full min-h-12 rounded-2xl border border-white/35 bg-white/20 px-4 py-3 text-sm md:text-base text-white placeholder:text-slate-200"
+          className="w-full min-h-12 rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm md:text-base text-slate-900 placeholder:text-slate-500 outline-none transition-shadow focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20"
           required
         />
         <PasswordInput
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Password"
-          inputClassName="w-full min-h-12 rounded-2xl border border-white/35 bg-white/20 px-4 py-3 text-sm md:text-base text-white placeholder:text-slate-200"
+          inputClassName="w-full min-h-12 rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm md:text-base text-slate-900 placeholder:text-slate-500 outline-none transition-shadow focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20"
+          toggleClassName="text-slate-500 hover:text-slate-700"
           required
         />
 
-        {error ? <p className="text-sm text-red-300">{error}</p> : null}
+        </div>
+
+        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
         <button
           type="submit"
           disabled={loading || !email || !password}
-          className="min-h-12 w-full rounded-2xl bg-white/90 px-4 py-3 text-sm md:text-base text-slate-900 transition-all hover:bg-white disabled:opacity-50"
+          className="mt-4 min-h-12 w-full rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 px-4 py-3 text-sm font-semibold text-white transition-all hover:from-blue-700 hover:to-blue-800 disabled:opacity-50"
         >
           {loading ? "Signing in..." : "Sign In"}
         </button>

@@ -3,8 +3,10 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
+import { DeletedUser } from "../models/DeletedUser.js";
 import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
+import { permanentlyDeleteUserAccount } from "../services/accountDeletionService.js";
 import { buildVerificationMeta, verifyIdentityDocuments } from "../services/verificationFlowService.js";
 import { normalizeCnic } from "../utils/kycUtils.js";
 
@@ -77,6 +79,106 @@ const toStoredUploadPath = (file) => (file?.path ? file.path : "");
 
 const jsonError = (res, status, error) => res.status(status).json({ success: false, error });
 const jsonSuccess = (res, status, payload) => res.status(status).json({ success: true, ...payload });
+
+const resolveSignupIdentityConflict = async ({ role, normalizedCnic, normalizedMobile }) => {
+  const roleValue = String(role || "").trim().toLowerCase();
+  const cnicValue = String(normalizedCnic || "").trim();
+  const mobileValue = String(normalizedMobile || "").trim();
+
+  const cnicCondition = cnicValue
+    ? {
+        $or: [{ cnicNumber: cnicValue }, { cnic: cnicValue }],
+      }
+    : null;
+
+  const mobileCondition = mobileValue ? { phone: mobileValue } : null;
+  const lookupConditions = [cnicCondition, mobileCondition].filter(Boolean);
+
+  if (lookupConditions.length === 0) {
+    return null;
+  }
+
+  const matchingUsers = await User.find({
+    role: { $in: ["passenger", "driver"] },
+    $or: lookupConditions,
+  })
+    .select("role phone cnic cnicNumber")
+    .lean();
+
+  if (!matchingUsers.length) {
+    return null;
+  }
+
+  const hasCnicConflictWithDifferentMobile = cnicValue
+    ? matchingUsers.some((user) => {
+        const userCnic = String(user?.cnicNumber || user?.cnic || "").trim();
+        const userPhone = String(user?.phone || "").trim();
+
+        if (userCnic !== cnicValue) {
+          return false;
+        }
+
+        // Ignore legacy rows with no stored phone when checking mobile mismatch.
+        if (!userPhone || !mobileValue) {
+          return false;
+        }
+
+        return userPhone !== mobileValue;
+      })
+    : false;
+
+  if (hasCnicConflictWithDifferentMobile) {
+    return "CNIC already linked with another number";
+  }
+
+  const hasMobileConflictWithDifferentCnic = mobileValue
+    ? matchingUsers.some((user) => {
+        const userPhone = String(user?.phone || "").trim();
+        const userCnic = String(user?.cnicNumber || user?.cnic || "").trim();
+
+        if (userPhone !== mobileValue) {
+          return false;
+        }
+
+        if (!cnicValue || !userCnic) {
+          return false;
+        }
+
+        return userCnic !== cnicValue;
+      })
+    : false;
+
+  if (hasMobileConflictWithDifferentCnic) {
+    return "Mobile number already linked with another CNIC";
+  }
+
+  const hasSameRoleAccount = matchingUsers.some((user) => {
+    const userRole = String(user?.role || "").trim().toLowerCase();
+
+    if (userRole !== roleValue) {
+      return false;
+    }
+
+    const userCnic = String(user?.cnicNumber || user?.cnic || "").trim();
+    const userPhone = String(user?.phone || "").trim();
+
+    if (cnicValue && userCnic === cnicValue) {
+      return true;
+    }
+
+    if (mobileValue && userPhone === mobileValue) {
+      return true;
+    }
+
+    return false;
+  });
+
+  if (hasSameRoleAccount) {
+    return "Account already exists for this role";
+  }
+
+  return null;
+};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -330,6 +432,47 @@ const minimalLoginUser = (user) => ({
   ...getUserVerificationMeta(user),
 });
 
+const buildDeletedLoginResponse = (deletedRecord) => {
+  if (!deletedRecord) {
+    return null;
+  }
+
+  if (deletedRecord.deletedBy === "admin") {
+    const reason = String(deletedRecord.deleteReason || "").trim();
+    const reasonText = reason || "No reason provided";
+
+    return {
+      message: `Your account was deleted by admin. Reason: ${reasonText}. You can create a new account again.`,
+      canReRegister: true,
+    };
+  }
+
+  return {
+    message: "Your account was deleted by you. You can create a new account again.",
+    canReRegister: true,
+  };
+};
+
+const findDeletedAccountRecord = async ({ mobileNumber, cnic }) => {
+  const normalizedMobile = String(mobileNumber || "").trim();
+  const normalizedCnic = normalizeCnic(cnic);
+  const criteria = [];
+
+  if (normalizedMobile) {
+    criteria.push({ mobileNumber: normalizedMobile });
+  }
+
+  if (normalizedCnic) {
+    criteria.push({ cnic: normalizedCnic });
+  }
+
+  if (!criteria.length) {
+    return null;
+  }
+
+  return DeletedUser.findOne({ $or: criteria }).sort({ deletedAt: -1 });
+};
+
 const isBcryptHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ""));
 
 const verifyPasswordAndMigrateIfNeeded = async (user, plainPassword) => {
@@ -401,6 +544,49 @@ export const logoutAllDevices = async (req, res, next) => {
   }
 };
 
+export const deleteOwnAccount = async (req, res, next) => {
+  try {
+    const password = String(req.body?.password || "");
+    const deleteReason = String(req.body?.reason || req.body?.deleteReason || "").trim();
+
+    if (!password) {
+      return res.status(400).json({ message: "Password is required" });
+    }
+
+    if (!deleteReason) {
+      return res.status(400).json({ message: "Delete reason is required" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const passwordMatch = await verifyPasswordAndMigrateIfNeeded(user, password);
+    if (!passwordMatch) {
+      return res.status(401).json({ message: "Invalid password" });
+    }
+
+    await permanentlyDeleteUserAccount({
+      user,
+      deletedBy: "user",
+      deleteReason,
+      adminUserId: user._id,
+    });
+
+    return res.json({
+      message: "Account permanently deleted",
+      canReRegister: true,
+    });
+  } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+
+    return next(error);
+  }
+};
+
 export const register = async (req, res, next) => {
   try {
     const { name, email, phone, password, role, cnicNumber, dob } = req.body;
@@ -429,9 +615,14 @@ export const register = async (req, res, next) => {
     }
 
     if (normalizedPhone) {
-      const existingPhoneRole = await User.findOne({ phone: normalizedPhone, role: finalRole });
-      if (existingPhoneRole) {
-        return res.status(409).json({ message: "Account already exists for this role" });
+      const identityConflict = await resolveSignupIdentityConflict({
+        role: finalRole,
+        normalizedCnic: normalizeCnic(cnicNumber),
+        normalizedMobile: normalizedPhone,
+      });
+
+      if (identityConflict) {
+        return res.status(409).json({ message: identityConflict });
       }
     }
 
@@ -445,11 +636,6 @@ export const register = async (req, res, next) => {
 
       if (!normalizedInputDob) {
         return res.status(400).json({ message: "Valid dob is required in YYYY-MM-DD format" });
-      }
-
-      const existingCnic = await User.findOne({ cnicNumber: normalizedInputCnic });
-      if (existingCnic) {
-        return res.status(409).json({ message: "Account already exists for this CNIC" });
       }
 
       const cnicFrontFile = req.files?.cnicFrontImage?.[0];
@@ -587,9 +773,15 @@ const strictSignup = async ({ req, res, role }) => {
   const hasVerificationText = Boolean(cnic || dob);
   const wantsVerifiedSignup = hasAnyVerificationImage || hasVerificationText;
 
-  const duplicateByPhone = await User.findOne({ phone: normalizedMobile, role });
-  if (duplicateByPhone) {
-    return jsonError(res, 409, "Account already exists");
+  const normalizedInputCnic = normalizeCnic(cnic);
+  const identityConflict = await resolveSignupIdentityConflict({
+    role,
+    normalizedCnic: normalizedInputCnic,
+    normalizedMobile,
+  });
+
+  if (identityConflict) {
+    return jsonError(res, 409, identityConflict);
   }
 
   if (!wantsVerifiedSignup) {
@@ -647,7 +839,7 @@ const strictSignup = async ({ req, res, role }) => {
     return jsonError(res, 400, "cnic and dob are required for verified signup");
   }
 
-  const normalizedCnic = normalizeCnic(cnic);
+  const normalizedCnic = normalizedInputCnic;
 
   if (!profileImageFile || !cnicFrontFile || !cnicBackFile) {
     return jsonError(res, 400, "Missing required verification images");
@@ -655,14 +847,6 @@ const strictSignup = async ({ req, res, role }) => {
 
   if (role === "driver" && (!licenseNumber || !licenseImageFile)) {
     return jsonError(res, 400, "License number invalid");
-  }
-
-  const duplicate = await User.findOne({
-    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }],
-  });
-
-  if (duplicate) {
-    return jsonError(res, 409, "Account already exists");
   }
 
   const verificationResult = await verifyIdentityDocuments({
@@ -788,7 +972,7 @@ export const publicSignup = async (req, res, next) => {
 
 export const publicLogin = async (req, res, next) => {
   try {
-    const { mobile, password, role, identifier, email, phone } = req.body;
+    const { mobile, password, role, identifier, email, phone, cnic } = req.body;
 
     const phoneInput = mobile || phone || identifier;
     const normalizedMobile = normalizeNumber(phoneInput);
@@ -808,6 +992,15 @@ export const publicLogin = async (req, res, next) => {
 
     if (!inputIdentifier || !password) {
       return jsonError(res, 400, "Mobile/email and password are required");
+    }
+
+    const deletedByInput = await findDeletedAccountRecord({
+      mobileNumber: normalizedMobile,
+      cnic,
+    });
+
+    if (deletedByInput) {
+      return res.status(403).json(buildDeletedLoginResponse(deletedByInput));
     }
 
     const lookupConditions = normalizedMobile ? [{ phone: normalizedMobile }] : [];
@@ -839,6 +1032,15 @@ export const publicLogin = async (req, res, next) => {
       return jsonError(res, 404, "User not found");
     }
 
+    const deletedByStoredIdentity = await findDeletedAccountRecord({
+      mobileNumber: user.phone,
+      cnic: user.cnicNumber || user.cnic,
+    });
+
+    if (deletedByStoredIdentity) {
+      return res.status(403).json(buildDeletedLoginResponse(deletedByStoredIdentity));
+    }
+
     const passwordMatch = await verifyPasswordAndMigrateIfNeeded(user, String(password));
 
     if (!passwordMatch) {
@@ -861,7 +1063,7 @@ export const publicLogin = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { email, phone, identifier, password, role } = req.body;
+    const { email, phone, identifier, password, role, cnic } = req.body;
 
     if (!password) {
       return res.status(400).json({ message: "email and password are required" });
@@ -881,6 +1083,15 @@ export const login = async (req, res, next) => {
 
     if (identifierConditions.length === 0) {
       return res.status(400).json({ message: "email or phone is required" });
+    }
+
+    const deletedByInput = await findDeletedAccountRecord({
+      mobileNumber: phoneCandidate,
+      cnic,
+    });
+
+    if (deletedByInput) {
+      return res.status(403).json(buildDeletedLoginResponse(deletedByInput));
     }
 
     if (role && !["passenger", "driver"].includes(role)) {
@@ -906,6 +1117,15 @@ export const login = async (req, res, next) => {
 
     if (!user) {
       return res.status(404).json({ message: "No account found for selected role" });
+    }
+
+    const deletedByStoredIdentity = await findDeletedAccountRecord({
+      mobileNumber: user.phone,
+      cnic: user.cnicNumber || user.cnic,
+    });
+
+    if (deletedByStoredIdentity) {
+      return res.status(403).json(buildDeletedLoginResponse(deletedByStoredIdentity));
     }
 
     const passwordMatch = await verifyPasswordAndMigrateIfNeeded(user, password);

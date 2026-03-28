@@ -430,8 +430,14 @@ userSchema.index(
   { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: "" } } }
 );
 userSchema.index(
-  { cnicNumber: 1 },
-  { unique: true, partialFilterExpression: { cnicNumber: { $exists: true, $ne: "" } } }
+  { cnicNumber: 1, role: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      cnicNumber: { $exists: true, $ne: "" },
+      role: { $exists: true, $ne: "" },
+    },
+  }
 );
 
 export const User = mongoose.model("User", userSchema);

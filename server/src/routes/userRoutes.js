@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { protect } from "../middleware/auth.js";
 import { submitVerification } from "../controllers/verificationController.js";
+import { deleteOwnAccount } from "../controllers/authController.js";
 import { upload } from "../middleware/upload.js";
 import { User } from "../models/User.js";
 import { UserLocation } from "../models/UserLocation.js";
@@ -8,6 +9,8 @@ import { isWithinPakistanBounds } from "../utils/pakistanLocation.js";
 import { UserReport } from "../models/UserReport.js";
 
 const router = Router();
+
+router.post("/delete-account", protect, deleteOwnAccount);
 
 const maskPhone = (value) => {
   const phone = String(value || "").trim();

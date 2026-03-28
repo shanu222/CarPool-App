@@ -53,6 +53,26 @@ const formatPhone = (value: string) => {
   return digits;
 };
 
+const formatLicenseNumber = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 16);
+
+  if (digits.length <= 5) {
+    return digits;
+  }
+
+  if (digits.length <= 12) {
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  }
+
+  if (digits.length <= 13) {
+    return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+  }
+
+  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}#${digits.slice(13)}`;
+};
+
+const licensePattern = /^\d{5}-\d{7}-\d#\d{3}$/;
+
 const normalizePhone = (digits: string) => {
   const value = digits.replace(/\D/g, '');
   if (value.length !== 10) {
@@ -152,7 +172,7 @@ export function IdentityAuth() {
       profileImage: !signup.profileImage,
       cnicFront: !signup.cnicFront,
       cnicBack: !signup.cnicBack,
-      licenseNumber: role === 'driver' && !signup.licenseNumber.trim(),
+      licenseNumber: role === 'driver' && !licensePattern.test(signup.licenseNumber.trim()),
       licenseImage: role === 'driver' && !signup.licenseImage,
     };
   }, [role, signup]);
@@ -176,6 +196,11 @@ export function IdentityAuth() {
 
     if (signupErrors.passwordMismatch) {
       setErrorMessage('Passwords do not match');
+      return false;
+    }
+
+    if (role === 'driver' && signupErrors.licenseNumber) {
+      setErrorMessage('Please enter complete driving license number.');
       return false;
     }
 
@@ -544,14 +569,17 @@ export function IdentityAuth() {
 
               {role === 'driver' ? (
                 <>
-                  <input
-                    className={`h-11 rounded-xl px-3 text-white placeholder:text-white/60 ${fieldErrorClass(
-                      attempted && signupErrors.licenseNumber
-                    )}`}
-                    placeholder="Driving License Number"
-                    value={signup.licenseNumber}
-                    onChange={(event) => setSignup((prev) => ({ ...prev, licenseNumber: event.target.value }))}
-                  />
+                  <div>
+                    <input
+                      className={`h-11 w-full rounded-xl px-3 text-white placeholder:text-white/60 ${fieldErrorClass(
+                        attempted && signupErrors.licenseNumber
+                      )}`}
+                      placeholder="Driving License Number"
+                      value={signup.licenseNumber}
+                      onChange={(event) => setSignup((prev) => ({ ...prev, licenseNumber: formatLicenseNumber(event.target.value) }))}
+                    />
+                    <p className="mt-1 text-xs text-white/80">Enter license number (format will be applied automatically)</p>
+                  </div>
                   <UploadInput
                     label="License Image"
                     file={signup.licenseImage}

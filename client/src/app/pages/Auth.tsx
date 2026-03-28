@@ -75,7 +75,26 @@ const formatCnic = (raw: string) => {
   return `${p1}-${p2}-${p3}`;
 };
 
+const formatLicenseNumber = (raw: string) => {
+  const digits = raw.replace(/\D/g, '').slice(0, 16);
+
+  if (digits.length <= 5) {
+    return digits;
+  }
+
+  if (digits.length <= 12) {
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  }
+
+  if (digits.length <= 13) {
+    return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+  }
+
+  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}#${digits.slice(13)}`;
+};
+
 const cnicPattern = /^\d{5}-\d{7}-\d{1}$/;
+const licensePattern = /^\d{5}-\d{7}-\d#\d{3}$/;
 const today = new Date().toISOString().split('T')[0];
 
 const verificationReasonMessage = (reason?: string) => {
@@ -273,7 +292,7 @@ export function Auth() {
       profile: Boolean(signup.profileImage),
       front: Boolean(signup.cnicFront),
       back: Boolean(signup.cnicBack),
-      licenseNumber: signup.licenseNumber.trim().length >= 6,
+      licenseNumber: licensePattern.test(signup.licenseNumber.trim()),
       licenseImage: Boolean(signup.licenseImage),
     };
 
@@ -759,8 +778,12 @@ export function Auth() {
                           icon={<FileText className="h-4 w-4" />}
                           placeholder="License number"
                           value={signup.licenseNumber}
-                          onChange={(value) => setSignup((prev) => ({ ...prev, licenseNumber: value }))}
+                          invalid={signupAttempted && !signupValid.licenseNumber}
+                          onChange={(value) => setSignup((prev) => ({ ...prev, licenseNumber: formatLicenseNumber(value) }))}
                         />
+                        <p className="mt-1 text-xs" style={{ color: '#516A81' }}>
+                          Enter license number (format will be applied automatically)
+                        </p>
                       </FloatingField>
 
                       <UploadRow
