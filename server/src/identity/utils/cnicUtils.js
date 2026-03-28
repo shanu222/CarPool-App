@@ -41,6 +41,12 @@ export const normalizeCnic = (value) => {
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
 };
 
+export const normalizeLicenseNumber = (value) =>
+  String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .trim();
+
 export const isValidCnic = (value) => CNIC_PATTERN.test(String(value || ""));
 
 const toDateParts = (value) => {

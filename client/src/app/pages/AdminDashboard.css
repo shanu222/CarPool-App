@@ -1,0 +1,65 @@
+.admin-dashboard,
+.admin-dashboard * {
+  box-sizing: border-box;
+}
+
+.admin-dashboard {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.admin-main {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.table-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 600px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions > button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-sidebar,
+.admin-sidebar-mobile {
+  transition: width 280ms ease, transform 280ms ease, opacity 280ms ease;
+}
+
+@media (max-width: 768px) {
+  .admin-main {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .mobile-stack {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-stack button {
+    width: 100%;
+  }
+}

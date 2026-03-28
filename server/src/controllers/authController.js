@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
 import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
+import { compareFaces } from "../services/faceService.js";
+import { extractCnicData, extractLicenseNumber } from "../services/ocrService.js";
 import { isNameMatch, isSameDate, normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
 
 const getAdminEmails = () =>
@@ -21,6 +23,11 @@ const adminLoginAttempts = new Map();
 
 const normalizeEmail = (value) => (value || "").trim().toLowerCase();
 const normalizePhone = (value) => String(value || "").trim();
+const normalizeLicenseNumber = (value) =>
+  String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .trim();
 
 const buildFilePath = (req, file) => {
   if (!file?.filename) {
@@ -31,6 +38,9 @@ const buildFilePath = (req, file) => {
 };
 
 const toStoredUploadPath = (file) => (file?.path ? file.path : "");
+
+const jsonError = (res, status, error) => res.status(status).json({ success: false, error });
+const jsonSuccess = (res, status, payload) => res.status(status).json({ success: true, ...payload });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -268,6 +278,17 @@ const sanitizeUser = (user) => ({
   },
 });
 
+const minimalLoginUser = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  phone: user.phone,
+  role: user.role,
+  rating: Number(user.rating || 0),
+  isVerified: Boolean(user.isVerified),
+  verificationStatus: user.verificationStatus,
+});
+
 export const changePassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -455,6 +476,177 @@ export const register = async (req, res, next) => {
 
     const token = signToken(user);
     return res.status(201).json({ token, user: sanitizeUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const strictSignup = async ({ req, res, role }) => {
+  const { name, dob, cnic, mobile, password, licenseNumber } = req.body;
+
+  if (!name || !dob || !cnic || !mobile || !password) {
+    return jsonError(res, 400, "Missing required fields");
+  }
+
+  const normalizedCnic = normalizeCnic(cnic);
+  const normalizedDob = normalizeDob(dob);
+  const normalizedMobile = normalizePhone(mobile);
+
+  if (!normalizedCnic) {
+    return jsonError(res, 400, "CNIC number does not match");
+  }
+
+  if (!normalizedDob) {
+    return jsonError(res, 400, "DOB does not match CNIC");
+  }
+
+  const profileImageFile = req.files?.profileImage?.[0];
+  const cnicFrontFile = req.files?.cnicFront?.[0];
+  const cnicBackFile = req.files?.cnicBack?.[0];
+  const licenseImageFile = req.files?.licenseImage?.[0];
+
+  if (!profileImageFile || !cnicFrontFile || !cnicBackFile) {
+    return jsonError(res, 400, "Missing required verification images");
+  }
+
+  if (role === "driver" && (!licenseNumber || !licenseImageFile)) {
+    return jsonError(res, 400, "License number invalid");
+  }
+
+  const duplicate = await User.findOne({
+    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }, { phone: normalizedMobile, role }],
+  });
+
+  if (duplicate) {
+    return jsonError(res, 409, "Account already exists");
+  }
+
+  const cnicData = await extractCnicData({
+    cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+    cnicBackPath: toStoredUploadPath(cnicBackFile),
+  });
+
+  if (!cnicData?.cnic || normalizeCnic(cnicData.cnic) !== normalizedCnic) {
+    return jsonError(res, 400, "CNIC number does not match");
+  }
+
+  if (!cnicData?.name || !isNameMatch(normalizeName(name), cnicData.name)) {
+    return jsonError(res, 400, "Name does not match CNIC");
+  }
+
+  if (!cnicData?.dob || !isSameDate(normalizedDob, cnicData.dob)) {
+    return jsonError(res, 400, "DOB does not match CNIC");
+  }
+
+  if (role === "driver") {
+    const extractedLicense = await extractLicenseNumber(toStoredUploadPath(licenseImageFile));
+
+    if (!extractedLicense || normalizeLicenseNumber(extractedLicense) !== normalizeLicenseNumber(licenseNumber)) {
+      return jsonError(res, 400, "License number invalid");
+    }
+  }
+
+  const faceResult = await compareFaces(
+    toStoredUploadPath(cnicFrontFile),
+    toStoredUploadPath(profileImageFile),
+    Number(process.env.FACE_MATCH_THRESHOLD || 80)
+  );
+
+  if (!faceResult?.matched) {
+    return jsonError(res, 400, "Face does not match CNIC");
+  }
+
+  const normalizedEmail = `${normalizedMobile.replace(/[^\d+]/g, "")}.${role}@noemail.local`;
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  await User.create({
+    name: String(name).trim(),
+    email: normalizedEmail,
+    phone: normalizedMobile,
+    password: hashedPassword,
+    role,
+    cnicNumber: normalizedCnic,
+    cnic: normalizedCnic,
+    dob: normalizedDob,
+    selfieImage: buildFilePath(req, profileImageFile),
+    profilePhoto: buildFilePath(req, profileImageFile),
+    cnicFrontImage: buildFilePath(req, cnicFrontFile),
+    cnicBackImage: buildFilePath(req, cnicBackFile),
+    licensePhoto: role === "driver" ? buildFilePath(req, licenseImageFile) : "",
+    cnicPhoto: role === "driver" ? buildFilePath(req, licenseImageFile) : "",
+    status: "approved",
+    accountStatus: "active",
+    verificationStatus: "verified",
+    isVerified: true,
+    verified: true,
+  });
+
+  return jsonSuccess(res, 201, {
+    message: "Account created successfully. Please login.",
+  });
+};
+
+export const passengerSignup = async (req, res, next) => {
+  try {
+    return await strictSignup({ req, res, role: "passenger" });
+  } catch (error) {
+    return jsonError(res, 400, error?.message || "Verification failed");
+  }
+};
+
+export const driverSignup = async (req, res, next) => {
+  try {
+    return await strictSignup({ req, res, role: "driver" });
+  } catch (error) {
+    return jsonError(res, 400, error?.message || "Verification failed");
+  }
+};
+
+export const publicLogin = async (req, res, next) => {
+  try {
+    const { mobile, password, role, identifier, email, phone } = req.body;
+    const inputIdentifier = String(mobile || phone || identifier || email || "").trim();
+    const emailCandidate = inputIdentifier.includes("@")
+      ? inputIdentifier.toLowerCase()
+      : String(email || "").trim().toLowerCase();
+
+    if (!inputIdentifier || !password) {
+      return jsonError(res, 400, "Mobile/email and password are required");
+    }
+
+    const lookupConditions = [{ phone: inputIdentifier }];
+
+    if (emailCandidate) {
+      lookupConditions.push({ email: emailCandidate });
+    }
+
+    const selector = {
+      $or: lookupConditions,
+      ...(role ? { role } : { role: { $in: ["passenger", "driver"] } }),
+    };
+
+    const user = await User.findOne(selector);
+
+    if (!user) {
+      return jsonError(res, 404, "User not found");
+    }
+
+    const passwordMatch = await bcrypt.compare(String(password), user.password);
+
+    if (!passwordMatch) {
+      return jsonError(res, 401, "Invalid credentials");
+    }
+
+    if (user.verified !== true) {
+      return jsonError(res, 403, "Account not verified");
+    }
+
+    const token = signToken(user);
+
+    return jsonSuccess(res, 200, {
+      token,
+      user: minimalLoginUser(user),
+    });
   } catch (error) {
     return next(error);
   }

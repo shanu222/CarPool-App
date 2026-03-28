@@ -12,6 +12,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import "./AdminDashboard.css";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import type { DeletedUserArchiveItem, Payment, User, UserReportItem } from "../types";
@@ -71,7 +72,7 @@ const getViewport = (): Viewport => {
     return "desktop";
   }
 
-  if (window.innerWidth < 640) {
+  if (window.innerWidth <= 768) {
     return "mobile";
   }
 
@@ -285,15 +286,19 @@ export function AdminDashboard() {
     mainOffset > 0
       ? {
           marginLeft: `${mainOffset}px`,
+          width: `calc(100% - ${mainOffset}px)`,
+          maxWidth: `calc(100% - ${mainOffset}px)`,
         }
-      : undefined;
+      : {
+          maxWidth: "100%",
+        };
 
   const currentSectionLabel = sidebarItems.find((item) => item.key === section)?.label || "Admin Panel";
   const currentSectionDescription = sectionDescriptions[section];
 
   return (
     <div
-      className="min-h-screen overflow-x-hidden"
+      className="admin-dashboard min-h-screen overflow-x-hidden"
       style={{ background: "linear-gradient(140deg, #08142e 0%, #123760 54%, #14507d 100%)" }}
     >
       {viewport === "mobile" ? (
@@ -305,7 +310,7 @@ export function AdminDashboard() {
 
       {viewport === "desktop" ? (
         <aside
-          className="fixed left-0 top-0 z-30 h-screen overflow-y-auto border-r border-white/20 bg-slate-950/45 p-4 backdrop-blur-xl"
+          className="admin-sidebar fixed left-0 top-0 z-30 h-screen overflow-y-auto border-r border-white/20 bg-slate-950/45 p-4 backdrop-blur-xl"
           style={{ width: SIDEBAR_WIDTH }}
         >
           <SidebarContent
@@ -322,7 +327,7 @@ export function AdminDashboard() {
 
       {viewport === "tablet" ? (
         <aside
-          className={`fixed left-0 top-0 z-30 h-screen overflow-y-auto border-r border-white/20 bg-slate-950/45 p-4 backdrop-blur-xl transition-all duration-300 ${
+          className={`admin-sidebar fixed left-0 top-0 z-30 h-screen overflow-y-auto border-r border-white/20 bg-slate-950/45 p-4 backdrop-blur-xl transition-all duration-300 ${
             tabletSidebarCollapsed ? "w-20" : "w-64"
           }`}
         >
@@ -359,7 +364,7 @@ export function AdminDashboard() {
             }`}
           />
           <aside
-            className={`absolute left-0 top-0 h-full w-72 border-r border-white/20 bg-slate-950/95 p-4 backdrop-blur-xl transition-transform duration-300 ${
+            className={`admin-sidebar-mobile absolute left-0 top-0 h-full w-72 border-r border-white/20 bg-slate-950/95 p-4 backdrop-blur-xl transition-transform duration-300 ${
               mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
@@ -387,7 +392,7 @@ export function AdminDashboard() {
       ) : null}
 
       <main
-        className="w-full min-w-0 px-3 pb-6 pt-3 transition-[margin] duration-300 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
+        className="admin-main w-full min-w-0 px-3 pb-6 pt-3 transition-[margin,width] duration-300 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
         style={mainStyle}
       >
         <div className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-5">
@@ -405,7 +410,7 @@ export function AdminDashboard() {
             </header>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="cards grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
             {metrics.map((item) => (
               <MetricCard key={item.label} label={item.label} value={item.value} />
             ))}
@@ -432,7 +437,7 @@ export function AdminDashboard() {
               </div>
 
               <TableWrap>
-                <table className="min-w-[760px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -455,7 +460,7 @@ export function AdminDashboard() {
                             <StatusBadge tone="active" label="Active" />
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="danger"
                                 label="Ban"
@@ -482,7 +487,7 @@ export function AdminDashboard() {
           {!loading && section === "banned" ? (
             <SectionCard title="Banned Users" subtitle="Review ban reason and restore or remove accounts">
               <TableWrap>
-                <table className="min-w-[920px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[920px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -509,7 +514,7 @@ export function AdminDashboard() {
                             <StatusBadge tone="banned" label="Banned" />
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="success"
                                 label="Unban"
@@ -536,7 +541,7 @@ export function AdminDashboard() {
           {!loading && section === "deleted" ? (
             <SectionCard title="Deleted Users" subtitle="Archived users list">
               <TableWrap>
-                <table className="min-w-[760px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -569,7 +574,7 @@ export function AdminDashboard() {
           {!loading && section === "passengers" ? (
             <SectionCard title="Passenger Management" subtitle="Manage passenger records and moderation actions">
               <TableWrap>
-                <table className="min-w-[760px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -590,7 +595,7 @@ export function AdminDashboard() {
                           <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
                           <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="danger"
                                 label="Ban"
@@ -615,7 +620,7 @@ export function AdminDashboard() {
           {!loading && section === "drivers" ? (
             <SectionCard title="Driver Management" subtitle="Manage driver records and approvals">
               <TableWrap>
-                <table className="min-w-[760px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Name</th>
@@ -636,7 +641,7 @@ export function AdminDashboard() {
                           <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
                           <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                               <ActionButton
                                 tone="success"
                                 label="Approve"
@@ -661,7 +666,7 @@ export function AdminDashboard() {
           {!loading && section === "payments" ? (
             <SectionCard title="Payments Panel" subtitle="Review proofs and approve/reject transactions">
               <TableWrap>
-                <table className="min-w-[820px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[820px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">User</th>
@@ -687,7 +692,7 @@ export function AdminDashboard() {
                         </td>
                         <td className="px-3 py-3">{payment.status}</td>
                         <td className="px-3 py-3">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                             <ActionButton
                               tone="success"
                               label="Approve"
@@ -711,7 +716,7 @@ export function AdminDashboard() {
           {!loading && section === "reports" ? (
             <SectionCard title="Reports Panel" subtitle="Review report comments and take action">
               <TableWrap>
-                <table className="min-w-[860px] text-left text-sm text-slate-100">
+                <table className="admin-table min-w-[860px] text-left text-sm text-slate-100">
                   <thead>
                     <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                       <th className="px-3 py-3">Reported User</th>
@@ -735,7 +740,7 @@ export function AdminDashboard() {
                           )}
                         </td>
                         <td className="px-3 py-3">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                             <ActionButton
                               tone="neutral"
                               label="Ignore"
@@ -800,7 +805,7 @@ export function AdminDashboard() {
               </div>
             ) : null}
 
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <div className="mobile-stack mt-4 flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
                 onClick={handleConfirmAction}
@@ -909,7 +914,7 @@ function MetricCard({ label, value }: { label: string; value: number }) {
 }
 
 function TableWrap({ children }: { children: ReactNode }) {
-  return <div className="w-full overflow-x-auto rounded-2xl border border-white/20 bg-white/5">{children}</div>;
+  return <div className="table-container w-full overflow-x-auto rounded-2xl border border-white/20 bg-white/5">{children}</div>;
 }
 
 function StatusBadge({ tone, label }: { tone: "active" | "banned" | "deleted"; label: string }) {

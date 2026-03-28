@@ -20,6 +20,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
 import changeRequestRoutes from "./routes/changeRequestRoutes.js";
 import supportRoutes from "./routes/supportRoutes.js";
+import publicAuthRoutes from "./routes/publicAuthRoutes.js";
 import identityAuthRoutes from "./identity/routes/identityAuthRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { initializeSocket } from "./socket/setupSocket.js";
@@ -153,6 +154,7 @@ app.get("/ready", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api", publicAuthRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/notifications", notificationRoutes);

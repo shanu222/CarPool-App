@@ -13,6 +13,7 @@ import {
   updatePasswordWithResetToken,
 } from "../repository/identityAuthRepository.js";
 import { compareFaceAgainstCnic } from "../services/faceMatchService.js";
+import { extractLicenseDataFromImage } from "../services/licenseOcrService.js";
 import { extractCnicDataFromImages } from "../services/ocrService.js";
 import { saveVerificationFile } from "../services/storageService.js";
 import {
@@ -20,6 +21,7 @@ import {
   isValidCnic,
   normalizeCnic,
   normalizeDob,
+  normalizeLicenseNumber,
   normalizeName,
   normalizePhone,
 } from "../utils/cnicUtils.js";
@@ -166,6 +168,26 @@ export const signupWithIdentityVerification = async (req, res, next) => {
 
     if (!isSameDate(parsedCnic.dob, dob)) {
       return sendError(res, 400, "Date of birth does not match CNIC");
+    }
+
+    if (role === "driver") {
+      let parsedLicense;
+
+      try {
+        parsedLicense = await extractLicenseDataFromImage({
+          licenseBuffer: licenseImageFile.buffer,
+        });
+      } catch (error) {
+        if (error?.statusCode === 400) {
+          return sendError(res, 400, "Uploaded driving license image is unclear");
+        }
+
+        throw error;
+      }
+
+      if (normalizeLicenseNumber(parsedLicense.licenseNumber) !== normalizeLicenseNumber(licenseNumber)) {
+        return sendError(res, 400, "License number does not match the uploaded driving license");
+      }
     }
 
     let faceResult;

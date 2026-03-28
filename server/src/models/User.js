@@ -66,6 +66,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    verified: {
+      type: Boolean,
+      default: false,
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -284,6 +288,7 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
     this.paymentApproved = true;
     this.accountStatus = "active";
     this.isVerified = true;
+    this.verified = true;
     this.verificationStatus = "verified";
     this.isDeleted = false;
     this.hasPurchased = true;
@@ -306,6 +311,14 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
     this.freeChatCredits = this.freeChatsRemaining;
   } else if (typeof this.freeChatCredits === "number") {
     this.freeChatsRemaining = this.freeChatCredits;
+  }
+
+  if (typeof this.isVerified === "boolean" && typeof this.verified !== "boolean") {
+    this.verified = this.isVerified;
+  }
+
+  if (typeof this.verified === "boolean") {
+    this.isVerified = this.verified;
   }
 
   return next();
