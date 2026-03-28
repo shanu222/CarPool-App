@@ -109,9 +109,9 @@ export function PaymentMethods() {
                 accountNumber={settings.jazzcashNumber || "Not set"}
               />
               <MethodCard
-                title="Bank"
-                accountTitle={settings.accountTitle || "Not set"}
-                accountNumber={settings.bankAccount || "Not set"}
+                title="HBL Bank"
+                accountTitle="Shahnawaz"
+                accountNumber="24897000279603"
               />
             </div>
 
@@ -125,11 +125,18 @@ export function PaymentMethods() {
                   <select
                     value={method}
                     onChange={(event) => setMethod(event.target.value as "easypaisa" | "jazzcash" | "bank")}
-                    className="mt-1 w-full rounded-xl border border-white/35 bg-white/20 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white/90 px-3 py-2 text-sm text-slate-800"
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#1e293b" }}
                   >
-                    <option value="easypaisa">Easypaisa</option>
-                    <option value="jazzcash">JazzCash</option>
-                    <option value="bank">Bank</option>
+                    <option value="easypaisa" style={{ backgroundColor: "#ffffff", color: "#1e293b" }}>
+                      Easypaisa
+                    </option>
+                    <option value="jazzcash" style={{ backgroundColor: "#ffffff", color: "#1e293b" }}>
+                      JazzCash
+                    </option>
+                    <option value="bank" style={{ backgroundColor: "#ffffff", color: "#1e293b" }}>
+                      Bank
+                    </option>
                   </select>
                 </div>
 
