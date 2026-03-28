@@ -6,6 +6,7 @@ import { Home } from "./pages/Home";
 import { SearchResults } from "./pages/SearchResults";
 import { RideDetails } from "./pages/RideDetails";
 import { PostRide } from "./pages/PostRide";
+import { PostRequest } from "./pages/PostRequest";
 import { Booking } from "./pages/Booking";
 import { MyTrips } from "./pages/MyTrips";
 import { Chat } from "./pages/Chat";
@@ -84,6 +85,14 @@ export const router = createBrowserRouter(
                 {
                   path: "/post-ride",
                   element: <PostRide />,
+                },
+                {
+                  path: "/request-ride",
+                  element: <PostRequest />,
+                },
+                {
+                  path: "/post-request",
+                  element: <PostRequest />,
                 },
                 {
                   path: "/ride-requests",

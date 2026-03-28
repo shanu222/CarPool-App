@@ -7,7 +7,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 type Screen = 'login' | 'signup' | 'forgot' | 'reset' | 'success';
-type VerifyStep = 'Checking CNIC' | 'Matching Name' | 'Validating DOB' | 'Matching Face';
+type VerifyStep = 'Checking CNIC' | 'Matching Name' | 'Validating DOB' | 'Matching Face' | 'Matching License';
 
 type SignupForm = {
   fullName: string;
@@ -35,7 +35,8 @@ const colors = {
   bg: '#F5F7FA',
 };
 
-const verifySteps: VerifyStep[] = ['Checking CNIC', 'Matching Name', 'Validating DOB', 'Matching Face'];
+const passengerVerifySteps: VerifyStep[] = ['Checking CNIC', 'Matching Name', 'Validating DOB', 'Matching Face'];
+const driverVerifySteps: VerifyStep[] = ['Checking CNIC', 'Matching Name', 'Validating DOB', 'Matching Face', 'Matching License'];
 
 const emptySignup: SignupForm = {
   fullName: '',
@@ -89,6 +90,7 @@ const verificationReasonMessage = (reason?: string) => {
     DOB_MISMATCH: 'Date of birth does not match.',
     FACE_CHECK_FAILED: 'Face verification check failed.',
     FACE_MISMATCH: 'Face does not match CNIC photo.',
+    LICENSE_REQUIRED: 'Driving license number and image are required.',
     LICENSE_EXTRACTION_FAILED: 'Unable to read driving license number from image.',
     LICENSE_MISMATCH: 'License number does not match.',
   };
@@ -200,6 +202,7 @@ export function Auth() {
   const [isVerifyingOverlayVisible, setIsVerifyingOverlayVisible] = useState(false);
   const [verifyIndex, setVerifyIndex] = useState(0);
   const [verifyFailedIndex, setVerifyFailedIndex] = useState<number | null>(null);
+  const currentVerifySteps = signupRole === 'driver' ? driverVerifySteps : passengerVerifySteps;
 
   const reasonToVerifyStepIndex = (reason?: string) => {
     const code = String(reason || '').trim().toUpperCase();
@@ -220,7 +223,11 @@ export function Auth() {
       return 3;
     }
 
-    if (['LICENSE_EXTRACTION_FAILED', 'LICENSE_MISMATCH'].includes(code)) {
+    if (['LICENSE_REQUIRED', 'LICENSE_EXTRACTION_FAILED', 'LICENSE_MISMATCH'].includes(code)) {
+      if (signupRole === 'driver') {
+        return 4;
+      }
+
       return 3;
     }
 
@@ -236,7 +243,7 @@ export function Auth() {
       return;
     }
 
-    if (verifyIndex >= verifySteps.length) {
+    if (verifyIndex >= currentVerifySteps.length) {
       if (isLoading) {
         return;
       }
@@ -254,7 +261,7 @@ export function Auth() {
     }, 950);
 
     return () => window.clearTimeout(timer);
-  }, [isVerifyingOverlayVisible, verifyIndex, verifyFailedIndex, isLoading]);
+  }, [isVerifyingOverlayVisible, verifyIndex, verifyFailedIndex, isLoading, currentVerifySteps.length]);
 
   const signupValid = useMemo(() => {
     const mobileDigits = signup.mobile.replace(/\D/g, '');
@@ -419,7 +426,7 @@ export function Auth() {
         setVerifyFailedIndex(failedIndexFromReason);
         setVerifyIndex(failedIndexFromReason);
       } else {
-        setVerifyFailedIndex(Math.min(verifyIndex, verifySteps.length - 1));
+        setVerifyFailedIndex(Math.min(verifyIndex, currentVerifySteps.length - 1));
       }
 
       if (deepDetails) {
@@ -514,7 +521,7 @@ export function Auth() {
   };
 
   const verificationProgress = Math.round(
-    ((verifyFailedIndex !== null ? verifyFailedIndex + 1 : verifyIndex) / verifySteps.length) * 100
+    ((verifyFailedIndex !== null ? verifyFailedIndex + 1 : verifyIndex) / currentVerifySteps.length) * 100
   );
   const activeAccent = signupRole === 'driver' ? colors.green : '#1B6FA3';
 
@@ -945,7 +952,7 @@ export function Auth() {
             </div>
 
             <div className="mt-4 space-y-2">
-              {verifySteps.map((step, index) => {
+              {currentVerifySteps.map((step, index) => {
                 const failed = verifyFailedIndex === index;
                 const done = verifyFailedIndex !== null ? index < verifyFailedIndex : verifyIndex > index;
                 const active = verifyFailedIndex === null && verifyIndex === index;
