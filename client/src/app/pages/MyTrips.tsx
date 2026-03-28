@@ -129,16 +129,31 @@ export function MyTrips() {
   const showPassengerView = role === 'passenger';
   const showDriverView = role === 'driver';
 
-  const passengerLiveBookings = bookings.filter((trip) => trip.ride?.status === 'live');
-  const passengerScheduledBookings = bookings.filter((trip) => trip.ride?.status === 'scheduled');
+  const matchedRideIds = new Set(
+    (matchedTrips || [])
+      .filter((item) => item.status === 'approved')
+      .map((item) => String(item.rideId || item.ride?._id || ''))
+      .filter(Boolean)
+  );
+
+  const passengerLiveBookings = bookings.filter(
+    (trip) => trip.ride?.status === 'live' && !matchedRideIds.has(String(trip.ride?._id || trip.rideId || ''))
+  );
+  const passengerScheduledBookings = bookings.filter(
+    (trip) => trip.ride?.status === 'scheduled' && !matchedRideIds.has(String(trip.ride?._id || trip.rideId || ''))
+  );
 
   const passengerCompletedBookings = bookings.filter((trip) => {
     return trip.status === 'completed' || trip.ride?.status === 'completed';
   });
   const passengerExpiredBookings = bookings.filter((trip) => trip.ride?.status === 'expired');
 
-  const passengerLiveRequests = requests.filter((item) => item.timeClass === 'live');
-  const passengerScheduledRequests = requests.filter((item) => item.timeClass === 'scheduled');
+  const passengerLiveRequests = requests.filter(
+    (item) => item.timeClass === 'live' && !matchedRideIds.has(String(item.matchedRideId || ''))
+  );
+  const passengerScheduledRequests = requests.filter(
+    (item) => item.timeClass === 'scheduled' && !matchedRideIds.has(String(item.matchedRideId || ''))
+  );
   const passengerCompletedRequests = requests.filter((item) => item.timeClass === 'completed' || item.status === 'completed');
   const passengerExpiredRequests = requests.filter((item) => item.timeClass === 'expired' || item.status === 'expired');
 
@@ -162,12 +177,12 @@ export function MyTrips() {
       : tab === 'expired'
       ? passengerExpiredRequests
       : passengerCompletedRequests;
-  const activeMatchedTrips = tab === 'matched' ? matchedTrips : [];
+  const activeMatchedTrips = tab === 'matched' ? matchedTrips.filter((item) => item.status === 'approved') : [];
   const activeDriverTrips =
     tab === 'live'
       ? driverLiveRides
       : tab === 'scheduled'
-      ? driverScheduledRides
+      ? driverScheduledRides.filter((ride) => !matchedRideIds.has(String(ride._id || '')))
       : tab === 'matched'
       ? []
       : tab === 'expired'

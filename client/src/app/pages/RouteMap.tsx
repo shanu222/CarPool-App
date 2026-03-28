@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Navigation } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -12,7 +12,7 @@ type Coordinates = {
   lng: number;
 };
 
-type MapboxDirectionsRoute = {
+type OsrmRoute = {
   distance?: number;
   duration?: number;
   geometry?: {
@@ -23,14 +23,12 @@ type MapboxDirectionsRoute = {
       maneuver?: {
         instruction?: string;
       };
-      distance?: number;
-      duration?: number;
     }>;
   }>;
 };
 
-type MapboxDirectionsResponse = {
-  routes?: MapboxDirectionsRoute[];
+type OsrmDirectionsResponse = {
+  routes?: OsrmRoute[];
 };
 
 const PAKISTAN_CENTER: LatLngExpression = [30.3753, 69.3451];
@@ -108,8 +106,6 @@ export function RouteMap() {
   const [durationSeconds, setDurationSeconds] = useState<number | undefined>();
   const [steps, setSteps] = useState<string[]>([]);
 
-  const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-
   const pickup = useMemo(
     () => toCoord(ride?.pickupLocation || ride?.fromCoordinates || null),
     [ride?.pickupLocation, ride?.fromCoordinates]
@@ -156,29 +152,17 @@ export function RouteMap() {
       if (!pickup || !drop) {
         setRoutePoints([]);
         setSteps([]);
-        return;
-      }
-
-      if (!token) {
-        setError("Mapbox token missing. Add VITE_MAPBOX_ACCESS_TOKEN to show road route and traffic.");
-        setRoutePoints([
-          [pickup.lat, pickup.lng],
-          [drop.lat, drop.lng],
-        ]);
         setDistanceMeters(undefined);
         setDurationSeconds(undefined);
-        setSteps([]);
         return;
       }
 
       try {
-        const endpoint = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}`;
+        const endpoint = `https://router.project-osrm.org/route/v1/driving/${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}`;
         const params = new URLSearchParams({
-          geometries: "geojson",
           overview: "full",
-          alternatives: "false",
+          geometries: "geojson",
           steps: "true",
-          access_token: token,
         });
 
         const response = await fetch(`${endpoint}?${params.toString()}`);
@@ -186,7 +170,7 @@ export function RouteMap() {
           throw new Error("Directions lookup failed");
         }
 
-        const data = (await response.json()) as MapboxDirectionsResponse;
+        const data = (await response.json()) as OsrmDirectionsResponse;
         const route = data.routes?.[0];
         const coordinates = route?.geometry?.coordinates || [];
         const points: Array<[number, number]> = coordinates
@@ -208,10 +192,7 @@ export function RouteMap() {
         );
       } catch {
         setError("Could not load road route. Try again shortly.");
-        setRoutePoints([
-          [pickup.lat, pickup.lng],
-          [drop.lat, drop.lng],
-        ]);
+        setRoutePoints([]);
         setDistanceMeters(undefined);
         setDurationSeconds(undefined);
         setSteps([]);
@@ -219,7 +200,7 @@ export function RouteMap() {
     };
 
     loadDirections();
-  }, [pickup, drop, token]);
+  }, [pickup, drop]);
 
   if (loading) {
     return <div className="p-6">Loading map...</div>;
@@ -246,17 +227,10 @@ export function RouteMap() {
       <div className="mt-3 overflow-hidden rounded-2xl border border-white/20 bg-white">
         <div className="h-[62vh] w-full">
           <MapContainer center={mapCenter} zoom={11} className="h-full w-full" scrollWheelZoom>
-            {token ? (
-              <TileLayer
-                attribution='&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url={`https://api.mapbox.com/styles/v1/mapbox/traffic-day-v2/tiles/256/{z}/{x}/{y}@2x?access_token=${token}`}
-              />
-            ) : (
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-            )}
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
             {routePoints.length ? (
               <Polyline positions={routePoints} pathOptions={{ color: "#2563eb", weight: 5 }} />
@@ -279,10 +253,6 @@ export function RouteMap() {
           <div className="mt-2 flex items-center justify-between">
             <span>ETA</span>
             <span className="font-medium text-white">{formatEta(durationSeconds)}</span>
-          </div>
-          <div className="mt-2 flex items-center gap-1 text-xs text-slate-200">
-            <Navigation className="h-3.5 w-3.5" />
-            {token ? "Traffic layer enabled" : "Traffic layer requires VITE_MAPBOX_ACCESS_TOKEN"}
           </div>
           {error ? <p className="mt-2 text-xs text-amber-200">{error}</p> : null}
         </div>

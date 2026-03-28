@@ -341,6 +341,8 @@ export interface MatchedTrip {
     status?: string;
     pricePerSeat?: number;
     totalSeats?: number;
+    bookedSeats?: number;
+    availableSeats?: number;
   };
   otherUser?: {
     id: string;

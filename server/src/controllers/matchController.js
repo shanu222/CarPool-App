@@ -55,6 +55,8 @@ const buildMatchResponse = ({ match, ride, request, booking, meId }) => {
           status: ride.status,
           pricePerSeat: ride.pricePerSeat,
           totalSeats: ride.totalSeats,
+          bookedSeats: ride.bookedSeats,
+          availableSeats: ride.availableSeats,
         }
       : undefined,
     otherUser: otherUser
@@ -120,6 +122,10 @@ const ensureBookingForMatch = async ({ ride, request }) => {
 const finalizeMatchIfApproved = async ({ match, ride, request, booking, actorUserId }) => {
   const bothApproved = Boolean(match.driverApproved) && Boolean(match.passengerApproved);
 
+  if (match.status === "approved" && bothApproved) {
+    return match;
+  }
+
   match.status = bothApproved ? "approved" : "pending";
   match.rideId = ride._id;
   match.requestId = request._id;
@@ -146,6 +152,32 @@ const finalizeMatchIfApproved = async ({ match, ride, request, booking, actorUse
     return match;
   }
 
+  const seatsToReserve = 1;
+  const reserveResult = await Ride.updateOne(
+    {
+      _id: ride._id,
+      availableSeats: { $gte: seatsToReserve },
+      status: { $in: ["scheduled", "nearby", "live", "ongoing"] },
+    },
+    {
+      $inc: {
+        bookedSeats: seatsToReserve,
+        availableSeats: -seatsToReserve,
+      },
+    }
+  );
+
+  if (!reserveResult?.modifiedCount) {
+    match.status = "pending";
+    match.driverApproved = false;
+    match.passengerApproved = false;
+    await match.save();
+    throw Object.assign(new Error("Ride is full"), { statusCode: 400 });
+  }
+
+  booking.seatsRequested = Math.max(1, Number(booking.seatsRequested || 1));
+  booking.seatsBooked = 1;
+  booking.totalPrice = Number(ride.pricePerSeat || 0);
   booking.status = "accepted";
   await booking.save();
 
@@ -154,12 +186,12 @@ const finalizeMatchIfApproved = async ({ match, ride, request, booking, actorUse
   request.matchedBookingId = booking._id;
   await request.save();
 
-  if (!["completed", "cancelled", "expired"].includes(String(ride.status))) {
-    ride.status = "matched";
-    const { date, time } = getRideDateParts(ride.dateTime || `${ride.date}T${ride.time}:00`);
-    ride.date = date;
-    ride.time = time;
-    await ride.save();
+  const freshRide = await Ride.findById(ride._id);
+  if (freshRide && !["completed", "cancelled", "expired"].includes(String(freshRide.status))) {
+    const { date, time } = getRideDateParts(freshRide.dateTime || `${freshRide.date}T${freshRide.time}:00`);
+    freshRide.date = date;
+    freshRide.time = time;
+    await freshRide.save();
   }
 
   const actorIsDriver = String(actorUserId) === String(match.driverId);
@@ -351,7 +383,7 @@ export const acceptRideMatch = async (req, res, next) => {
     const populatedMatch = await Match.findById(match._id)
       .populate("driverId", "name profilePhoto phone")
       .populate("passengerId", "name profilePhoto phone")
-      .populate("rideId", "fromCity toCity date time dateTime status pricePerSeat totalSeats")
+      .populate("rideId", "fromCity toCity date time dateTime status pricePerSeat totalSeats bookedSeats availableSeats")
       .populate("requestId", "fromCity toCity dateTime seatsNeeded status")
       .populate("bookingId", "status seatsBooked totalPrice");
 
@@ -366,6 +398,10 @@ export const acceptRideMatch = async (req, res, next) => {
       }),
     });
   } catch (error) {
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message || "Ride is full" });
+    }
+
     return next(error);
   }
 };
@@ -414,7 +450,7 @@ export const approveRideMatch = async (req, res, next) => {
     const populatedMatch = await Match.findById(match._id)
       .populate("driverId", "name profilePhoto phone")
       .populate("passengerId", "name profilePhoto phone")
-      .populate("rideId", "fromCity toCity date time dateTime status pricePerSeat totalSeats")
+      .populate("rideId", "fromCity toCity date time dateTime status pricePerSeat totalSeats bookedSeats availableSeats")
       .populate("requestId", "fromCity toCity dateTime seatsNeeded status")
       .populate("bookingId", "status seatsBooked totalPrice");
 
@@ -429,6 +465,10 @@ export const approveRideMatch = async (req, res, next) => {
       }),
     });
   } catch (error) {
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message || "Ride is full" });
+    }
+
     return next(error);
   }
 };
@@ -446,7 +486,7 @@ export const getMyMatchedTrips = async (req, res, next) => {
     const matches = await Match.find(query)
       .populate("driverId", "name profilePhoto phone")
       .populate("passengerId", "name profilePhoto phone")
-      .populate("rideId", "fromCity toCity date time dateTime status pricePerSeat totalSeats")
+      .populate("rideId", "fromCity toCity date time dateTime status pricePerSeat totalSeats bookedSeats availableSeats")
       .populate("requestId", "fromCity toCity dateTime seatsNeeded status")
       .populate("bookingId", "status seatsBooked totalPrice")
       .sort({ createdAt: -1 });

@@ -13,6 +13,10 @@ export function RideCard({ ride }: RideCardProps) {
   const isLive = ride.status === 'live' && ride.availableSeats > 0;
   const isNearby = ride.status === 'nearby';
   const isScheduled = ride.status === 'scheduled';
+  const totalSeats = Number(ride.totalSeats || 0);
+  const bookedSeats = Number(ride.bookedSeats || 0);
+  const availableSeats = Number(ride.availableSeats || 0);
+  const rideIsFull = availableSeats <= 0;
 
   return (
     <motion.div
@@ -52,9 +56,11 @@ export function RideCard({ ride }: RideCardProps) {
           <span className="rounded-full bg-slate-500/25 px-2 py-1 text-[11px] text-slate-200">{ride.status || 'UNKNOWN'}</span>
         )}
 
-        {ride.availableSeats > 0 ? (
-          <span className="text-xs text-emerald-200">{ride.availableSeats} seat{ride.availableSeats !== 1 ? 's' : ''} left</span>
-        ) : null}
+        {rideIsFull ? (
+          <span className="text-xs text-red-200">Ride Full</span>
+        ) : (
+          <span className="text-xs text-emerald-200">{availableSeats} seat{availableSeats !== 1 ? 's' : ''} left</span>
+        )}
       </div>
 
       <div className="flex items-start gap-2 mb-3">
@@ -79,7 +85,7 @@ export function RideCard({ ride }: RideCardProps) {
         <div className="flex items-center gap-4 text-sm text-slate-100">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
-            <span>{ride.availableSeats} seats left</span>
+            <span>{bookedSeats} seat{bookedSeats !== 1 ? 's' : ''} booked • {availableSeats} seat{availableSeats !== 1 ? 's' : ''} left</span>
           </div>
           <div className="flex items-center gap-1">
             <Clock className="w-4 h-4" />
@@ -88,6 +94,8 @@ export function RideCard({ ride }: RideCardProps) {
         </div>
         <div className="text-xs text-slate-100">Driver Ride</div>
       </div>
+
+      <div className="pt-2 text-xs text-slate-100">Total seats: {totalSeats}</div>
 
       <div className="pt-3">
         <button
