@@ -41,6 +41,16 @@ const sidebarItems: Array<{ key: SectionKey; label: string; icon: ReactNode }> =
   { key: "reports", label: "Reports Panel", icon: <FileWarning className="h-4 w-4" /> },
 ];
 
+const sectionDescriptions: Record<SectionKey, string> = {
+  active: "Monitor active accounts and moderation actions",
+  banned: "Review suspensions and manage ban appeals",
+  deleted: "Inspect archived user records",
+  passengers: "Oversee passenger activity and enforcement",
+  drivers: "Manage driver verification and status",
+  payments: "Validate payment proofs and settlements",
+  reports: "Investigate abuse reports and outcomes",
+};
+
 const resolveUserId = (user: User) => String(user.id || user._id || "");
 
 const formatDateTime = (value?: string) => {
@@ -275,9 +285,11 @@ export function AdminDashboard() {
     mainOffset > 0
       ? {
           marginLeft: `${mainOffset}px`,
-          width: `calc(100% - ${mainOffset}px)`,
         }
       : undefined;
+
+  const currentSectionLabel = sidebarItems.find((item) => item.key === section)?.label || "Admin Panel";
+  const currentSectionDescription = sectionDescriptions[section];
 
   return (
     <div
@@ -375,18 +387,32 @@ export function AdminDashboard() {
       ) : null}
 
       <main
-        className="min-w-0 px-3 pb-6 pt-3 transition-[margin,width] duration-300 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
+        className="w-full min-w-0 px-3 pb-6 pt-3 transition-[margin] duration-300 sm:px-4 sm:pb-8 sm:pt-4 md:px-6 md:pb-10 md:pt-6"
         style={mainStyle}
       >
-        <div className="mx-auto max-w-7xl">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-5">
+          {viewport !== "mobile" ? (
+            <header className="sticky top-3 z-20 hidden items-center justify-between rounded-2xl border border-white/20 bg-slate-950/55 px-4 py-3 backdrop-blur-xl sm:flex">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-cyan-100/80">Admin Workspace</p>
+                <h2 className="mt-1 text-lg font-semibold text-white md:text-xl">{currentSectionLabel}</h2>
+                <p className="mt-0.5 text-xs text-slate-200 md:text-sm">{currentSectionDescription}</p>
+              </div>
+              <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-right">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-slate-300">Mode</p>
+                <p className="text-sm font-medium text-white">Operations</p>
+              </div>
+            </header>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
             {metrics.map((item) => (
               <MetricCard key={item.label} label={item.label} value={item.value} />
             ))}
           </div>
 
-          {error ? <p className="mt-4 rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-100">{error}</p> : null}
-          {loading ? <p className="mt-4 text-sm text-slate-100">Loading admin dashboard...</p> : null}
+          {error ? <p className="rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-100">{error}</p> : null}
+          {loading ? <p className="text-sm text-slate-100">Loading admin dashboard...</p> : null}
 
           {!loading && section === "active" ? (
             <SectionCard title="Active Users" subtitle="Filter by role and run quick moderation actions">
@@ -865,9 +891,9 @@ function SidebarContent({
 
 function SectionCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
-    <section className="mt-4 rounded-2xl border border-white/20 bg-white/8 p-3 sm:p-4 md:p-5">
+    <section className="rounded-3xl border border-white/20 bg-white/8 p-4 sm:p-5 md:p-6">
       <h2 className="text-lg font-semibold text-white sm:text-xl">{title}</h2>
-      <p className="mb-3 text-sm text-slate-200">{subtitle}</p>
+      <p className="mb-4 text-sm text-slate-200 sm:text-base">{subtitle}</p>
       {children}
     </section>
   );
@@ -875,9 +901,9 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle: s
 
 function MetricCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-white/20 bg-white/10 p-3 sm:p-4">
-      <p className="text-xs text-slate-200 sm:text-sm">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-white sm:text-xl">{value}</p>
+    <div className="min-h-[110px] rounded-2xl border border-white/20 bg-white/10 p-4 sm:p-5">
+      <p className="text-sm text-slate-200">{label}</p>
+      <p className="mt-2 text-2xl font-semibold leading-none text-white sm:text-[1.75rem]">{value}</p>
     </div>
   );
 }
