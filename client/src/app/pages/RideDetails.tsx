@@ -204,6 +204,13 @@ export function RideDetails() {
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/route-map/${ride._id}`)}
+            className="mt-4 w-full rounded-xl bg-white/15 px-3 py-2 text-sm text-white"
+          >
+            Open Map
+          </button>
         </motion.div>
 
         <motion.div

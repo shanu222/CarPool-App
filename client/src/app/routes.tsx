@@ -5,6 +5,7 @@ import { IdentityAuth } from "./pages/IdentityAuth";
 import { Home } from "./pages/Home";
 import { SearchResults } from "./pages/SearchResults";
 import { RideDetails } from "./pages/RideDetails";
+import { RouteMap } from "./pages/RouteMap";
 import { PostRide } from "./pages/PostRide";
 import { PostRequest } from "./pages/PostRequest";
 import { Booking } from "./pages/Booking";
@@ -81,6 +82,10 @@ export const router = createBrowserRouter(
                 {
                   path: "/ride/:id",
                   element: <RideDetails />,
+                },
+                {
+                  path: "/route-map/:rideId",
+                  element: <RouteMap />,
                 },
                 {
                   path: "/post-ride",

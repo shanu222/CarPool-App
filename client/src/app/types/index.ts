@@ -85,6 +85,14 @@ export interface Ride {
     lat: number;
     lng: number;
   };
+  pickupLocation?: {
+    lat: number;
+    lng: number;
+  };
+  dropLocation?: {
+    lat: number;
+    lng: number;
+  };
   distanceText?: string;
   durationText?: string;
   distanceKm?: number;

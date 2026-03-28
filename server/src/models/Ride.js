@@ -125,6 +125,17 @@ const rideSchema = new mongoose.Schema(
   }
 );
 
+rideSchema.virtual("pickupLocation").get(function pickupLocationVirtual() {
+  return this.fromCoordinates || null;
+});
+
+rideSchema.virtual("dropLocation").get(function dropLocationVirtual() {
+  return this.toCoordinates || null;
+});
+
+rideSchema.set("toJSON", { virtuals: true });
+rideSchema.set("toObject", { virtuals: true });
+
 rideSchema.index({ fromCity: 1, toCity: 1, date: 1 });
 
 rideSchema.pre("validate", function syncDateTime(next) {

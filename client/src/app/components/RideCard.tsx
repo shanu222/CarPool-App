@@ -88,6 +88,19 @@ export function RideCard({ ride }: RideCardProps) {
         </div>
         <div className="text-xs text-slate-100">Driver Ride</div>
       </div>
+
+      <div className="pt-3">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            navigate(`/route-map/${ride._id}`);
+          }}
+          className="w-full rounded-xl bg-white/15 px-3 py-2 text-sm text-white"
+        >
+          Open Map
+        </button>
+      </div>
     </motion.div>
   );
 }
