@@ -54,7 +54,7 @@ export const extractText = async (imagePath) => {
 const parseCnicText = (text) => {
   const raw = String(text || "");
   const cnicMatch = raw.match(/\b\d{5}-?\d{7}-?\d\b/);
-  const dobMatch = raw.match(/\b\d{2}[/-]\d{2}[/-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/);
+  const dobMatch = raw.match(/\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/);
 
   const lines = raw
     .replace(/\r/g, "")

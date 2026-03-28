@@ -32,8 +32,8 @@ export const normalizeDob = (value) => {
     return text;
   }
 
-  if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(text)) {
-    const [day, month, year] = text.split(/[/-]/).map((part) => Number(part));
+  if (/^\d{2}[./-]\d{2}[./-]\d{4}$/.test(text)) {
+    const [day, month, year] = text.split(/[./-]/).map((part) => Number(part));
     return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day
       .toString()
       .padStart(2, "0")}`;
@@ -53,7 +53,7 @@ export const parseCnicText = (text) => {
     .filter(Boolean);
 
   const cnicMatch = normalized.match(/\b\d{5}-?\d{7}-?\d\b/);
-  const dobMatch = normalized.match(/\b\d{2}[/-]\d{2}[/-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/);
+  const dobMatch = normalized.match(/\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/);
 
   const excludedKeywords = [
     "identity",
