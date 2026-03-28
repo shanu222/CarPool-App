@@ -59,6 +59,39 @@ const resolvePaymentProofPath = (payment) => {
   return path.join(paymentsUploadDir, fileName);
 };
 
+const normalizePaymentProofPublicPath = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  let candidate = raw;
+
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const parsed = new URL(candidate);
+      candidate = parsed.pathname || "";
+    } catch {
+      return "";
+    }
+  }
+
+  if (candidate.startsWith("/uploads/payments/")) {
+    return candidate;
+  }
+
+  if (candidate.startsWith("uploads/payments/")) {
+    return `/${candidate}`;
+  }
+
+  const fileName = path.basename(candidate);
+  if (!fileName) {
+    return "";
+  }
+
+  return `/uploads/payments/${fileName}`;
+};
+
 export const getAdminUsers = async (req, res, next) => {
   try {
     const { role, status } = req.query;
@@ -363,7 +396,18 @@ export const getAdminPayments = async (_req, res, next) => {
       .populate("reviewedBy", "name email")
       .sort({ createdAt: -1 });
 
-    return res.json(payments);
+    const normalized = payments.map((paymentDoc) => {
+      const payment = paymentDoc.toObject();
+      const normalizedProofPath = normalizePaymentProofPublicPath(payment.proofImage || payment.screenshot);
+
+      return {
+        ...payment,
+        screenshot: normalizedProofPath || payment.screenshot,
+        proofImage: normalizedProofPath || payment.proofImage,
+      };
+    });
+
+    return res.json(normalized);
   } catch (error) {
     return next(error);
   }

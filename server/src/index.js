@@ -24,7 +24,6 @@ import supportRoutes from "./routes/supportRoutes.js";
 import publicAuthRoutes from "./routes/publicAuthRoutes.js";
 import identityAuthRoutes from "./identity/routes/identityAuthRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
-import { protect, requireAdmin } from "./middleware/auth.js";
 import { initializeSocket } from "./socket/setupSocket.js";
 import { checkExpiredRides, startRideExpiryScheduler } from "./services/rideExpiryService.js";
 
@@ -134,12 +133,6 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
-app.use(
-  "/uploads/payments",
-  protect,
-  requireAdmin,
-  express.static(path.resolve(__dirname, "..", "uploads", "payments"), { fallthrough: false })
-);
 app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 
 app.get("/", (req, res) => {

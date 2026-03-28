@@ -246,9 +246,6 @@ export function AdminDashboard() {
   };
 
   const closeProofModal = () => {
-    if (proofUrl) {
-      URL.revokeObjectURL(proofUrl);
-    }
     setProofModalOpen(false);
     setProofLoading(false);
     setProofError("");
@@ -257,37 +254,45 @@ export function AdminDashboard() {
     setProofFileName("payment-proof");
   };
 
-  const openProofModal = async (payment: Payment) => {
-    try {
-      setProofModalOpen(true);
-      setProofLoading(true);
-      setProofError("");
-
-      if (proofUrl) {
-        URL.revokeObjectURL(proofUrl);
-      }
-
-      const fileName = extractProofFileName(payment);
-      const response = await api.get(`/admin/payments/${payment._id}/proof`, {
-        responseType: "blob",
-      });
-
-      const blob = response.data as Blob;
-      const nextUrl = URL.createObjectURL(blob);
-
-      setProofUrl(nextUrl);
-      setProofFileName(fileName);
-      setProofMimeType(String(response.headers?.["content-type"] || blob.type || ""));
-    } catch (requestError: any) {
-      setProofError(requestError?.response?.data?.message || "Could not load proof file");
-    } finally {
-      setProofLoading(false);
+  const buildProofUrl = (payment: Payment) => {
+    const raw = String(payment.proofImage || payment.screenshot || "").trim();
+    if (!raw) {
+      return "";
     }
+
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+
+    const base = String(api.defaults.baseURL || "").replace(/\/$/, "");
+    const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
+    return `${base}${normalizedPath}`;
   };
 
-  const isImageProof =
-    proofMimeType.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(proofFileName);
-  const isPdfProof = proofMimeType.includes("pdf") || /\.pdf$/i.test(proofFileName);
+  const openProofModal = async (payment: Payment) => {
+    setProofModalOpen(true);
+    setProofLoading(true);
+    setProofError("");
+
+    const fileName = extractProofFileName(payment);
+    const resolvedUrl = buildProofUrl(payment);
+
+    setProofFileName(fileName);
+    setProofMimeType("");
+
+    if (!resolvedUrl) {
+      setProofError("Could not load proof file");
+      setProofUrl(null);
+      setProofLoading(false);
+      return;
+    }
+
+    setProofUrl(resolvedUrl);
+    setProofLoading(false);
+  };
+
+  const isImageProof = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(proofFileName) || proofMimeType.startsWith("image/");
+  const isPdfProof = /\.pdf$/i.test(proofFileName) || proofMimeType.includes("pdf");
 
   const openConfirmation = (nextAction: ConfirmAction) => {
     setBanReason("");
@@ -962,10 +967,21 @@ export function AdminDashboard() {
               {proofLoading ? <p className="text-sm text-slate-200">Loading proof...</p> : null}
               {!proofLoading && proofError ? <p className="text-sm text-red-200">{proofError}</p> : null}
               {!proofLoading && !proofError && proofUrl && isImageProof ? (
-                <img src={proofUrl} alt="Payment proof" className="mx-auto max-h-[66vh] w-auto" />
+                <img
+                  src={proofUrl}
+                  alt="Payment proof"
+                  className="mx-auto max-h-[66vh] w-auto"
+                  onLoad={() => setProofMimeType("image/*")}
+                  onError={() => setProofError("Could not load proof file")}
+                />
               ) : null}
               {!proofLoading && !proofError && proofUrl && isPdfProof ? (
-                <iframe title="Payment proof" src={proofUrl} className="h-[66vh] w-full rounded-lg bg-white" />
+                <iframe
+                  title="Payment proof"
+                  src={proofUrl}
+                  className="h-[66vh] w-full rounded-lg bg-white"
+                  onLoad={() => setProofMimeType("application/pdf")}
+                />
               ) : null}
               {!proofLoading && !proofError && proofUrl && !isImageProof && !isPdfProof ? (
                 <p className="text-sm text-slate-200">Preview not supported for this file type. Use download.</p>
