@@ -78,7 +78,7 @@ const parseCnicText = (text) => {
     "issue",
   ];
 
-  const labeledNameMatch = raw.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([a-z][a-z\s.]{2,})/im);
+  const labeledNameMatch = raw.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([^\n\r]+)/im);
   let name = labeledNameMatch?.[1] ? labeledNameMatch[1].trim() : "";
 
   for (const line of lines) {

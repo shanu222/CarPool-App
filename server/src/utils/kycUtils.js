@@ -73,7 +73,7 @@ export const parseCnicText = (text) => {
   ];
 
   // Prefer value extracted from an explicit CNIC name label before generic line scanning.
-  const labeledNameMatch = normalized.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([a-z][a-z\s.]{2,})/im);
+  const labeledNameMatch = normalized.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([^\n\r]+)/im);
   let name = labeledNameMatch?.[1] ? normalizeSpace(labeledNameMatch[1]) : "";
 
   for (const line of lines) {
@@ -121,12 +121,56 @@ export const isNameMatch = (inputName, extractedName) => {
     return true;
   }
 
+  const levenshteinDistance = (a, b) => {
+    const rows = a.length + 1;
+    const cols = b.length + 1;
+    const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+    for (let i = 0; i < rows; i += 1) {
+      matrix[i][0] = i;
+    }
+
+    for (let j = 0; j < cols; j += 1) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i < rows; i += 1) {
+      for (let j = 1; j < cols; j += 1) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+
+    return matrix[a.length][b.length];
+  };
+
+  const similarity = (a, b) => {
+    const maxLen = Math.max(a.length, b.length);
+    if (maxLen === 0) {
+      return 1;
+    }
+
+    const distance = levenshteinDistance(a, b);
+    return 1 - distance / maxLen;
+  };
+
+  if (similarity(left, right) >= 0.78) {
+    return true;
+  }
+
   const leftTokens = new Set(left.split(" ").filter(Boolean));
   const rightTokens = new Set(right.split(" ").filter(Boolean));
 
   let overlap = 0;
   for (const token of leftTokens) {
-    if (rightTokens.has(token)) {
+    const hasExact = rightTokens.has(token);
+    const hasFuzzy = [...rightTokens].some((candidate) => similarity(token, candidate) >= 0.78);
+
+    if (hasExact || hasFuzzy) {
       overlap += 1;
     }
   }
