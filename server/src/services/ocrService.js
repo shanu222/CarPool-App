@@ -63,6 +63,7 @@ const parseCnicText = (text) => {
     .filter(Boolean);
 
   const skipKeywords = [
+    "name",
     "identity",
     "card",
     "national",
@@ -77,14 +78,23 @@ const parseCnicText = (text) => {
     "issue",
   ];
 
-  let name = "";
+  const labeledNameMatch = raw.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([a-z][a-z\s.]{2,})/im);
+  let name = labeledNameMatch?.[1] ? labeledNameMatch[1].trim() : "";
 
   for (const line of lines) {
+    if (name) {
+      break;
+    }
+
     if (line.length < 3 || /\d/.test(line)) {
       continue;
     }
 
     const lowered = line.toLowerCase();
+
+    if (["name", "father name", "father's name", "date of birth", "identity number"].includes(lowered)) {
+      continue;
+    }
 
     if (skipKeywords.some((keyword) => lowered.includes(keyword))) {
       continue;

@@ -56,6 +56,7 @@ export const parseCnicText = (text) => {
   const dobMatch = normalized.match(/\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/);
 
   const excludedKeywords = [
+    "name",
     "identity",
     "card",
     "national",
@@ -71,12 +72,22 @@ export const parseCnicText = (text) => {
     "birth",
   ];
 
-  let name = "";
+  // Prefer value extracted from an explicit CNIC name label before generic line scanning.
+  const labeledNameMatch = normalized.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([a-z][a-z\s.]{2,})/im);
+  let name = labeledNameMatch?.[1] ? normalizeSpace(labeledNameMatch[1]) : "";
 
   for (const line of lines) {
+    if (name) {
+      break;
+    }
+
     const lowered = line.toLowerCase();
 
     if (line.length < 3 || /\d/.test(line)) {
+      continue;
+    }
+
+    if (["name", "father name", "father's name", "date of birth", "identity number"].includes(lowered)) {
       continue;
     }
 
