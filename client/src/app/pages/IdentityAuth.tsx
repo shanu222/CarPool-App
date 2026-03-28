@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, Loader2, UploadCloud } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2, UploadCloud } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 
@@ -155,11 +155,11 @@ export function IdentityAuth() {
     }
 
     const timer = window.setInterval(() => {
-      setVerificationStep((current) => (current < 2 ? current + 1 : current));
+      setVerificationStep((current) => (current < steps.length ? current + 1 : current));
     }, 900);
 
     return () => window.clearInterval(timer);
-  }, [isSubmitting, mode]);
+  }, [isSubmitting, mode, steps.length]);
 
   const signupErrors = useMemo(() => {
     return {
@@ -410,20 +410,31 @@ export function IdentityAuth() {
           >
             <div className="mb-2 flex items-center gap-2 text-lg font-semibold">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Verifying your identity...
+              Verifying your identity, please wait...
             </div>
 
             <div className="space-y-2">
               {steps.map((step, index) => {
-                const active = index <= verificationStep;
+                const completed = index < verificationStep;
+                const inProgress = index === verificationStep && verificationStep < steps.length;
+
+                const rowClass = completed
+                  ? 'bg-emerald-500/25 text-emerald-100'
+                  : inProgress
+                    ? 'bg-cyan-500/20 text-cyan-100'
+                    : 'bg-white/10 text-white/80';
+
                 return (
                   <div
                     key={step}
-                    className={`rounded-xl px-3 py-2 text-sm ${
-                      active ? 'bg-emerald-500/25 text-emerald-100' : 'bg-white/10 text-white/80'
-                    }`}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${rowClass}`}
                   >
-                    {step}
+                    <span>{step}</span>
+                    {completed ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-200" />
+                    ) : inProgress ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-cyan-100" />
+                    ) : null}
                   </div>
                 );
               })}

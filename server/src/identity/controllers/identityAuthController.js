@@ -21,7 +21,6 @@ import {
   isValidCnic,
   normalizeCnic,
   normalizeDob,
-  normalizeLicenseNumber,
   normalizeName,
   normalizePhone,
 } from "../utils/cnicUtils.js";
@@ -72,6 +71,7 @@ const requiredFile = (files, key) => files?.[key]?.[0] || null;
 const sendError = (res, status, message) => res.status(status).json({ message });
 
 const duplicateRoleMessage = (role) => `Account already exists as ${role}. Please login.`;
+const normalizeLicense = (value) => String(value || "").replace(/[^0-9]/g, "");
 
 export const signupWithIdentityVerification = async (req, res, next) => {
   let role = "";
@@ -185,7 +185,13 @@ export const signupWithIdentityVerification = async (req, res, next) => {
         throw error;
       }
 
-      if (normalizeLicenseNumber(parsedLicense.licenseNumber) !== normalizeLicenseNumber(licenseNumber)) {
+      const inputLicense = normalizeLicense(licenseNumber);
+      const extractedLicense = normalizeLicense(parsedLicense.licenseNumber);
+
+      console.log("INPUT:", inputLicense);
+      console.log("OCR:", extractedLicense);
+
+      if (inputLicense !== extractedLicense) {
         return sendError(res, 400, "License number does not match the uploaded driving license");
       }
     }

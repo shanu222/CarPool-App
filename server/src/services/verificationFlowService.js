@@ -2,11 +2,7 @@ import { compareFaces } from "./faceService.js";
 import { extractCnicData, extractLicenseData } from "./ocrService.js";
 import { isNameMatch, isSameDate, normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
 
-const normalizeLicenseNumber = (value) =>
-  String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .trim();
+const normalizeLicense = (value) => String(value || "").replace(/[^0-9]/g, "");
 
 export const toDateOrNull = (value) => {
   const normalized = normalizeDob(value);
@@ -205,10 +201,13 @@ export const verifyIdentityDocuments = async ({
       };
     }
 
-    if (
-      !licenseData?.licenseNumber ||
-      normalizeLicenseNumber(licenseData.licenseNumber) !== normalizeLicenseNumber(licenseNumber)
-    ) {
+    const inputLicense = normalizeLicense(licenseNumber);
+    const extractedLicense = normalizeLicense(licenseData?.licenseNumber);
+
+    console.log("INPUT:", inputLicense);
+    console.log("OCR:", extractedLicense);
+
+    if (!extractedLicense || inputLicense !== extractedLicense) {
       return {
         ok: false,
         reason: "LICENSE_MISMATCH",
@@ -216,8 +215,8 @@ export const verifyIdentityDocuments = async ({
           failedField: "licenseNumber",
           why: "License number does not match",
           hint: "Enter the same license number shown on uploaded driving license image.",
-          inputValue: normalizeLicenseNumber(licenseNumber),
-          extractedLicense: normalizeLicenseNumber(licenseData?.licenseNumber),
+          inputValue: inputLicense,
+          extractedLicense,
         },
       };
     }

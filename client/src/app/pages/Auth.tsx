@@ -539,9 +539,12 @@ export function Auth() {
     setConfirmPassword('');
   };
 
-  const verificationProgress = Math.round(
-    ((verifyFailedIndex !== null ? verifyFailedIndex + 1 : verifyIndex) / currentVerifySteps.length) * 100
-  );
+  const completedStepCount =
+    verifyFailedIndex !== null
+      ? Math.max(0, Math.min(verifyFailedIndex, currentVerifySteps.length))
+      : Math.max(0, Math.min(verifyIndex, currentVerifySteps.length));
+
+  const verificationProgress = Math.round((completedStepCount / currentVerifySteps.length) * 100);
   const activeAccent = signupRole === 'driver' ? colors.green : '#1B6FA3';
 
   return (
@@ -961,7 +964,7 @@ export function Auth() {
             }}
           >
             <h2 className="text-lg" style={{ color: colors.navy, fontWeight: 700 }}>
-              Verifying your identity...
+              Verifying your identity, please wait...
             </h2>
 
             <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ backgroundColor: '#DCE8F4' }}>
@@ -977,8 +980,8 @@ export function Auth() {
             <div className="mt-4 space-y-2">
               {currentVerifySteps.map((step, index) => {
                 const failed = verifyFailedIndex === index;
-                const done = verifyFailedIndex !== null ? index < verifyFailedIndex : verifyIndex > index;
-                const active = verifyFailedIndex === null && verifyIndex === index;
+                const done = index < completedStepCount;
+                const active = verifyFailedIndex === null && index === completedStepCount && completedStepCount < currentVerifySteps.length;
 
                 const rowBg = failed
                   ? 'rgba(231,76,60,0.14)'
