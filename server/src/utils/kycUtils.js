@@ -72,9 +72,54 @@ export const parseCnicText = (text) => {
     "birth",
   ];
 
-  // Prefer value extracted from an explicit CNIC name label before generic line scanning.
-  const labeledNameMatch = normalized.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([^\n\r]+)/im);
-  let name = labeledNameMatch?.[1] ? normalizeSpace(labeledNameMatch[1]) : "";
+  const cleanNameCandidate = (value) => {
+    const cleaned = normalizeSpace(value)
+      .replace(/[^a-z\s.]/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleaned || /\d/.test(cleaned)) {
+      return "";
+    }
+
+    const lowered = cleaned.toLowerCase();
+    if (excludedKeywords.some((keyword) => lowered.includes(keyword))) {
+      return "";
+    }
+
+    const tokens = cleaned.split(" ").filter(Boolean);
+    if (tokens.length === 0 || tokens.length > 4) {
+      return "";
+    }
+
+    if (tokens.some((token) => token.length < 2)) {
+      return "";
+    }
+
+    return cleaned;
+  };
+
+  // Prefer values around "Name" label (including common OCR confusion "Narne").
+  const labelLikeIndex = lines.findIndex((line) => /^\s*na(?:m|rn)e\s*$/i.test(line) || /^\s*na(?:m|rn)e\s*[:\-]/i.test(line));
+
+  let name = "";
+
+  if (labelLikeIndex >= 0) {
+    const afterLabel = lines.slice(labelLikeIndex, labelLikeIndex + 3);
+    for (const candidate of afterLabel) {
+      const inline = candidate.match(/na(?:m|rn)e\s*[:\-]?\s*(.+)$/i)?.[1] || "";
+      const parsed = cleanNameCandidate(inline || candidate);
+      if (parsed) {
+        name = parsed;
+        break;
+      }
+    }
+  }
+
+  if (!name) {
+    const labeledNameMatch = normalized.match(/(?:^|\n)\s*na(?:m|rn)e\s*[:\-]?\s*(?:\n\s*)?([^\n\r]+)/im);
+    name = cleanNameCandidate(labeledNameMatch?.[1] || "");
+  }
 
   for (const line of lines) {
     if (name) {
@@ -95,8 +140,9 @@ export const parseCnicText = (text) => {
       continue;
     }
 
+    // Use conservative fallback: plain alphabetic line near the top identity section only.
     if (/^[a-z\s.]+$/i.test(line)) {
-      name = normalizeSpace(line);
+      name = cleanNameCandidate(line);
       break;
     }
   }
@@ -121,56 +167,12 @@ export const isNameMatch = (inputName, extractedName) => {
     return true;
   }
 
-  const levenshteinDistance = (a, b) => {
-    const rows = a.length + 1;
-    const cols = b.length + 1;
-    const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
-
-    for (let i = 0; i < rows; i += 1) {
-      matrix[i][0] = i;
-    }
-
-    for (let j = 0; j < cols; j += 1) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i < rows; i += 1) {
-      for (let j = 1; j < cols; j += 1) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + cost
-        );
-      }
-    }
-
-    return matrix[a.length][b.length];
-  };
-
-  const similarity = (a, b) => {
-    const maxLen = Math.max(a.length, b.length);
-    if (maxLen === 0) {
-      return 1;
-    }
-
-    const distance = levenshteinDistance(a, b);
-    return 1 - distance / maxLen;
-  };
-
-  if (similarity(left, right) >= 0.78) {
-    return true;
-  }
-
   const leftTokens = new Set(left.split(" ").filter(Boolean));
   const rightTokens = new Set(right.split(" ").filter(Boolean));
 
   let overlap = 0;
   for (const token of leftTokens) {
-    const hasExact = rightTokens.has(token);
-    const hasFuzzy = [...rightTokens].some((candidate) => similarity(token, candidate) >= 0.78);
-
-    if (hasExact || hasFuzzy) {
+    if (rightTokens.has(token)) {
       overlap += 1;
     }
   }

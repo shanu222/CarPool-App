@@ -78,8 +78,49 @@ const parseCnicText = (text) => {
     "issue",
   ];
 
-  const labeledNameMatch = raw.match(/(?:^|\n)\s*name\s*[:\-]?\s*(?:\n\s*)?([^\n\r]+)/im);
-  let name = labeledNameMatch?.[1] ? labeledNameMatch[1].trim() : "";
+  const cleanNameCandidate = (value) => {
+    const cleaned = String(value || "")
+      .replace(/[^a-z\s.]/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleaned || /\d/.test(cleaned)) {
+      return "";
+    }
+
+    const lowered = cleaned.toLowerCase();
+    if (skipKeywords.some((keyword) => lowered.includes(keyword))) {
+      return "";
+    }
+
+    const tokens = cleaned.split(" ").filter(Boolean);
+    if (tokens.length === 0 || tokens.length > 4 || tokens.some((token) => token.length < 2)) {
+      return "";
+    }
+
+    return cleaned;
+  };
+
+  const labelLikeIndex = lines.findIndex((line) => /^\s*na(?:m|rn)e\s*$/i.test(line) || /^\s*na(?:m|rn)e\s*[:\-]/i.test(line));
+
+  let name = "";
+
+  if (labelLikeIndex >= 0) {
+    const afterLabel = lines.slice(labelLikeIndex, labelLikeIndex + 3);
+    for (const candidate of afterLabel) {
+      const inline = candidate.match(/na(?:m|rn)e\s*[:\-]?\s*(.+)$/i)?.[1] || "";
+      const parsed = cleanNameCandidate(inline || candidate);
+      if (parsed) {
+        name = parsed;
+        break;
+      }
+    }
+  }
+
+  if (!name) {
+    const labeledNameMatch = raw.match(/(?:^|\n)\s*na(?:m|rn)e\s*[:\-]?\s*(?:\n\s*)?([^\n\r]+)/im);
+    name = cleanNameCandidate(labeledNameMatch?.[1] || "");
+  }
 
   for (const line of lines) {
     if (name) {
@@ -101,7 +142,7 @@ const parseCnicText = (text) => {
     }
 
     if (/^[a-z\s.]+$/i.test(line)) {
-      name = line;
+      name = cleanNameCandidate(line);
       break;
     }
   }
