@@ -7,7 +7,6 @@ import { Location } from "../models/Location.js";
 import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
 import { Match } from "../models/Match.js";
-import { Payment } from "../models/Payment.js";
 import { Notification } from "../models/Notification.js";
 import { sendPushNotification } from "../services/pushService.js";
 import { createUserNotification } from "../services/notificationService.js";
@@ -60,21 +59,6 @@ const getApprovedMatchForUser = async (rideId, userId) => {
   });
 };
 
-const hasInteractionAccess = async (userId, rideId, role) => {
-  if (role === "admin") {
-    return true;
-  }
-
-  const approvedPayment = await Payment.exists({
-    userId,
-    rideId,
-    type: "interaction_unlock",
-    status: "approved",
-  });
-
-  return Boolean(approvedPayment);
-};
-
 const toRad = (value) => (value * Math.PI) / 180;
 
 const calculateDistanceKm = (a, b) => {
@@ -92,14 +76,6 @@ const calculateDistanceKm = (a, b) => {
 };
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
-const FREE_CHAT_MESSAGE_LIMIT = 5;
-const PHONE_REGEX = /(\+?\d[\d\s\-()]{7,}\d)/;
-const WHATSAPP_LINK_REGEX = /(wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/)/i;
-
-const containsLockedContactContent = (text) => {
-  const value = String(text || "");
-  return PHONE_REGEX.test(value) || WHATSAPP_LINK_REGEX.test(value);
-};
 
 const resolveRideStatusForChat = async (ride) => {
   if (!ride) {
@@ -267,8 +243,6 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const unlocked = await hasInteractionAccess(socket.user._id, rideId, socket.user.role);
-
       const normalizedReceiverId = receiverId ? String(receiverId) : null;
       if (normalizedReceiverId && !participantIds.includes(normalizedReceiverId)) {
         return;
@@ -280,25 +254,6 @@ export const initializeSocket = (httpServer) => {
 
       if (!recipients.length) {
         return;
-      }
-
-      if (!unlocked && containsLockedContactContent(text.trim())) {
-        socket.emit("chat_locked", {
-          rideId,
-          message: "Phone numbers and WhatsApp links are blocked before payment unlock.",
-        });
-        return;
-      }
-
-      if (!unlocked) {
-        const sentCount = await Message.countDocuments({ rideId, senderId: socket.user._id });
-        if (sentCount >= FREE_CHAT_MESSAGE_LIMIT) {
-          socket.emit("chat_locked", {
-            rideId,
-            message: "Free chat limit reached. Pay to unlock unlimited chat and contact.",
-          });
-          return;
-        }
       }
 
       const blockedChecks = await Promise.all(recipients.map((targetId) => isConversationBlocked(socket.user._id, targetId)));
@@ -327,6 +282,7 @@ export const initializeSocket = (httpServer) => {
       io.to(`ride:${rideId}`).emit("new_message", messagePayload);
       recipients.forEach((targetId) => {
         io.to(`user:${String(targetId)}`).emit("receive_message", messagePayload);
+        io.to(`user:${String(targetId)}`).emit("new_message", messagePayload);
       });
 
       await Promise.all(

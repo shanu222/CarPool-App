@@ -3,6 +3,7 @@ import { Match } from "../models/Match.js";
 import { Ride } from "../models/Ride.js";
 import { RideRequest } from "../models/RideRequest.js";
 import { createUserNotification } from "../services/notificationService.js";
+import { getIo } from "../socket/io.js";
 
 const MATCH_TIME_WINDOW_MINUTES = Number(process.env.MATCH_TIME_WINDOW_MINUTES || 90);
 
@@ -149,6 +150,16 @@ const finalizeMatchIfApproved = async ({ match, ride, request, booking, actorUse
       pushFallback: true,
     });
 
+    const io = getIo();
+    if (io) {
+      io.to(`user:${String(targetUserId)}`).emit("ride_matched", {
+        matchId: String(match._id),
+        rideId: String(ride._id),
+        requestId: String(request._id),
+        status: "pending",
+      });
+    }
+
     return match;
   }
 
@@ -210,6 +221,20 @@ const finalizeMatchIfApproved = async ({ match, ride, request, booking, actorUse
     },
     pushFallback: true,
   });
+
+  const io = getIo();
+  if (io) {
+    const rideAcceptedPayload = {
+      matchId: String(match._id),
+      rideId: String(ride._id),
+      requestId: String(request._id),
+      bookingId: String(booking._id),
+      status: "approved",
+    };
+
+    io.to(`user:${String(match.driverId)}`).emit("ride_accepted", rideAcceptedPayload);
+    io.to(`user:${String(match.passengerId)}`).emit("ride_accepted", rideAcceptedPayload);
+  }
 
   return match;
 };

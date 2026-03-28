@@ -1,6 +1,5 @@
 import { Message } from "../models/Message.js";
 import { Ride } from "../models/Ride.js";
-import { Payment } from "../models/Payment.js";
 import { sendPushNotification } from "../services/pushService.js";
 import { User } from "../models/User.js";
 import { Booking } from "../models/Booking.js";
@@ -11,11 +10,8 @@ import { isUserOnline } from "../socket/io.js";
 import { createUserNotification } from "../services/notificationService.js";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
-const FREE_CHAT_MESSAGE_LIMIT = 5;
 const CHAT_OPEN_TOKEN_COST = 2;
 const TOKEN_RATE_PER_PKR = 2;
-const PHONE_REGEX = /(\+?\d[\d\s\-()]{7,}\d)/;
-const WHATSAPP_LINK_REGEX = /(wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/)/i;
 
 const resolveRideStatusForChat = async (ride) => {
   if (!ride) {
@@ -222,36 +218,6 @@ const ensureChatOpenAccess = async ({ user, rideId }) => {
   };
 };
 
-const hasInteractionAccess = async (userId, rideId, role) => {
-  if (role === "admin") {
-    return true;
-  }
-
-  const approvedPayment = await Payment.exists({
-    userId,
-    rideId,
-    type: "interaction_unlock",
-    status: "approved",
-  });
-
-  return Boolean(approvedPayment);
-};
-
-const containsLockedContactContent = (text) => {
-  const value = String(text || "");
-  return PHONE_REGEX.test(value) || WHATSAPP_LINK_REGEX.test(value);
-};
-
-const getFreeMessageUsage = async ({ rideId, userId }) => {
-  const sentCount = await Message.countDocuments({ rideId, senderId: userId });
-  const remaining = Math.max(0, FREE_CHAT_MESSAGE_LIMIT - sentCount);
-  return {
-    sentCount,
-    remaining,
-    limitReached: sentCount >= FREE_CHAT_MESSAGE_LIMIT,
-  };
-};
-
 const validateChatContext = async ({ rideId, user }) => {
   const ride = await Ride.findById(rideId).select("driver status dateTime startTime");
 
@@ -325,8 +291,6 @@ export const getRideMessages = async (req, res, next) => {
       return res.status(403).json(access.payload);
     }
 
-    const unlocked = await hasInteractionAccess(req.user._id, rideId, req.user?.role);
-
     await Message.updateMany(
       {
         rideId,
@@ -343,17 +307,7 @@ export const getRideMessages = async (req, res, next) => {
       .populate("receiverId", "name role")
       .sort({ timestamp: 1 });
 
-    const usage = await getFreeMessageUsage({ rideId, userId: req.user._id });
-    return res.json(
-      messages.map((item) => ({
-        ...mapMessagePayload(item),
-        _meta: {
-          unlocked,
-          freeMessagesRemaining: usage.remaining,
-          freeLimitReached: usage.limitReached,
-        },
-      }))
-    );
+    return res.json(messages.map((item) => mapMessagePayload(item)));
   } catch (error) {
     return next(error);
   }
@@ -417,19 +371,6 @@ export const sendMessage = async (req, res, next) => {
       return res.status(403).json({ message: "Only ride participants can chat" });
     }
 
-    const unlocked = await hasInteractionAccess(req.user._id, rideId, req.user?.role);
-
-    if (!unlocked && containsLockedContactContent(normalizedText)) {
-      return res.status(403).json({ message: "Phone numbers and WhatsApp links are blocked before payment unlock." });
-    }
-
-    if (!unlocked) {
-      const usage = await getFreeMessageUsage({ rideId, userId: req.user._id });
-      if (usage.limitReached) {
-        return res.status(403).json({ message: "Free chat limit reached. Pay to unlock unlimited chat and contact." });
-      }
-    }
-
     const participantIds = await getRideParticipantIds(rideId, ride.driver._id);
     const normalizedReceiverId = receiverId ? String(receiverId) : null;
 
@@ -473,6 +414,7 @@ export const sendMessage = async (req, res, next) => {
       io.to(`ride:${rideId}`).emit("new_message", payload);
       notificationTargets.forEach((targetId) => {
         io.to(`user:${String(targetId)}`).emit("receive_message", payload);
+        io.to(`user:${String(targetId)}`).emit("new_message", payload);
       });
     }
 

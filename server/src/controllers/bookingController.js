@@ -2,6 +2,7 @@ import { Booking } from "../models/Booking.js";
 import { Ride } from "../models/Ride.js";
 import { Payment } from "../models/Payment.js";
 import { createUserNotification } from "../services/notificationService.js";
+import { getIo } from "../socket/io.js";
 
 const notifyUser = async ({ userId, type = "message", title, body, data }) =>
   createUserNotification({ userId, type, title, body, data, pushFallback: true });
@@ -217,6 +218,17 @@ export const respondToBookingRequest = async (req, res, next) => {
           : `${req.user.name} rejected your booking request`,
       data: { rideId: booking.rideId._id, bookingId: booking._id, status: booking.status },
     });
+
+    if (action === "accepted") {
+      const io = getIo();
+      if (io) {
+        io.to(`user:${String(booking.passengerId._id)}`).emit("ride_accepted", {
+          rideId: String(booking.rideId._id),
+          bookingId: String(booking._id),
+          status: "accepted",
+        });
+      }
+    }
 
     const populated = await Booking.findById(booking._id)
       .populate({

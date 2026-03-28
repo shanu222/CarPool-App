@@ -4,7 +4,7 @@ import { ArrowLeft, Send, Phone, MoreVertical, User, Flag, Ban, Share2, X } from
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import type { Message, Payment, Ride, User as AppUser } from '../types';
+import type { Message, Ride, User as AppUser } from '../types';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -33,11 +33,6 @@ export function Chat() {
   const [reportReason, setReportReason] = useState('');
   const [receiverProfile, setReceiverProfile] = useState<AppUser | null>(null);
   const [isConversationBlocked, setIsConversationBlocked] = useState(false);
-  const [interactionUnlocked, setInteractionUnlocked] = useState(false);
-  const [chatLimitReached, setChatLimitReached] = useState(false);
-  const [freeMessagesRemaining, setFreeMessagesRemaining] = useState<number>(5);
-
-  const passengerChatLocked = !interactionUnlocked && chatLimitReached;
   const isChatClosedByRide = ride?.status === 'completed' || ride?.status === 'cancelled';
 
   const receiverId = useMemo(() => {
@@ -64,15 +59,6 @@ export function Chat() {
         ]);
         setRide(rideResponse.data);
         setMessages(messageResponse.data);
-        const latestMeta = messageResponse.data
-          .slice()
-          .reverse()
-          .find((msg: any) => msg?._meta)?.['_meta'] as any;
-
-        if (latestMeta) {
-          setFreeMessagesRemaining(Number(latestMeta.freeMessagesRemaining ?? 0));
-          setChatLimitReached(Boolean(latestMeta.freeLimitReached));
-        }
         await api.patch(`/api/messages/${id}/seen`);
       } catch (requestError: any) {
         const errorCode = requestError?.response?.data?.error;
@@ -97,26 +83,6 @@ export function Chat() {
       loadRide();
     }
   }, [id]);
-
-  useEffect(() => {
-    if (!id) {
-      return;
-    }
-
-    api
-      .get<{ payments?: Payment[] } | Payment[]>(`/api/payments/my?rideId=${id}`)
-      .then((response) => {
-        const paymentRows = Array.isArray(response.data) ? response.data : response.data?.payments || [];
-        const hasApproved = paymentRows.some(
-          (payment) => payment.type === 'interaction_unlock' && payment.status === 'approved',
-        );
-        setInteractionUnlocked(hasApproved);
-        if (hasApproved) {
-          setChatLimitReached(false);
-        }
-      })
-      .catch(() => setInteractionUnlocked(false));
-  }, [id, showUnlockModal]);
 
   useEffect(() => {
     if (!receiverId) {
@@ -214,27 +180,6 @@ export function Chat() {
       return;
     }
 
-    if (passengerChatLocked) {
-      setShowUnlockModal(true);
-      return;
-    }
-
-    if (!interactionUnlocked && freeMessagesRemaining <= 0) {
-      setChatLimitReached(true);
-      setShowUnlockModal(true);
-      toast.error('Free chat limit reached. Pay to unlock unlimited chat.');
-      return;
-    }
-
-    if (!interactionUnlocked) {
-      const phoneRegex = /(\+?\d[\d\s\-()]{7,}\d)/;
-      const whatsappRegex = /(wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/)/i;
-      if (phoneRegex.test(message) || whatsappRegex.test(message)) {
-        toast.error('Phone numbers and WhatsApp links are blocked before payment unlock.');
-        return;
-      }
-    }
-
     if (!message.trim()) return;
 
     const text = message.trim();
@@ -256,9 +201,6 @@ export function Chat() {
     };
 
     setMessages((prev) => [...prev, optimisticMessage]);
-    if (!interactionUnlocked) {
-      setFreeMessagesRemaining((prev) => Math.max(0, prev - 1));
-    }
 
     try {
       const response = await api.post<Message & { tokensLeft?: number; tokensSpent?: number }>('/api/messages', {
@@ -271,9 +213,6 @@ export function Chat() {
     } catch (requestError: any) {
       const apiMessage = requestError?.response?.data?.message || 'Could not send message';
       syncAccessSummary(requestError?.response?.data);
-      if (!interactionUnlocked) {
-        setFreeMessagesRemaining((prev) => Math.min(5, prev + 1));
-      }
       if (apiMessage === 'User blocked') {
         setIsConversationBlocked(true);
         setMessages([]);
@@ -290,11 +229,6 @@ export function Chat() {
         });
       }
 
-      if (String(apiMessage).toLowerCase().includes('free chat limit')) {
-        setChatLimitReached(true);
-        setShowUnlockModal(true);
-      }
-
       setMessage(text);
       toast.error(apiMessage);
     }
@@ -305,12 +239,6 @@ export function Chat() {
 
     if (!phone) {
       toast.error('Phone number not available');
-      return;
-    }
-
-    if (!interactionUnlocked) {
-      toast.error('Unlock contact to view and call phone number');
-      setShowUnlockModal(true);
       return;
     }
 
@@ -392,9 +320,7 @@ export function Chat() {
               <VerifiedBadge isVerified={Boolean(receiverProfile?.isVerified ?? ride.driver.isVerified)} />
             </div>
             <p className="text-xs text-gray-600 truncate">{ride.fromCity} → {ride.toCity}</p>
-            <p className="text-[11px] text-gray-500">
-              {interactionUnlocked ? 'Contact unlocked' : 'Contact hidden until payment unlock'}
-            </p>
+            <p className="text-[11px] text-gray-500">Chat available for this ride</p>
           </div>
           {!isDriverOwner ? (
             <Button type="button" variant="secondary" onClick={handleCall} className="min-h-12 w-12 p-0" leftIcon={<Phone className="w-5 h-5 text-gray-600" />}>
@@ -475,18 +401,6 @@ export function Chat() {
           <div className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-xs text-slate-700">Ride completed - chat closed</div>
         ) : null}
 
-        {passengerChatLocked ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            Free chat limit reached. Unlock for unlimited messages and phone contact.
-          </div>
-        ) : null}
-
-        {!interactionUnlocked ? (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            Free messages left: {freeMessagesRemaining}
-          </div>
-        ) : null}
-
         {!isConversationBlocked
           ? messages.map((msg) => (
               <motion.div
@@ -523,10 +437,6 @@ export function Chat() {
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white px-3 py-3 md:px-4 md:py-4">
-        <div className="mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Each chat costs 2 tokens.
-        </div>
-
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -539,7 +449,7 @@ export function Chat() {
           />
           <Button
             onClick={handleSend}
-            disabled={!message.trim() || passengerChatLocked || isConversationBlocked || isChatClosedByRide}
+            disabled={!message.trim() || isConversationBlocked || isChatClosedByRide}
             variant="primary"
             className="min-h-12 w-12 rounded-2xl p-0"
             leftIcon={<Send className="w-5 h-5" />}
@@ -547,17 +457,6 @@ export function Chat() {
             
           </Button>
         </div>
-
-        {passengerChatLocked ? (
-          <Button
-            type="button"
-            onClick={() => setShowUnlockModal(true)}
-            variant="secondary"
-            className="mt-2 min-h-12 w-full border border-blue-200 !bg-blue-50 !text-blue-700"
-          >
-            Pay & Unlock Unlimited Chat
-          </Button>
-        ) : null}
       </div>
 
       {showReportModal ? (
@@ -602,10 +501,7 @@ export function Chat() {
         open={showUnlockModal}
         rideId={id}
         onClose={() => setShowUnlockModal(false)}
-        onSubmitted={() => {
-          setInteractionUnlocked(false);
-          setChatLimitReached(false);
-        }}
+        onSubmitted={() => setShowUnlockModal(false)}
       />
     </div>
   );
