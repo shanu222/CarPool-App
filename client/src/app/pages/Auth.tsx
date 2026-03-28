@@ -93,6 +93,25 @@ const formatLicenseNumber = (raw: string) => {
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}#${digits.slice(13)}`;
 };
 
+const getCaretPositionForDigitIndex = (formattedValue: string, digitCount: number) => {
+  if (digitCount <= 0) {
+    return 0;
+  }
+
+  let seenDigits = 0;
+
+  for (let index = 0; index < formattedValue.length; index += 1) {
+    if (/\d/.test(formattedValue[index])) {
+      seenDigits += 1;
+      if (seenDigits === digitCount) {
+        return index + 1;
+      }
+    }
+  }
+
+  return formattedValue.length;
+};
+
 const cnicPattern = /^\d{5}-\d{7}-\d{1}$/;
 const licensePattern = /^\d{5}-\d{7}-\d#\d{3}$/;
 const today = new Date().toISOString().split('T')[0];
@@ -779,10 +798,12 @@ export function Auth() {
                       <FloatingField label="Driving License Number">
                         <IconInput
                           icon={<FileText className="h-4 w-4" />}
-                          placeholder="License number"
+                          placeholder="45303-5233924-9#299"
                           value={signup.licenseNumber}
                           invalid={signupAttempted && !signupValid.licenseNumber}
-                          onChange={(value) => setSignup((prev) => ({ ...prev, licenseNumber: formatLicenseNumber(value) }))}
+                          formatter={formatLicenseNumber}
+                          keepCursorOnFormat
+                          onChange={(value) => setSignup((prev) => ({ ...prev, licenseNumber: value }))}
                         />
                         <p className="mt-1 text-xs" style={{ color: '#516A81' }}>
                           Enter license number (format will be applied automatically)
@@ -1059,6 +1080,8 @@ function IconInput({
   icon,
   type = 'text',
   invalid = false,
+  formatter,
+  keepCursorOnFormat = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -1066,6 +1089,8 @@ function IconInput({
   icon: React.ReactNode;
   type?: string;
   invalid?: boolean;
+  formatter?: (raw: string) => string;
+  keepCursorOnFormat?: boolean;
 }) {
   return (
     <div
@@ -1080,7 +1105,27 @@ function IconInput({
       <input
         type={type}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          const rawValue = event.target.value;
+
+          if (!formatter) {
+            onChange(rawValue);
+            return;
+          }
+
+          const selectionStart = event.target.selectionStart ?? rawValue.length;
+          const digitsBeforeCaret = rawValue.slice(0, selectionStart).replace(/\D/g, '').length;
+          const formattedValue = formatter(rawValue);
+
+          onChange(formattedValue);
+
+          if (keepCursorOnFormat) {
+            const nextCaret = getCaretPositionForDigitIndex(formattedValue, digitsBeforeCaret);
+            requestAnimationFrame(() => {
+              event.target.setSelectionRange(nextCaret, nextCaret);
+            });
+          }
+        }}
         placeholder={placeholder}
         className="h-11 w-full bg-transparent text-sm outline-none"
         style={{ color: '#1D3449' }}

@@ -36,9 +36,40 @@ const toUnclearImageError = () => {
   return unclear;
 };
 
+const normalizeLicenseDigits = (value) => String(value || "").replace(/[^0-9]/g, "");
+
+const pickBestLicenseDigits = (text) => {
+  const raw = String(text || "");
+  const matches = raw.match(/\d[\d\s#\-/]{8,}\d/g) || [];
+  const candidates = matches
+    .map((entry) => normalizeLicenseDigits(entry))
+    .filter((entry) => entry.length >= 10)
+    .sort((left, right) => {
+      const leftDistance = Math.abs(left.length - 16);
+      const rightDistance = Math.abs(right.length - 16);
+
+      if (leftDistance !== rightDistance) {
+        return leftDistance - rightDistance;
+      }
+
+      return right.length - left.length;
+    });
+
+  return candidates[0] || "";
+};
+
 const parseLicenseText = (text) => {
   const raw = String(text || "");
   const normalized = raw.replace(/\r/g, "");
+  const bestDigits = pickBestLicenseDigits(normalized);
+
+  if (bestDigits) {
+    return {
+      licenseNumber: bestDigits,
+      name: "",
+      rawText: normalized,
+    };
+  }
 
   const labeledMatch = normalized.match(
     /(?:licen[sc]e|driving\s*license|d\.?l\.?)\s*(?:no|number|#)?\s*[:\-]?\s*([A-Z0-9\-/]{5,})/i

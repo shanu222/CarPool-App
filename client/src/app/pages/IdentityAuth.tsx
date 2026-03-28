@@ -71,6 +71,25 @@ const formatLicenseNumber = (value: string) => {
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}#${digits.slice(13)}`;
 };
 
+const getCaretPositionForDigitIndex = (formattedValue: string, digitCount: number) => {
+  if (digitCount <= 0) {
+    return 0;
+  }
+
+  let seenDigits = 0;
+
+  for (let index = 0; index < formattedValue.length; index += 1) {
+    if (/\d/.test(formattedValue[index])) {
+      seenDigits += 1;
+      if (seenDigits === digitCount) {
+        return index + 1;
+      }
+    }
+  }
+
+  return formattedValue.length;
+};
+
 const licensePattern = /^\d{5}-\d{7}-\d#\d{3}$/;
 
 const normalizePhone = (digits: string) => {
@@ -184,6 +203,20 @@ export function IdentityAuth() {
 
   const setSignupFile = (key: 'profileImage' | 'cnicFront' | 'cnicBack' | 'licenseImage', file: File | null) => {
     setSignup((prev) => ({ ...prev, [key]: file }));
+  };
+
+  const handleLicenseInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
+    const selectionStart = event.target.selectionStart ?? rawValue.length;
+    const digitsBeforeCaret = rawValue.slice(0, selectionStart).replace(/\D/g, '').length;
+    const formattedValue = formatLicenseNumber(rawValue);
+
+    setSignup((prev) => ({ ...prev, licenseNumber: formattedValue }));
+
+    const nextCaret = getCaretPositionForDigitIndex(formattedValue, digitsBeforeCaret);
+    requestAnimationFrame(() => {
+      event.target.setSelectionRange(nextCaret, nextCaret);
+    });
   };
 
   const validateSignup = () => {
@@ -585,9 +618,9 @@ export function IdentityAuth() {
                       className={`h-11 w-full rounded-xl px-3 text-white placeholder:text-white/60 ${fieldErrorClass(
                         attempted && signupErrors.licenseNumber
                       )}`}
-                      placeholder="Driving License Number"
+                      placeholder="45303-5233924-9#299"
                       value={signup.licenseNumber}
-                      onChange={(event) => setSignup((prev) => ({ ...prev, licenseNumber: formatLicenseNumber(event.target.value) }))}
+                      onChange={handleLicenseInputChange}
                     />
                     <p className="mt-1 text-xs text-white/80">Enter license number (format will be applied automatically)</p>
                   </div>
