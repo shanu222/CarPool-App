@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { CompareFacesCommand, RekognitionClient } from "@aws-sdk/client-rekognition";
+import sharp from "sharp";
 
 let cachedClient;
 const OPENAI_FACE_CONFIDENCE = Number(process.env.OPENAI_FACE_CONFIDENCE || 0.9);
@@ -151,6 +152,82 @@ const getRekognitionClient = () => {
   return cachedClient;
 };
 
+const buildSelfieVariants = async (selfieBytes) => {
+  const variants = [selfieBytes];
+
+  try {
+    const enhanced = await sharp(selfieBytes).rotate().normalize().sharpen().jpeg({ quality: 95 }).toBuffer();
+    variants.push(enhanced);
+  } catch {
+    // Keep original selfie if enhancement fails.
+  }
+
+  return variants;
+};
+
+const buildCnicFaceVariants = async (cnicBytes) => {
+  const variants = [cnicBytes];
+
+  try {
+    const image = sharp(cnicBytes).rotate();
+    const meta = await image.metadata();
+    const width = Number(meta.width || 0);
+    const height = Number(meta.height || 0);
+
+    if (width > 0 && height > 0) {
+      // Pakistani CNIC front typically has portrait on the right side.
+      const portraitCrop = await sharp(cnicBytes)
+        .rotate()
+        .extract({
+          left: Math.max(0, Math.floor(width * 0.62)),
+          top: Math.max(0, Math.floor(height * 0.18)),
+          width: Math.max(1, Math.floor(width * 0.34)),
+          height: Math.max(1, Math.floor(height * 0.62)),
+        })
+        .resize(640, 640, { fit: "inside" })
+        .normalize()
+        .sharpen()
+        .jpeg({ quality: 96 })
+        .toBuffer();
+
+      variants.push(portraitCrop);
+
+      const portraitTightCrop = await sharp(cnicBytes)
+        .rotate()
+        .extract({
+          left: Math.max(0, Math.floor(width * 0.67)),
+          top: Math.max(0, Math.floor(height * 0.22)),
+          width: Math.max(1, Math.floor(width * 0.28)),
+          height: Math.max(1, Math.floor(height * 0.54)),
+        })
+        .resize(640, 640, { fit: "inside" })
+        .normalize()
+        .sharpen()
+        .jpeg({ quality: 96 })
+        .toBuffer();
+
+      variants.push(portraitTightCrop);
+    }
+  } catch {
+    // Keep original CNIC image if crop/enhancement fails.
+  }
+
+  return variants;
+};
+
+const compareSinglePair = async ({ sourceBytes, targetBytes, threshold }) => {
+  const result = await getRekognitionClient().send(
+    new CompareFacesCommand({
+      SimilarityThreshold: threshold,
+      SourceImage: { Bytes: sourceBytes },
+      TargetImage: { Bytes: targetBytes },
+    })
+  );
+
+  const bestMatch = result.FaceMatches?.sort((a, b) => (b.Similarity || 0) - (a.Similarity || 0))?.[0];
+  return Number(bestMatch?.Similarity || 0);
+};
+
 export const compareFaces = async (cnicImage, selfieImage, threshold = 80) => {
   const [cnicBytes, selfieBytes] = await Promise.all([fs.readFile(cnicImage), fs.readFile(selfieImage)]);
 
@@ -158,16 +235,18 @@ export const compareFaces = async (cnicImage, selfieImage, threshold = 80) => {
   let awsMatched = false;
 
   try {
-    const result = await getRekognitionClient().send(
-      new CompareFacesCommand({
-        SimilarityThreshold: threshold,
-        SourceImage: { Bytes: selfieBytes },
-        TargetImage: { Bytes: cnicBytes },
-      })
-    );
+    const [selfieVariants, cnicVariants] = await Promise.all([
+      buildSelfieVariants(selfieBytes),
+      buildCnicFaceVariants(cnicBytes),
+    ]);
 
-    const bestMatch = result.FaceMatches?.sort((a, b) => (b.Similarity || 0) - (a.Similarity || 0))?.[0];
-    awsSimilarity = Number(bestMatch?.Similarity || 0);
+    for (const sourceBytes of selfieVariants) {
+      for (const targetBytes of cnicVariants) {
+        const similarity = await compareSinglePair({ sourceBytes, targetBytes, threshold });
+        awsSimilarity = Math.max(awsSimilarity, similarity);
+      }
+    }
+
     awsMatched = awsSimilarity >= threshold;
   } catch {
     awsMatched = false;
