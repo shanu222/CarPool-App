@@ -114,6 +114,10 @@ export function Auth() {
     }
 
     if (verifyIndex >= verifySteps.length) {
+      if (isLoading) {
+        return;
+      }
+
       const done = window.setTimeout(() => {
         setIsVerifyingOverlayVisible(false);
         setScreen('success');
@@ -194,7 +198,7 @@ export function Auth() {
     setErrorMessage(message);
   };
 
-  const startAutoVerification = () => {
+  const startAutoVerification = async () => {
     setSignupAttempted(true);
 
     if (!signupValid.passwordLength || !signupValid.passwordUpper || !signupValid.passwordNumber || !signupValid.passwordSpecial) {
@@ -225,9 +229,43 @@ export function Auth() {
     console.log('DEV HANDOFF signup payload:', signupPayloadForBackend);
 
     resetError('');
-    setIsLoading(true);
-    setVerifyIndex(0);
-    setIsVerifyingOverlayVisible(true);
+
+    try {
+      setIsLoading(true);
+      setVerifyIndex(0);
+      setIsVerifyingOverlayVisible(true);
+
+      const formData = new FormData();
+      formData.append('role', signupRole);
+      formData.append('name', signup.fullName.trim());
+      formData.append('cnic', signup.cnic);
+      formData.append('dob', signup.dob);
+      formData.append('mobile', `${signup.countryCode}${signup.mobile}`);
+      formData.append('password', signupPassword);
+      formData.append('confirmPassword', signupConfirmPassword);
+      formData.append('profileImage', signup.profileImage as Blob);
+      formData.append('cnicFront', signup.cnicFront as Blob);
+      formData.append('cnicBack', signup.cnicBack as Blob);
+
+      if (signupRole === 'driver') {
+        formData.append('licenseNumber', signup.licenseNumber);
+        formData.append('licenseImage', signup.licenseImage as Blob);
+      }
+
+      await api.post('/api/signup', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setIsLoading(false);
+    } catch (error) {
+      const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+      resetError(message?.error || message?.message || 'Information does not match');
+      setIsVerifyingOverlayVisible(false);
+      setIsLoading(false);
+      setVerifyIndex(0);
+    }
   };
 
   const submitLogin = async () => {
