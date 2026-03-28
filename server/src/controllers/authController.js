@@ -651,7 +651,25 @@ const strictSignup = async ({ req, res, role }) => {
     });
   }
 
-  if (!cnicData?.name || !isNameMatch(normalizeName(name), cnicData.name)) {
+  const normalizedInputName = normalizeName(name);
+  const extractedNameCandidates = [cnicData?.name, ...(cnicData?.nameCandidates || [])]
+    .map((value) => normalizeName(value))
+    .filter(Boolean);
+
+  const nameMatched = extractedNameCandidates.some((candidate) => isNameMatch(normalizedInputName, candidate));
+
+  if (!extractedNameCandidates.length) {
+    return verificationFail({
+      reason: "NAME_EXTRACTION_FAILED",
+      details: {
+        failedField: "name",
+        why: "OCR could not confidently extract Name from CNIC front image",
+        hint: "Retake CNIC front in bright light and keep the Name area clear and sharp.",
+      },
+    });
+  }
+
+  if (!nameMatched) {
     return verificationFail({
       reason: "NAME_MISMATCH",
       details: {
@@ -660,6 +678,7 @@ const strictSignup = async ({ req, res, role }) => {
         hint: "Enter name exactly as printed under the Name label on CNIC.",
         inputValue: String(name || "").trim(),
         extractedName: cnicData?.name || "",
+        extractedNameCandidates,
       },
     });
   }

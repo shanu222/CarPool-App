@@ -102,6 +102,7 @@ const verificationDetailsMessage = (details?: {
   hint?: string;
   inputValue?: string;
   extractedName?: string;
+  extractedNameCandidates?: string[];
   extractedCnic?: string;
   extractedDob?: string;
   extractedLicense?: string;
@@ -128,6 +129,10 @@ const verificationDetailsMessage = (details?: {
 
   if (details.extractedName) {
     parts.push(`OCR Name: ${details.extractedName}`);
+  }
+
+  if (Array.isArray(details.extractedNameCandidates) && details.extractedNameCandidates.length > 0) {
+    parts.push(`OCR Name candidates: ${details.extractedNameCandidates.join(', ')}`);
   }
 
   if (details.extractedCnic) {
@@ -376,6 +381,7 @@ export function Auth() {
               hint?: string;
               inputValue?: string;
               extractedName?: string;
+              extractedNameCandidates?: string[];
               extractedCnic?: string;
               extractedDob?: string;
               extractedLicense?: string;

@@ -230,7 +230,9 @@ const parseCnicText = (text) => {
     return cleaned;
   };
 
-  const labelLikeIndex = lines.findIndex((line) => /^\s*na(?:m|rn)e\s*$/i.test(line) || /^\s*na(?:m|rn)e\s*[:\-]/i.test(line));
+  const labelLikeIndex = lines.findIndex(
+    (line) => /^\s*na(?:m|rn)e\s*$/i.test(line) || /^\s*na(?:m|rn)e\s*[:\-]/i.test(line)
+  );
 
   let name = "";
 
@@ -251,30 +253,8 @@ const parseCnicText = (text) => {
     name = cleanNameCandidate(labeledNameMatch?.[1] || "");
   }
 
-  for (const line of lines) {
-    if (name) {
-      break;
-    }
-
-    if (line.length < 3 || /\d/.test(line)) {
-      continue;
-    }
-
-    const lowered = line.toLowerCase();
-
-    if (["name", "father name", "father's name", "date of birth", "identity number"].includes(lowered)) {
-      continue;
-    }
-
-    if (skipKeywords.some((keyword) => lowered.includes(keyword))) {
-      continue;
-    }
-
-    if (/^[a-z\s.]+$/i.test(line)) {
-      name = cleanNameCandidate(line);
-      break;
-    }
-  }
+  // Deliberately avoid broad fallback line-scanning for name.
+  // On blurry cards, random OCR lines can be mistaken as name and cause false mismatches.
 
   return {
     cnic: normalizeCnic(cnicMatch?.[0] || ""),
@@ -332,10 +312,27 @@ export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
   ]);
 
   const allCandidates = [];
+  const nameCandidates = [];
+
+  for (const frontText of frontCandidates.slice(0, 5)) {
+    const parsedFront = parseCnicText(frontText);
+    if (parsedFront.name) {
+      nameCandidates.push(parsedFront.name);
+    }
+  }
+
+  const uniqueNameCandidates = [...new Set(nameCandidates.map((value) => String(value || "").trim()).filter(Boolean))];
 
   for (const frontText of frontCandidates.slice(0, 3)) {
     for (const backText of backCandidates.slice(0, 3)) {
-      allCandidates.push(parseCnicText(`${frontText}\n${backText}`.trim()));
+      const parsedFront = parseCnicText(frontText);
+      const parsedBack = parseCnicText(backText);
+
+      allCandidates.push({
+        cnic: parsedFront.cnic || parsedBack.cnic,
+        dob: parsedFront.dob || parsedBack.dob,
+        name: parsedFront.name || parsedBack.name,
+      });
     }
   }
 
@@ -356,7 +353,12 @@ export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
     })
     .sort((a, b) => b.score - a.score);
 
-  return ranked[0]?.parsed || { cnic: "", dob: "", name: "" };
+  const best = ranked[0]?.parsed || { cnic: "", dob: "", name: "" };
+
+  return {
+    ...best,
+    nameCandidates: uniqueNameCandidates,
+  };
 };
 
 export const extractLicenseNumber = async (licenseImagePath) => {
