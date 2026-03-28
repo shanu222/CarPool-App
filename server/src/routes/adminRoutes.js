@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  approvePaymentByAdminId,
   approvePaymentByAdmin,
   deleteUserByAdmin,
   deleteRideByAdmin,
@@ -16,6 +17,7 @@ import {
   reviewUserReportByAdmin,
   unbanUserByAdmin,
   getPaymentSettingsAdmin,
+  rejectPaymentByAdminId,
   updatePaymentSettingsAdmin,
   updateUserStatusByAdmin,
   verifyUserByAdmin,
@@ -41,6 +43,8 @@ router.post("/feature-ride", featureRideByAdmin);
 router.get("/payments", getAdminPayments);
 router.post("/approve-payment", approvePaymentByAdmin);
 router.post("/payment/approve", approvePaymentByAdmin);
+router.post("/approve-payment/:id", approvePaymentByAdminId);
+router.post("/reject-payment/:id", rejectPaymentByAdminId);
 
 router.get("/payment-settings", getPaymentSettingsAdmin);
 router.post("/payment-settings", updatePaymentSettingsAdmin);

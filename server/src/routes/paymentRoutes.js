@@ -10,5 +10,14 @@ router.get("/quote/:rideId", protect, getPaymentQuote);
 router.get("/my", protect, getMyPayments);
 router.post("/create", protect, paymentUpload.single("proof"), submitPaymentProof);
 router.post("/proof", protect, paymentUpload.single("proof"), submitPaymentProof);
+router.post(
+	"/upload-proof",
+	protect,
+	paymentUpload.fields([
+		{ name: "paymentProof", maxCount: 1 },
+		{ name: "proof", maxCount: 1 },
+	]),
+	submitPaymentProof
+);
 
 export default router;

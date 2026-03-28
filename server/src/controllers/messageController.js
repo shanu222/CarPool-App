@@ -7,11 +7,6 @@ import { Booking } from "../models/Booking.js";
 import { getIo } from "../socket/io.js";
 import { isUserOnline } from "../socket/io.js";
 import { createUserNotification } from "../services/notificationService.js";
-import {
-  getActionTokenStatus,
-  refundReservedActionCredit,
-  reserveActionCredit,
-} from "../services/tokenAccessService.js";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
 const FREE_CHAT_MESSAGE_LIMIT = 5;
@@ -218,8 +213,6 @@ export const markRideMessagesSeen = async (req, res, next) => {
 };
 
 export const sendMessage = async (req, res, next) => {
-  let reservedCreditSource = null;
-
   try {
     const { rideId, receiverId, text, message: messageText } = req.body;
     const normalizedText = String(text || messageText || "").trim();
@@ -249,17 +242,6 @@ export const sendMessage = async (req, res, next) => {
       return res.status(403).json({ message: "Only ride participants can chat" });
     }
 
-    if (req.user?.role !== "admin") {
-      const tokenStatus = await getActionTokenStatus({
-        userId: req.user._id,
-        action: "chat",
-      });
-
-      if (!tokenStatus.allowed) {
-        return res.status(403).json({ message: "Not enough tokens to perform this action" });
-      }
-    }
-
     const unlocked = await hasInteractionAccess(req.user._id, rideId, req.user?.role);
 
     if (!unlocked && containsLockedContactContent(normalizedText)) {
@@ -286,19 +268,6 @@ export const sendMessage = async (req, res, next) => {
 
     if (!recipients.length) {
       return res.status(400).json({ message: "No chat recipients available" });
-    }
-
-    if (req.user?.role !== "admin") {
-      const reservation = await reserveActionCredit({
-        userId: req.user._id,
-        action: "chat",
-      });
-
-      if (!reservation.reserved) {
-        return res.status(403).json({ message: "Not enough tokens to perform this action" });
-      }
-
-      reservedCreditSource = reservation.source;
     }
 
     const blockedChecks = await Promise.all(recipients.map((participantId) => isConversationBlocked(req.user._id, participantId)));
@@ -356,18 +325,8 @@ export const sendMessage = async (req, res, next) => {
       })
     );
 
-    reservedCreditSource = null;
-
     return res.status(201).json(payload);
   } catch (error) {
-    if (reservedCreditSource) {
-      await refundReservedActionCredit({
-        userId: req.user?._id,
-        action: "chat",
-        source: reservedCreditSource,
-      });
-    }
-
     return next(error);
   }
 };

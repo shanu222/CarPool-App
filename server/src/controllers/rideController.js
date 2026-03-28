@@ -5,11 +5,6 @@ import { Booking } from "../models/Booking.js";
 import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
 import { sendPushNotification } from "../services/pushService.js";
 import {
-  getActionTokenStatus,
-  refundReservedActionCredit,
-  reserveActionCredit,
-} from "../services/tokenAccessService.js";
-import {
   getKnownPakistanCity,
   isKnownPakistanCity,
   isWithinPakistanBounds,
@@ -260,8 +255,6 @@ const refreshRideLifecycleStatuses = async (now = new Date()) => {
 };
 
 export const createRide = async (req, res, next) => {
-  let reservedCreditSource = null;
-
   try {
     const { fromCity, toCity, date, time, pricePerSeat, totalSeats, availableSeats } = req.body;
     const requestedSeats = Number(availableSeats ?? totalSeats);
@@ -269,15 +262,6 @@ export const createRide = async (req, res, next) => {
 
     if (!req.user?.isVerified) {
       return res.status(403).json({ message: "Driver verification is required before posting rides" });
-    }
-
-    const tokenStatus = await getActionTokenStatus({
-      userId: req.user._id,
-      action: "post_ride",
-    });
-
-    if (!tokenStatus.allowed) {
-      return res.status(403).json({ message: "Not enough tokens to perform this action" });
     }
 
     if (!fromCity || !toCity || !date || !time || !pricePerSeat || !requestedSeats) {
@@ -318,17 +302,6 @@ export const createRide = async (req, res, next) => {
     }
 
     const routeMeta = await getDistanceAndDuration(fromCoordinates, toCoordinates);
-
-    const reservation = await reserveActionCredit({
-      userId: req.user._id,
-      action: "post_ride",
-    });
-
-    if (!reservation.reserved) {
-      return res.status(403).json({ message: "Not enough tokens to perform this action" });
-    }
-
-    reservedCreditSource = reservation.source;
 
     const ride = await Ride.create({
       driver: req.user._id,
@@ -381,17 +354,8 @@ export const createRide = async (req, res, next) => {
       "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
     );
 
-    reservedCreditSource = null;
     return res.status(201).json(populatedRide);
   } catch (error) {
-    if (reservedCreditSource) {
-      await refundReservedActionCredit({
-        userId: req.user?._id,
-        action: "post_ride",
-        source: reservedCreditSource,
-      });
-    }
-
     return next(error);
   }
 };

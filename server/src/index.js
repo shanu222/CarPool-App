@@ -165,11 +165,13 @@ app.use("/api/user", userRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/payment", paymentRoutes);
 app.use("/api/requests", requestRoutes);
 app.use("/api/change-request", changeRequestRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/identity-auth", identityAuthRoutes);
 app.use("/admin", adminRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -6,6 +6,7 @@ import { PaymentSettings } from "../models/PaymentSettings.js";
 import { ChangeRequest } from "../models/ChangeRequest.js";
 import { UserReport } from "../models/UserReport.js";
 import { DeletedUserArchive } from "../models/DeletedUserArchive.js";
+import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { createUserNotification } from "../services/notificationService.js";
 
 const archiveAndDeleteUser = async ({ user, adminUserId }) => {
@@ -348,6 +349,10 @@ export const approvePaymentByAdmin = async (req, res, next) => {
       return res.status(404).json({ message: "Payment not found" });
     }
 
+    if (payment.status === "approved") {
+      return res.status(409).json({ message: "Payment already approved" });
+    }
+
     payment.status = status;
     payment.reviewedBy = req.user._id;
     payment.rejectionReason = status === "rejected" ? (rejectionReason || "").trim() : "";
@@ -357,7 +362,10 @@ export const approvePaymentByAdmin = async (req, res, next) => {
       const user = await User.findById(payment.userId);
       if (user) {
         const paidAmount = Number(payment.amount || 0);
-        const creditedTokens = Math.max(0, Math.floor(paidAmount * 2));
+        const creditedTokens = Math.max(
+          0,
+          Number(payment.tokensRequested || 0) || Math.floor(paidAmount * 2)
+        );
 
         user.tokens = Number(user.tokens || 0) + creditedTokens;
         user.tokenBalance = user.tokens;
@@ -375,6 +383,15 @@ export const approvePaymentByAdmin = async (req, res, next) => {
           data: { paymentId: payment._id, paymentType: payment.type, creditedTokens },
           pushFallback: true,
         });
+
+        const populated = await Payment.findById(payment._id)
+          .populate("userId", "name email phone role")
+          .populate("reviewedBy", "name email");
+
+        return res.json({
+          payment: populated,
+          ...getUserAccessSummary(user),
+        });
       }
     }
 
@@ -382,7 +399,44 @@ export const approvePaymentByAdmin = async (req, res, next) => {
       .populate("userId", "name email phone role")
       .populate("reviewedBy", "name email");
 
-    return res.json(populated);
+    const owner = await User.findById(payment.userId).select(
+      "tokens freeChats freePosts freeRequests freeChatsRemaining freePostsRemaining freeRequestsRemaining"
+    );
+
+    if (owner) {
+      return res.json({ payment: populated, ...getUserAccessSummary(owner) });
+    }
+
+    return res.json({ payment: populated });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const approvePaymentByAdminId = async (req, res, next) => {
+  try {
+    req.body = {
+      ...(req.body || {}),
+      paymentId: req.params.id,
+      status: "approved",
+    };
+
+    return approvePaymentByAdmin(req, res, next);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const rejectPaymentByAdminId = async (req, res, next) => {
+  try {
+    req.body = {
+      ...(req.body || {}),
+      paymentId: req.params.id,
+      status: "rejected",
+      rejectionReason: req.body?.rejectionReason,
+    };
+
+    return approvePaymentByAdmin(req, res, next);
   } catch (error) {
     return next(error);
   }

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import { ArrowLeft, BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import backgroundImage from '../../assets/carpool-bg.png';
+import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 type Screen = 'login' | 'signup' | 'forgot' | 'reset' | 'success';
 type VerifyStep = 'Checking CNIC' | 'Matching Face' | 'Validating DOB';
@@ -77,6 +79,7 @@ const today = new Date().toISOString().split('T')[0];
 
 export function Auth() {
   const navigate = useNavigate();
+  const { setAuth } = useAuth();
 
   const [screen, setScreen] = useState<Screen>('login');
   const [loginRole, setLoginRole] = useState<'passenger' | 'driver'>('passenger');
@@ -227,7 +230,7 @@ export function Auth() {
     setIsVerifyingOverlayVisible(true);
   };
 
-  const submitLogin = () => {
+  const submitLogin = async () => {
     resetError('');
 
     if (!loginMobile || !loginPassword) {
@@ -243,11 +246,25 @@ export function Auth() {
 
     console.log('DEV HANDOFF login payload:', loginPayloadForBackend);
 
-    setIsLoading(true);
-    window.setTimeout(() => {
+    try {
+      setIsLoading(true);
+      const response = await api.post('/api/login', loginPayloadForBackend);
+      const token = String(response?.data?.token || '');
+      const user = response?.data?.user;
+
+      if (!token || !user) {
+        resetError('Information does not match');
+        return;
+      }
+
+      setAuth(token, user);
       setIsLoading(false);
       navigate('/home');
-    }, 700);
+    } catch (error) {
+      const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+      resetError(message?.error || message?.message || 'Information does not match');
+      setIsLoading(false);
+    }
   };
 
   const verifyIdentity = () => {

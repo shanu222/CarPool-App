@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
+import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
 import { compareFaces } from "../services/faceService.js";
 import { extractCnicData, extractLicenseNumber } from "../services/ocrService.js";
@@ -539,22 +540,23 @@ export const register = async (req, res, next) => {
 };
 
 const strictSignup = async ({ req, res, role }) => {
-  const { name, dob, cnic, mobile, password, licenseNumber } = req.body;
+  const { name, dob, cnic, mobile, mobileNumber, password, licenseNumber } = req.body;
+  const mobileInput = mobile || mobileNumber;
 
-  if (!name || !dob || !cnic || !mobile || !password) {
+  if (!name || !dob || !cnic || !mobileInput || !password) {
     return jsonError(res, 400, "Missing required fields");
   }
 
   const normalizedCnic = normalizeCnic(cnic);
   const normalizedDob = normalizeDob(dob);
-  const normalizedMobile = normalizePhone(mobile);
+  const normalizedMobile = normalizePhone(mobileInput);
 
   if (!normalizedCnic) {
-    return jsonError(res, 400, "CNIC number does not match");
+    return jsonError(res, 400, "Information does not match CNIC");
   }
 
   if (!normalizedDob) {
-    return jsonError(res, 400, "DOB does not match CNIC");
+    return jsonError(res, 400, "Information does not match CNIC");
   }
 
   const profileImageFile = req.files?.profileImage?.[0];
@@ -584,15 +586,15 @@ const strictSignup = async ({ req, res, role }) => {
   });
 
   if (!cnicData?.cnic || normalizeCnic(cnicData.cnic) !== normalizedCnic) {
-    return jsonError(res, 400, "CNIC number does not match");
+    return jsonError(res, 400, "Information does not match CNIC");
   }
 
   if (!cnicData?.name || !isNameMatch(normalizeName(name), cnicData.name)) {
-    return jsonError(res, 400, "Name does not match CNIC");
+    return jsonError(res, 400, "Information does not match CNIC");
   }
 
   if (!cnicData?.dob || !isSameDate(normalizedDob, cnicData.dob)) {
-    return jsonError(res, 400, "DOB does not match CNIC");
+    return jsonError(res, 400, "Information does not match CNIC");
   }
 
   if (role === "driver") {
@@ -610,7 +612,7 @@ const strictSignup = async ({ req, res, role }) => {
   );
 
   if (!faceResult?.matched) {
-    return jsonError(res, 400, "Face does not match CNIC");
+    return jsonError(res, 400, "Information does not match CNIC");
   }
 
   const normalizedEmail = `${normalizedMobile.replace(/[^\d+]/g, "")}.${role}@noemail.local`;
@@ -636,10 +638,24 @@ const strictSignup = async ({ req, res, role }) => {
     verificationStatus: "verified",
     isVerified: true,
     verified: true,
+    tokens: 0,
+    tokenBalance: 0,
+    freeChats: 5,
+    freeChatsRemaining: 5,
+    freePosts: 5,
+    freePostsRemaining: 5,
+    freeRequests: 5,
+    freeRequestsRemaining: 5,
   });
 
   return jsonSuccess(res, 201, {
     message: "Account created successfully. Please login.",
+    ...getUserAccessSummary(req.user || {
+      tokens: 0,
+      freeChats: 5,
+      freePosts: 5,
+      freeRequests: 5,
+    }),
   });
 };
 
@@ -732,7 +748,7 @@ export const publicLogin = async (req, res, next) => {
       return jsonError(res, 401, "Invalid password");
     }
 
-    if (user.verified !== true) {
+    if (user.verified !== true && user.isVerified !== true) {
       return jsonError(res, 403, "Account not verified");
     }
 
@@ -742,6 +758,7 @@ export const publicLogin = async (req, res, next) => {
       message: "Login successful",
       token,
       user: minimalLoginUser(user),
+      ...getUserAccessSummary(user),
     });
   } catch (error) {
     return next(error);

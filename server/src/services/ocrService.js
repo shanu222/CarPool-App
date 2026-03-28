@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import vision from "@google-cloud/vision";
+import Tesseract from "tesseract.js";
 import { normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
 
 let cachedClient;
@@ -33,6 +34,18 @@ const getVisionClient = () => {
 
 export const extractText = async (imagePath) => {
   const buffer = await fs.readFile(imagePath);
+
+  try {
+    const tesseractResult = await Tesseract.recognize(buffer, "eng");
+    const extracted = tesseractResult?.data?.text || "";
+
+    if (String(extracted).trim()) {
+      return extracted;
+    }
+  } catch {
+    // Fall back to Vision OCR when Tesseract cannot parse the image.
+  }
+
   const client = getVisionClient();
   const [result] = await client.textDetection({ image: { content: buffer } });
   return result?.fullTextAnnotation?.text || result?.textAnnotations?.[0]?.description || "";

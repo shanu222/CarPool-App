@@ -64,11 +64,11 @@ const userSchema = new mongoose.Schema(
     },
     isVerified: {
       type: Boolean,
-      default: false,
+      default: true,
     },
     verified: {
       type: Boolean,
-      default: false,
+      default: true,
     },
     isDeleted: {
       type: Boolean,
@@ -162,6 +162,21 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    freeRequests: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    freePosts: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    freeChats: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
     freeRideCredits: {
       type: Number,
       default: 0,
@@ -178,6 +193,11 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
     freeChatsRemaining: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    freeRequestsRemaining: {
       type: Number,
       default: 5,
       min: 0,
@@ -307,10 +327,28 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
     this.freePostsRemaining = this.freeRideCredits;
   }
 
+  if (typeof this.freePosts === "number") {
+    this.freePostsRemaining = this.freePosts;
+  } else if (typeof this.freePostsRemaining === "number") {
+    this.freePosts = this.freePostsRemaining;
+  }
+
   if (typeof this.freeChatsRemaining === "number") {
     this.freeChatCredits = this.freeChatsRemaining;
   } else if (typeof this.freeChatCredits === "number") {
     this.freeChatsRemaining = this.freeChatCredits;
+  }
+
+  if (typeof this.freeChats === "number") {
+    this.freeChatsRemaining = this.freeChats;
+  } else if (typeof this.freeChatsRemaining === "number") {
+    this.freeChats = this.freeChatsRemaining;
+  }
+
+  if (typeof this.freeRequests === "number") {
+    this.freeRequestsRemaining = this.freeRequests;
+  } else if (typeof this.freeRequestsRemaining === "number") {
+    this.freeRequests = this.freeRequestsRemaining;
   }
 
   if (typeof this.isVerified === "boolean" && typeof this.verified !== "boolean") {

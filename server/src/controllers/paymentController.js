@@ -1,5 +1,6 @@
 import { Payment } from "../models/Payment.js";
 import { PaymentSettings } from "../models/PaymentSettings.js";
+import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { getInteractionQuote, PRICING_CURRENCY } from "../services/interactionPricingService.js";
 
 const buildFilePath = (req, file) => {
@@ -42,7 +43,37 @@ export const getPaymentQuote = async (req, res, next) => {
 export const submitPaymentProof = async (req, res, next) => {
   try {
     const { method, rideId } = req.body;
+    const amount = Number(req.body?.amount || 0);
     const type = "interaction_unlock";
+    const uploadedFile = req.file || req.files?.paymentProof?.[0] || req.files?.proof?.[0];
+    const screenshot = buildFilePath(req, uploadedFile);
+
+    if (!screenshot) {
+      return res.status(400).json({ message: "Payment screenshot is required" });
+    }
+
+    if (amount > 0 && !rideId) {
+      const tokensRequested = Math.max(0, Math.floor(amount * 2));
+
+      const payment = await Payment.create({
+        userId: req.user._id,
+        role: req.user.role,
+        type: "token_purchase",
+        amount,
+        tokensRequested,
+        currency: PRICING_CURRENCY,
+        method: method || "bank",
+        screenshot,
+        proofImage: screenshot,
+        status: "pending",
+      });
+
+      return res.status(201).json({
+        message: "Payment proof uploaded",
+        payment,
+        ...getUserAccessSummary(req.user),
+      });
+    }
 
     if (!rideId) {
       return res.status(400).json({ message: "rideId is required" });
@@ -54,11 +85,6 @@ export const submitPaymentProof = async (req, res, next) => {
 
     if (!["easypaisa", "jazzcash", "bank"].includes(method)) {
       return res.status(400).json({ message: "Valid payment method is required" });
-    }
-
-    const screenshot = buildFilePath(req, req.file);
-    if (!screenshot) {
-      return res.status(400).json({ message: "Payment screenshot is required" });
     }
 
     if (!["driver", "passenger"].includes(req.user.role)) {
@@ -88,13 +114,18 @@ export const submitPaymentProof = async (req, res, next) => {
       rideId,
       distanceKm: quote.distanceKm,
       amount: quote.amount,
+      tokensRequested: Math.max(0, Math.floor(Number(quote.amount || 0) * 2)),
       currency: quote.currency || PRICING_CURRENCY,
       method,
       screenshot,
+      proofImage: screenshot,
       status: "pending",
     });
 
-    return res.status(201).json(payment);
+    return res.status(201).json({
+      payment,
+      ...getUserAccessSummary(req.user),
+    });
   } catch (error) {
     return next(error);
   }
@@ -109,7 +140,7 @@ export const getMyPayments = async (req, res, next) => {
     };
 
     const payments = await Payment.find(query).sort({ createdAt: -1 });
-    return res.json(payments);
+    return res.json({ payments, ...getUserAccessSummary(req.user) });
   } catch (error) {
     return next(error);
   }

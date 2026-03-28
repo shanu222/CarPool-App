@@ -16,7 +16,7 @@ const paymentSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["interaction_unlock", "ride_post", "booking_unlock"],
+      enum: ["interaction_unlock", "ride_post", "booking_unlock", "token_purchase"],
       required: true,
       index: true,
     },
@@ -35,6 +35,11 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    tokensRequested: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     currency: {
       type: String,
       default: "PKR",
@@ -43,9 +48,13 @@ const paymentSchema = new mongoose.Schema(
     method: {
       type: String,
       enum: ["easypaisa", "jazzcash", "bank"],
-      required: true,
+      required: false,
     },
     screenshot: {
+      type: String,
+      trim: true,
+    },
+    proofImage: {
       type: String,
       trim: true,
     },
@@ -66,6 +75,22 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+paymentSchema.pre("save", function syncProofFields(next) {
+  if (this.proofImage && !this.screenshot) {
+    this.screenshot = this.proofImage;
+  }
+
+  if (this.screenshot && !this.proofImage) {
+    this.proofImage = this.screenshot;
+  }
+
+  if (!this.tokensRequested || this.tokensRequested < 0) {
+    this.tokensRequested = Math.max(0, Math.floor(Number(this.amount || 0) * 2));
+  }
+
+  return next();
+});
 
 paymentSchema.index({ createdAt: -1 });
 paymentSchema.index({ userId: 1, rideId: 1, type: 1, status: 1 });
