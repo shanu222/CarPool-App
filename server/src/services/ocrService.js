@@ -6,6 +6,12 @@ import { normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js
 
 let cachedClient;
 const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS || 18000);
+const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 20000);
+
+const getGeminiApiKey = () =>
+  process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || "";
+
+const getGeminiModel = () => process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
 const getCredentials = () => {
   const raw = process.env.GOOGLE_VISION_CREDENTIALS_JSON;
@@ -41,6 +47,123 @@ const withTimeout = async (promise, timeoutMs) =>
       setTimeout(() => reject(new Error("OCR_TIMEOUT")), timeoutMs);
     }),
   ]);
+
+const parseFirstJsonObject = (text) => {
+  const raw = String(text || "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const source = fenced?.[1] ? fenced[1].trim() : raw;
+
+  try {
+    return JSON.parse(source);
+  } catch {
+    const start = source.indexOf("{");
+    const end = source.lastIndexOf("}");
+
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(source.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+};
+
+const extractCnicDataWithGemini = async ({ frontBuffer, backBuffer }) => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    return null;
+  }
+
+  const model = getGeminiModel();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const prompt = [
+    "Extract Pakistani CNIC fields from these two images (front and back).",
+    "Return JSON only with keys: name, cnic, dob.",
+    "Rules:",
+    "- name: card holder name under Name label only",
+    "- cnic: only CNIC number",
+    "- dob: normalize to YYYY-MM-DD",
+    "- if uncertain, return empty string for that key",
+  ].join("\n");
+
+  const requestBody = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: frontBuffer.toString("base64"),
+            },
+          },
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: backBuffer.toString("base64"),
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      topP: 0.1,
+      maxOutputTokens: 256,
+    },
+  };
+
+  let response;
+  try {
+    response = await withTimeout(
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      }),
+      GEMINI_TIMEOUT_MS
+    );
+  } catch {
+    return null;
+  }
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+
+  const textParts = payload?.candidates?.[0]?.content?.parts || [];
+  const combinedText = textParts.map((part) => String(part?.text || "")).join("\n");
+  const parsed = parseFirstJsonObject(combinedText);
+
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  return {
+    name: normalizeName(parsed.name || ""),
+    cnic: normalizeCnic(parsed.cnic || ""),
+    dob: normalizeDob(parsed.dob || ""),
+  };
+};
 
 const getOcrVariants = async (buffer) => {
   const variants = [buffer];
@@ -306,6 +429,15 @@ const parseLicenseText = (text) => {
 
 export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
   const [frontBuffer, backBuffer] = await Promise.all([fs.readFile(cnicFrontPath), fs.readFile(cnicBackPath)]);
+
+  const aiResult = await extractCnicDataWithGemini({ frontBuffer, backBuffer });
+  if (aiResult?.cnic && aiResult?.dob && aiResult?.name) {
+    return {
+      ...aiResult,
+      nameCandidates: aiResult.name ? [aiResult.name] : [],
+    };
+  }
+
   const [frontCandidates, backCandidates] = await Promise.all([
     extractTextCandidatesFromBuffer(frontBuffer),
     extractTextCandidatesFromBuffer(backBuffer),
