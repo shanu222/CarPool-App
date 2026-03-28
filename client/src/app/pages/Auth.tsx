@@ -77,6 +77,23 @@ const formatCnic = (raw: string) => {
 const cnicPattern = /^\d{5}-\d{7}-\d{1}$/;
 const today = new Date().toISOString().split('T')[0];
 
+const verificationReasonMessage = (reason?: string) => {
+  const code = String(reason || '').trim().toUpperCase();
+
+  const mapping: Record<string, string> = {
+    CNIC_FORMAT_INVALID: 'CNIC format is invalid.',
+    DOB_FORMAT_INVALID: 'Date of birth format is invalid.',
+    OCR_EXTRACTION_FAILED: 'Unable to read CNIC details from image.',
+    CNIC_MISMATCH: 'CNIC number does not match.',
+    NAME_MISMATCH: 'Name does not match.',
+    DOB_MISMATCH: 'Date of birth does not match.',
+    FACE_CHECK_FAILED: 'Face verification check failed.',
+    FACE_MISMATCH: 'Face does not match CNIC photo.',
+  };
+
+  return mapping[code] || '';
+};
+
 export function Auth() {
   const navigate = useNavigate();
   const { setAuth } = useAuth();
@@ -260,8 +277,14 @@ export function Auth() {
 
       setIsLoading(false);
     } catch (error) {
-      const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
-      resetError(message?.error || message?.message || 'Information does not match');
+      const payload = (error as {
+        response?: { data?: { error?: string; message?: string; reason?: string } };
+      })?.response?.data;
+
+      const baseMessage = payload?.error || payload?.message || 'Information does not match';
+      const details = verificationReasonMessage(payload?.reason);
+
+      resetError(details ? `${baseMessage} ${details}` : baseMessage);
       setIsVerifyingOverlayVisible(false);
       setIsLoading(false);
       setVerifyIndex(0);
