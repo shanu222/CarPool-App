@@ -129,26 +129,6 @@ export function MyTrips() {
   const showPassengerView = role === 'passenger';
   const showDriverView = role === 'driver';
 
-  const acceptRideFromRequest = async (requestId: string) => {
-    try {
-      const response = await api.post('/api/matches/accept', { requestId });
-      toast.success(response?.data?.message || 'Ride match request sent');
-      await loadTrips();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Could not accept ride');
-    }
-  };
-
-  const acceptRideFromRide = async (rideId: string) => {
-    try {
-      const response = await api.post('/api/matches/accept', { rideId });
-      toast.success(response?.data?.message || 'Ride match request sent');
-      await loadTrips();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Could not accept ride');
-    }
-  };
-
   const passengerLiveBookings = bookings.filter((trip) => trip.ride?.status === 'live');
   const passengerScheduledBookings = bookings.filter((trip) => trip.ride?.status === 'scheduled');
 
@@ -273,7 +253,6 @@ export function MyTrips() {
               <RequestTripCard
                 key={request._id}
                 request={request}
-                onAccept={() => acceptRideFromRequest(request._id)}
                 onReschedule={() =>
                   navigate('/request-ride', {
                     state: {
@@ -307,7 +286,6 @@ export function MyTrips() {
                 ride={ride}
                 onClick={() => navigate(`/ride/${ride._id}`)}
                 onStatusChange={updateRideStatus}
-                onAccept={() => acceptRideFromRide(ride._id)}
                 onReschedule={() =>
                   navigate('/post-ride', {
                     state: {
@@ -535,13 +513,11 @@ function DriverTripCard({
   ride,
   onClick,
   onStatusChange,
-  onAccept,
   onReschedule,
 }: {
   ride: Ride;
   onClick: () => void;
   onStatusChange: (rideId: string, status: 'scheduled' | 'nearby' | 'live' | 'completed' | 'cancelled') => void;
-  onAccept: () => void;
   onReschedule: () => void;
 }) {
   const driverStatusBadge =
@@ -587,18 +563,6 @@ function DriverTripCard({
       </div>
       {showActionButtons ? (
         <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
-          {isScheduledRide ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAccept();
-              }}
-              className="min-h-12 rounded-lg bg-amber-100 px-2 py-1 text-xs md:text-sm text-amber-700"
-            >
-              Accept Ride
-            </button>
-          ) : null}
-
           {isScheduledRide ? (
             <button
               onClick={(e) => {
@@ -662,12 +626,10 @@ function DriverTripCard({
 
 function RequestTripCard({
   request,
-  onAccept,
   onClick,
   onReschedule,
 }: {
   request: RideRequest;
-  onAccept: () => void;
   onClick: () => void;
   onReschedule: () => void;
 }) {
@@ -691,18 +653,6 @@ function RequestTripCard({
       <div className="text-sm text-slate-100">
         {Number.isNaN(requestDate.getTime()) ? request.dateTime : requestDate.toLocaleString()}
       </div>
-
-      {request.status !== 'matched' && request.status !== 'expired' ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onAccept();
-          }}
-          className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-amber-100 px-3 py-2 text-xs md:text-sm text-amber-700"
-        >
-          Accept Ride
-        </button>
-      ) : null}
 
       {request.status === 'expired' ? (
         <>
