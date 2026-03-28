@@ -82,6 +82,10 @@ export const verifyUserByAdmin = async (req, res, next) => {
       return res.status(403).json({ message: "Admin account cannot be modified" });
     }
 
+    if (user.role === "driver") {
+      return res.status(403).json({ message: "Driver approval is automatic and cannot be changed by admin" });
+    }
+
     user.isVerified = action === "approve";
     user.verificationStatus = action === "approve" ? "verified" : "rejected";
     user.status = action === "approve" ? "approved" : "pending";
@@ -118,6 +122,10 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
 
     if (user.role === "admin") {
       return res.status(403).json({ message: "Admin account cannot be modified" });
+    }
+
+    if (user.role === "driver" && ["approved", "pending"].includes(status)) {
+      return res.status(403).json({ message: "Driver approval status is controlled by verification system" });
     }
 
     user.status = status;
@@ -311,7 +319,7 @@ export const featureRideByAdmin = async (req, res, next) => {
 export const getAdminPayments = async (_req, res, next) => {
   try {
     const payments = await Payment.find({})
-      .populate("userId", "name email phone role accountStatus")
+      .populate("userId", "name role email phone accountStatus")
       .populate("rideId", "fromCity toCity status")
       .populate("reviewedBy", "name email")
       .sort({ createdAt: -1 });

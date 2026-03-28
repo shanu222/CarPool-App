@@ -622,7 +622,7 @@ export function AdminDashboard() {
           ) : null}
 
           {!loading && section === "drivers" ? (
-            <SectionCard title="Driver Management" subtitle="Manage driver records and approvals">
+            <SectionCard title="Driver Management" subtitle="Manage driver records and moderation actions">
               <TableWrap>
                 <table className="admin-table min-w-[760px] text-left text-sm text-slate-100">
                   <thead>
@@ -643,18 +643,18 @@ export function AdminDashboard() {
                           <td className="px-3 py-3">{user.name}</td>
                           <td className="px-3 py-3">{user.phone || "-"}</td>
                           <td className="px-3 py-3">{user.cnicNumber || user.cnic || "-"}</td>
-                          <td className="px-3 py-3">{user.status || user.accountStatus || "-"}</td>
+                          <td className="px-3 py-3">{user.isVerified ? "Approved" : "Not Verified"}</td>
                           <td className="px-3 py-3">
                             <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                              <ActionButton
-                                tone="success"
-                                label="Approve"
-                                onClick={() => openConfirmation({ kind: "unban-user", userId, userName: user.name })}
-                              />
                               <ActionButton
                                 tone="danger"
                                 label="Ban"
                                 onClick={() => openConfirmation({ kind: "ban-user", userId, userName: user.name })}
+                              />
+                              <ActionButton
+                                tone="danger"
+                                label="Delete"
+                                onClick={() => openConfirmation({ kind: "delete-user", userId, userName: user.name })}
                               />
                             </div>
                           </td>
@@ -686,6 +686,7 @@ export function AdminDashboard() {
                         <thead>
                           <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
                             <th className="px-3 py-3">User</th>
+                            <th className="px-3 py-3">Role</th>
                             <th className="px-3 py-3">Type</th>
                             <th className="px-3 py-3">Method</th>
                             <th className="px-3 py-3">Amount</th>
@@ -698,7 +699,7 @@ export function AdminDashboard() {
                         <tbody>
                           {group.rows.length === 0 ? (
                             <tr>
-                              <td className="px-3 py-4 text-slate-300" colSpan={8}>
+                              <td className="px-3 py-4 text-slate-300" colSpan={9}>
                                 No {group.key} payments
                               </td>
                             </tr>
@@ -706,6 +707,17 @@ export function AdminDashboard() {
                             group.rows.map((payment) => (
                               <tr key={payment._id} className="border-b border-white/10 align-top">
                                 <td className="px-3 py-3">{payment.userId?.name || "User"}</td>
+                                <td className="px-3 py-3">
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                                      payment.userId?.role === "driver"
+                                        ? "bg-emerald-500/20 text-emerald-200"
+                                        : "bg-blue-500/20 text-blue-200"
+                                    }`}
+                                  >
+                                    {payment.userId?.role === "driver" ? "Driver" : "Passenger"}
+                                  </span>
+                                </td>
                                 <td className="px-3 py-3 capitalize">{String(payment.type || "-").replace(/_/g, " ")}</td>
                                 <td className="px-3 py-3 capitalize">{payment.method || "-"}</td>
                                 <td className="px-3 py-3">{payment.currency || "PKR"} {payment.amount}</td>
