@@ -222,22 +222,22 @@ export function Home() {
           </div>
         ) : null}
 
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="responsive-tabs mb-4">
           {isDriver ? (
             <>
-              <button onClick={() => setDriverTab('offer')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'offer' ? 'bg-green-600 text-white' : 'bg-white/20 text-white'}`}>Post Ride</button>
-              <button onClick={() => setDriverTab('live')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'live' ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white'}`}>Live Rides</button>
-              <button onClick={() => setDriverTab('scheduled')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'scheduled' ? 'bg-sky-600 text-white' : 'bg-white/20 text-white'}`}>Scheduled Rides</button>
-              <button onClick={() => setDriverTab('search')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'search' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'}`}>Search Rides</button>
+              <button onClick={() => setDriverTab('offer')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'offer' ? 'bg-green-600 text-white' : 'bg-white/20 text-white'}`}>Post Ride</button>
+              <button onClick={() => setDriverTab('live')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'live' ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white'}`}>Live Rides</button>
+              <button onClick={() => setDriverTab('scheduled')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'scheduled' ? 'bg-sky-600 text-white' : 'bg-white/20 text-white'}`}>Scheduled Rides</button>
+              <button onClick={() => setDriverTab('search')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${driverTab === 'search' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'}`}>Search Rides</button>
             </>
           ) : null}
 
           {isPassenger ? (
             <>
-              <button onClick={() => setPassengerTab('search')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'search' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'}`}>Search Rides</button>
-              <button onClick={() => setPassengerTab('request')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'request' ? 'bg-indigo-600 text-white' : 'bg-white/20 text-white'}`}>Request Ride</button>
-              <button onClick={() => setPassengerTab('live')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'live' ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white'}`}>Live Rides</button>
-              <button onClick={() => setPassengerTab('scheduled')} className={`rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'scheduled' ? 'bg-sky-600 text-white' : 'bg-white/20 text-white'}`}>Scheduled Rides</button>
+              <button onClick={() => setPassengerTab('search')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'search' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'}`}>Search Rides</button>
+              <button onClick={() => setPassengerTab('request')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'request' ? 'bg-indigo-600 text-white' : 'bg-white/20 text-white'}`}>Request Ride</button>
+              <button onClick={() => setPassengerTab('live')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'live' ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white'}`}>Live Rides</button>
+              <button onClick={() => setPassengerTab('scheduled')} className={`touch-btn rounded-xl px-4 py-3 text-sm min-h-12 ${passengerTab === 'scheduled' ? 'bg-sky-600 text-white' : 'bg-white/20 text-white'}`}>Scheduled Rides</button>
             </>
           ) : null}
         </div>

@@ -225,7 +225,7 @@ export function RouteMap() {
       </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-white/20 bg-white">
-        <div className="h-[62vh] w-full">
+        <div className="h-[clamp(300px,52vh,420px)] w-full">
           <MapContainer center={mapCenter} zoom={11} className="h-full w-full" scrollWheelZoom>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

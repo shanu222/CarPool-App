@@ -18,13 +18,15 @@ export function Layout() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
-      <div className="pointer-events-none absolute right-3 top-3 z-40 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-end gap-2 md:right-4 md:top-4 md:max-w-[calc(100%-2rem)]">
+      <div className="pointer-events-none sticky top-2 z-40 px-3 pt-2 md:px-4 md:pt-3">
+        <div className="flex min-h-10 w-full flex-wrap items-start justify-end gap-2">
         <RoleIndicator role={user?.role} />
         <TokenIndicator user={user} />
+        </div>
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 pb-24 md:pb-28">
+      <main className="flex-1 pb-24 pt-1 md:pb-28">
         <Outlet />
       </main>
 

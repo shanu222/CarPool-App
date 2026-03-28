@@ -930,7 +930,7 @@ export function AdminDashboard() {
 
       {confirmAction ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/20 bg-slate-900/95 p-4 text-white">
+          <div className="modal-scroll w-full max-w-md rounded-2xl border border-white/20 bg-slate-900/95 p-4 text-white overflow-y-auto">
             <h3 className="text-base font-semibold sm:text-lg">Confirm Action</h3>
             <p className="mt-2 text-sm text-slate-200">{getConfirmMessage(confirmAction)}</p>
 
@@ -974,7 +974,7 @@ export function AdminDashboard() {
 
       {proofModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 px-4">
-          <div className="w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-900/95 p-4 text-white">
+          <div className="modal-scroll w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-900/95 p-4 text-white overflow-y-auto">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-base font-semibold sm:text-lg">Payment Proof</h3>
               <button

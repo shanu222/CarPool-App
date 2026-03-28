@@ -209,46 +209,46 @@ export function MyTrips() {
           {showPassengerView ? 'Your booked rides' : showDriverView ? 'Your created rides' : 'View your rides'}
         </p>
         {(showPassengerView || showDriverView) ? (
-          <div className="mt-4 flex gap-2">
+          <div className="responsive-tabs mt-4">
             <button
               type="button"
               onClick={() => setTab('live')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'live' ? 'active' : ''}`}
+              className={`touch-btn tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'live' ? 'active' : ''}`}
             >
               Live
             </button>
             <button
               type="button"
               onClick={() => setTab('scheduled')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'scheduled' ? 'active' : ''}`}
+              className={`touch-btn tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'scheduled' ? 'active' : ''}`}
             >
               Scheduled
             </button>
             <button
               type="button"
               onClick={() => setTab('completed')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'completed' ? 'active' : ''}`}
+              className={`touch-btn tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'completed' ? 'active' : ''}`}
             >
               Completed
             </button>
             <button
               type="button"
               onClick={() => setTab('cancelled')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'cancelled' ? 'active' : ''}`}
+              className={`touch-btn tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'cancelled' ? 'active' : ''}`}
             >
               Cancelled
             </button>
             <button
               type="button"
               onClick={() => setTab('matched')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'matched' ? 'active' : ''}`}
+              className={`touch-btn tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'matched' ? 'active' : ''}`}
             >
               Matched
             </button>
             <button
               type="button"
               onClick={() => setTab('expired')}
-              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'expired' ? 'active' : ''}`}
+              className={`touch-btn tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'expired' ? 'active' : ''}`}
             >
               Expired
             </button>

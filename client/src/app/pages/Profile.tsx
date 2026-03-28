@@ -414,7 +414,7 @@ export function Profile() {
               initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 16, opacity: 0 }}
-              className="glass-panel w-full max-w-lg rounded-3xl p-4 md:p-5"
+              className="modal-scroll glass-panel w-full max-w-lg rounded-3xl p-4 md:p-5 overflow-y-auto"
             >
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-5 w-5 text-red-300" />
@@ -489,7 +489,7 @@ export function Profile() {
               initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 16, opacity: 0 }}
-              className="glass-panel w-full max-w-lg rounded-3xl p-4 md:p-5"
+              className="modal-scroll glass-panel w-full max-w-lg rounded-3xl p-4 md:p-5 overflow-y-auto"
             >
               <h3 className="text-base md:text-lg text-white">
                 {verificationMode === "reverify"

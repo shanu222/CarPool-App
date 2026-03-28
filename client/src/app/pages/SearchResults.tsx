@@ -108,37 +108,37 @@ export function SearchResults() {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="flex flex-wrap gap-2 pb-2"
+            className="responsive-tabs pb-2"
           >
             <button
               onClick={() => setSortBy('price')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${sortBy === 'price' ? 'active' : ''}`}
+              className={`touch-btn tab-pill px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${sortBy === 'price' ? 'active' : ''}`}
             >
               <TrendingDown className="w-4 h-4" />
               Lowest Price
             </button>
             <button
               onClick={() => setSortBy('time')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${sortBy === 'time' ? 'active' : ''}`}
+              className={`touch-btn tab-pill px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${sortBy === 'time' ? 'active' : ''}`}
             >
               <Clock className="w-4 h-4" />
               Earliest
             </button>
             <button
               onClick={() => setViewType('all')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'all' ? 'active' : ''}`}
+              className={`touch-btn tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'all' ? 'active' : ''}`}
             >
               All
             </button>
             <button
               onClick={() => setViewType('live')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'live' ? 'active' : ''}`}
+              className={`touch-btn tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'live' ? 'active' : ''}`}
             >
               Live
             </button>
             <button
               onClick={() => setViewType('scheduled')}
-              className={`tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'scheduled' ? 'active' : ''}`}
+              className={`touch-btn tab-pill px-4 py-2 rounded-xl text-sm ${viewType === 'scheduled' ? 'active' : ''}`}
             >
               Scheduled
             </button>

@@ -323,6 +323,87 @@
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.2);
 }
 
+.responsive-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+
+.responsive-tabs > * {
+  flex: 0 0 auto;
+}
+
+.responsive-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.responsive-tabs::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 9999px;
+}
+
+.modal-scroll {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.touch-btn {
+  min-height: 40px;
+}
+
+.text-wrap-safe {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 480px) {
+  .app-stage {
+    padding: 0;
+  }
+
+  .app-shell {
+    border-radius: 0;
+    max-width: 100%;
+    min-height: 100vh;
+  }
+
+  .app-shell-content {
+    min-height: 100vh;
+  }
+
+  .responsive-card {
+    padding: 0.75rem;
+  }
+
+  .glass-panel,
+  .glass-subtle {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+@media (max-width: 768px) {
+  .responsive-action {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-stage {
+    padding: 2rem;
+  }
+
+  .app-shell {
+    max-width: 420px;
+    margin: 0 auto;
+  }
+}
+
 @media (min-width: 768px) {
   .app-stage {
     padding: 1.75rem;
