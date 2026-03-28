@@ -605,7 +605,12 @@ export const getNearbyRides = async (req, res, next) => {
   try {
     await refreshRideLifecycleStatuses();
 
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const rides = await Ride.find({
+      driver: { $ne: req.user._id },
       status: { $in: ["scheduled", "nearby", "live"] },
       "fromCoordinates.lat": { $exists: true },
       "fromCoordinates.lng": { $exists: true },

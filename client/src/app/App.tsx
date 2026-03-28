@@ -1,9 +1,14 @@
+import { useEffect } from 'react';
 import { RouterProvider } from 'react-router';
 import { router } from './routes';
 
 const isAdminApp = import.meta.env.VITE_APP_MODE === 'admin';
 
 export default function App() {
+  useEffect(() => {
+    document.title = isAdminApp ? 'Carpool Admin' : 'Carpool User';
+  }, []);
+
   if (isAdminApp) {
     return <RouterProvider router={router} />;
   }

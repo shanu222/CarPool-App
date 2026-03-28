@@ -105,6 +105,7 @@ export const getNearbyRideRequests = async (req, res, next) => {
     }
 
     const requests = await RideRequest.find({
+      passengerId: { $ne: req.user._id },
       status: "open",
       ...(fromCity ? { fromCity: new RegExp(fromCity, "i") } : {}),
       ...(toCity ? { toCity: new RegExp(toCity, "i") } : {}),
