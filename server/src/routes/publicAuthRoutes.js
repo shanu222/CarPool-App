@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { driverSignup, passengerSignup, publicLogin } from "../controllers/authController.js";
+import { driverSignup, passengerSignup, publicLogin, publicSignup } from "../controllers/authController.js";
 import { upload } from "../middleware/upload.js";
 
 const router = Router();
@@ -13,6 +13,7 @@ const signupFields = upload.fields([
 
 router.post("/passenger/signup", signupFields, passengerSignup);
 router.post("/driver/signup", signupFields, driverSignup);
+router.post("/signup", signupFields, publicSignup);
 router.post("/login", publicLogin);
 
 export default router;

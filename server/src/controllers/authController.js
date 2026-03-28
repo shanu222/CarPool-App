@@ -22,7 +22,40 @@ const ADMIN_FAIL_DELAY_MS = Number(process.env.ADMIN_LOGIN_FAIL_DELAY_MS || 700)
 const adminLoginAttempts = new Map();
 
 const normalizeEmail = (value) => (value || "").trim().toLowerCase();
-const normalizePhone = (value) => String(value || "").trim();
+
+// Normalize Pakistan numbers to +92XXXXXXXXXX for consistent signup/login matching.
+export function normalizeNumber(number) {
+  const digitsOnly = String(number || "").replace(/\D/g, "");
+
+  if (!digitsOnly) {
+    return "";
+  }
+
+  let normalizedDigits = digitsOnly;
+
+  if (normalizedDigits.startsWith("00")) {
+    normalizedDigits = normalizedDigits.slice(2);
+  }
+
+  if (normalizedDigits.startsWith("92")) {
+    const localPart = normalizedDigits.slice(2);
+    if (localPart.length === 10) {
+      return `+92${localPart}`;
+    }
+  }
+
+  if (normalizedDigits.startsWith("0") && normalizedDigits.length === 11) {
+    return `+92${normalizedDigits.slice(1)}`;
+  }
+
+  if (normalizedDigits.length === 10) {
+    return `+92${normalizedDigits}`;
+  }
+
+  return "";
+}
+
+const normalizePhone = (value) => normalizeNumber(value);
 const normalizeLicenseNumber = (value) =>
   String(value || "")
     .toUpperCase()
@@ -289,6 +322,30 @@ const minimalLoginUser = (user) => ({
   verificationStatus: user.verificationStatus,
 });
 
+const isBcryptHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ""));
+
+const verifyPasswordAndMigrateIfNeeded = async (user, plainPassword) => {
+  const storedPassword = String(user?.password || "");
+  const candidate = String(plainPassword || "");
+
+  if (!storedPassword) {
+    return false;
+  }
+
+  if (isBcryptHash(storedPassword)) {
+    return bcrypt.compare(candidate, storedPassword);
+  }
+
+  const plainMatch = storedPassword === candidate;
+
+  if (plainMatch) {
+    user.password = await bcrypt.hash(candidate, 10);
+    await user.save();
+  }
+
+  return plainMatch;
+};
+
 export const changePassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -514,7 +571,7 @@ const strictSignup = async ({ req, res, role }) => {
   }
 
   const duplicate = await User.findOne({
-    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }, { phone: normalizedMobile, role }],
+    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }, { phone: normalizedMobile }],
   });
 
   if (duplicate) {
@@ -602,19 +659,49 @@ export const driverSignup = async (req, res, next) => {
   }
 };
 
+export const publicSignup = async (req, res, next) => {
+  try {
+    const requestedRole = String(req.body?.role || "").trim().toLowerCase();
+
+    if (!requestedRole || !["passenger", "driver"].includes(requestedRole)) {
+      return jsonError(res, 400, "role must be passenger or driver");
+    }
+
+    return await strictSignup({ req, res, role: requestedRole });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const publicLogin = async (req, res, next) => {
   try {
     const { mobile, password, role, identifier, email, phone } = req.body;
-    const inputIdentifier = String(mobile || phone || identifier || email || "").trim();
+
+    const phoneInput = mobile || phone || identifier;
+    const normalizedMobile = normalizeNumber(phoneInput);
+    const inputIdentifier = normalizedMobile || String(identifier || email || "").trim();
     const emailCandidate = inputIdentifier.includes("@")
       ? inputIdentifier.toLowerCase()
       : String(email || "").trim().toLowerCase();
+
+    console.log("[AUTH][LOGIN] Input:", {
+      role,
+      mobile,
+      phone,
+      identifier,
+      normalizedMobile,
+      hasPassword: Boolean(password),
+    });
 
     if (!inputIdentifier || !password) {
       return jsonError(res, 400, "Mobile/email and password are required");
     }
 
-    const lookupConditions = [{ phone: inputIdentifier }];
+    const lookupConditions = normalizedMobile ? [{ phone: normalizedMobile }] : [];
+
+    if (!inputIdentifier.includes("@") && !normalizedMobile) {
+      return jsonError(res, 400, "Invalid mobile number format");
+    }
 
     if (emailCandidate) {
       lookupConditions.push({ email: emailCandidate });
@@ -627,14 +714,22 @@ export const publicLogin = async (req, res, next) => {
 
     const user = await User.findOne(selector);
 
+    console.log("[AUTH][LOGIN] User from DB:", {
+      found: Boolean(user),
+      id: user?._id,
+      role: user?.role,
+      phone: user?.phone,
+      hasPassword: Boolean(user?.password),
+    });
+
     if (!user) {
       return jsonError(res, 404, "User not found");
     }
 
-    const passwordMatch = await bcrypt.compare(String(password), user.password);
+    const passwordMatch = await verifyPasswordAndMigrateIfNeeded(user, String(password));
 
     if (!passwordMatch) {
-      return jsonError(res, 401, "Invalid credentials");
+      return jsonError(res, 401, "Invalid password");
     }
 
     if (user.verified !== true) {
@@ -644,6 +739,7 @@ export const publicLogin = async (req, res, next) => {
     const token = signToken(user);
 
     return jsonSuccess(res, 200, {
+      message: "Login successful",
       token,
       user: minimalLoginUser(user),
     });
@@ -662,10 +758,10 @@ export const login = async (req, res, next) => {
 
     const rawIdentifier = String(identifier || email || phone || "").trim();
     const explicitEmail = String(email || "").trim();
-    const explicitPhone = String(phone || "").trim();
+    const explicitPhone = normalizeNumber(phone || "");
 
     const emailCandidate = normalizeEmail(explicitEmail || (rawIdentifier.includes("@") ? rawIdentifier : ""));
-    const phoneCandidate = explicitPhone || (!rawIdentifier.includes("@") ? rawIdentifier : "");
+    const phoneCandidate = explicitPhone || (!rawIdentifier.includes("@") ? normalizeNumber(rawIdentifier) : "");
 
     const identifierConditions = [
       ...(emailCandidate ? [{ email: emailCandidate }] : []),
@@ -701,7 +797,7 @@ export const login = async (req, res, next) => {
       return res.status(404).json({ message: "No account found for selected role" });
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    const passwordMatch = await verifyPasswordAndMigrateIfNeeded(user, password);
 
     if (!passwordMatch) {
       return res.status(401).json({ message: "Authentication failed" });
