@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
 import vision from "@google-cloud/vision";
 import Tesseract from "tesseract.js";
+import sharp from "sharp";
 import { normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
 
 let cachedClient;
+const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS || 18000);
 
 const getCredentials = () => {
   const raw = process.env.GOOGLE_VISION_CREDENTIALS_JSON;
@@ -32,23 +34,150 @@ const getVisionClient = () => {
   return cachedClient;
 };
 
-export const extractText = async (imagePath) => {
-  const buffer = await fs.readFile(imagePath);
+const withTimeout = async (promise, timeoutMs) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("OCR_TIMEOUT")), timeoutMs);
+    }),
+  ]);
+
+const getOcrVariants = async (buffer) => {
+  const variants = [buffer];
 
   try {
-    const tesseractResult = await Tesseract.recognize(buffer, "eng");
-    const extracted = tesseractResult?.data?.text || "";
-
-    if (String(extracted).trim()) {
-      return extracted;
-    }
+    const enhanced = await sharp(buffer).grayscale().normalize().sharpen().toBuffer();
+    variants.push(enhanced);
   } catch {
-    // Fall back to Vision OCR when Tesseract cannot parse the image.
+    // Keep original buffer when enhancement fails.
   }
 
-  const client = getVisionClient();
-  const [result] = await client.textDetection({ image: { content: buffer } });
-  return result?.fullTextAnnotation?.text || result?.textAnnotations?.[0]?.description || "";
+  try {
+    const thresholded = await sharp(buffer)
+      .grayscale()
+      .normalize()
+      .threshold(165)
+      .sharpen()
+      .toBuffer();
+    variants.push(thresholded);
+  } catch {
+    // Threshold variant is optional.
+  }
+
+  return variants;
+};
+
+const scoreOcrText = (text) => {
+  const value = String(text || "");
+  if (!value.trim()) {
+    return 0;
+  }
+
+  let score = 0;
+  if (/\b\d{5}-?\d{7}-?\d\b/.test(value)) {
+    score += 6;
+  }
+
+  if (/\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/.test(value)) {
+    score += 4;
+  }
+
+  if (/\bna(?:m|rn)e\b/i.test(value)) {
+    score += 3;
+  }
+
+  if (/\bidentity\s*number\b/i.test(value)) {
+    score += 2;
+  }
+
+  score += Math.min(4, Math.floor(value.trim().length / 120));
+  return score;
+};
+
+const mergeUniqueLines = (texts) => {
+  const seen = new Set();
+  const merged = [];
+
+  for (const text of texts) {
+    const lines = String(text || "")
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      const key = line.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(line);
+      }
+    }
+  }
+
+  return merged.join("\n");
+};
+
+const extractTextWithVision = async (buffer) => {
+  try {
+    const client = getVisionClient();
+    const [result] = await withTimeout(client.textDetection({ image: { content: buffer } }), OCR_TIMEOUT_MS);
+    return result?.fullTextAnnotation?.text || result?.textAnnotations?.[0]?.description || "";
+  } catch {
+    return "";
+  }
+};
+
+const extractTextWithTesseract = async (buffer) => {
+  try {
+    const result = await withTimeout(
+      Tesseract.recognize(buffer, "eng", {
+        tessedit_pageseg_mode: 6,
+      }),
+      OCR_TIMEOUT_MS
+    );
+
+    return result?.data?.text || "";
+  } catch {
+    return "";
+  }
+};
+
+const extractTextCandidatesFromBuffer = async (buffer) => {
+  const variants = await getOcrVariants(buffer);
+  const texts = [];
+
+  for (const variant of variants) {
+    const [visionText, tesseractText] = await Promise.all([
+      extractTextWithVision(variant),
+      extractTextWithTesseract(variant),
+    ]);
+
+    if (visionText.trim()) {
+      texts.push(visionText);
+    }
+
+    if (tesseractText.trim()) {
+      texts.push(tesseractText);
+    }
+  }
+
+  const ranked = texts
+    .map((text) => ({ text, score: scoreOcrText(text) }))
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.text);
+
+  if (!ranked.length) {
+    return [""];
+  }
+
+  const merged = mergeUniqueLines(ranked);
+  return [merged, ...ranked];
+};
+
+export const extractText = async (imagePath) => {
+  const buffer = await fs.readFile(imagePath);
+  const candidates = await extractTextCandidatesFromBuffer(buffer);
+  return candidates[0] || "";
 };
 
 const parseCnicText = (text) => {
@@ -196,8 +325,38 @@ const parseLicenseText = (text) => {
 };
 
 export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
-  const [frontText, backText] = await Promise.all([extractText(cnicFrontPath), extractText(cnicBackPath)]);
-  return parseCnicText(`${frontText}\n${backText}`.trim());
+  const [frontBuffer, backBuffer] = await Promise.all([fs.readFile(cnicFrontPath), fs.readFile(cnicBackPath)]);
+  const [frontCandidates, backCandidates] = await Promise.all([
+    extractTextCandidatesFromBuffer(frontBuffer),
+    extractTextCandidatesFromBuffer(backBuffer),
+  ]);
+
+  const allCandidates = [];
+
+  for (const frontText of frontCandidates.slice(0, 3)) {
+    for (const backText of backCandidates.slice(0, 3)) {
+      allCandidates.push(parseCnicText(`${frontText}\n${backText}`.trim()));
+    }
+  }
+
+  const ranked = allCandidates
+    .map((parsed) => {
+      let score = 0;
+      if (parsed.cnic) {
+        score += 6;
+      }
+      if (parsed.dob) {
+        score += 4;
+      }
+      if (parsed.name) {
+        score += 4;
+      }
+
+      return { parsed, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0]?.parsed || { cnic: "", dob: "", name: "" };
 };
 
 export const extractLicenseNumber = async (licenseImagePath) => {
