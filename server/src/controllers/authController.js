@@ -543,6 +543,24 @@ const strictSignup = async ({ req, res, role }) => {
   const { name, dob, cnic, mobile, mobileNumber, password, licenseNumber } = req.body;
   const mobileInput = mobile || mobileNumber;
 
+  const verificationFail = ({ reason, details = {} }) => {
+    console.warn("[AUTH][SIGNUP][VERIFICATION_FAILED]", {
+      reason,
+      role,
+      inputName: String(name || "").trim(),
+      inputCnic: String(cnic || ""),
+      inputDob: String(dob || ""),
+      normalizedMobile,
+      ...details,
+    });
+
+    return res.status(400).json({
+      success: false,
+      error: "Information does not match CNIC",
+      reason,
+    });
+  };
+
   if (!name || !dob || !cnic || !mobileInput || !password) {
     return jsonError(res, 400, "Missing required fields");
   }
@@ -552,11 +570,11 @@ const strictSignup = async ({ req, res, role }) => {
   const normalizedMobile = normalizePhone(mobileInput);
 
   if (!normalizedCnic) {
-    return jsonError(res, 400, "Information does not match CNIC");
+    return verificationFail({ reason: "CNIC_FORMAT_INVALID" });
   }
 
   if (!normalizedDob) {
-    return jsonError(res, 400, "Information does not match CNIC");
+    return verificationFail({ reason: "DOB_FORMAT_INVALID" });
   }
 
   const profileImageFile = req.files?.profileImage?.[0];
@@ -580,21 +598,50 @@ const strictSignup = async ({ req, res, role }) => {
     return jsonError(res, 409, "Account already exists");
   }
 
-  const cnicData = await extractCnicData({
-    cnicFrontPath: toStoredUploadPath(cnicFrontFile),
-    cnicBackPath: toStoredUploadPath(cnicBackFile),
-  });
+  let cnicData;
+  try {
+    cnicData = await extractCnicData({
+      cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+      cnicBackPath: toStoredUploadPath(cnicBackFile),
+    });
+  } catch (error) {
+    console.error("[AUTH][SIGNUP][OCR_ERROR]", {
+      role,
+      message: error?.message,
+      stack: error?.stack,
+    });
+
+    return verificationFail({ reason: "OCR_EXTRACTION_FAILED" });
+  }
 
   if (!cnicData?.cnic || normalizeCnic(cnicData.cnic) !== normalizedCnic) {
-    return jsonError(res, 400, "Information does not match CNIC");
+    return verificationFail({
+      reason: "CNIC_MISMATCH",
+      details: {
+        extractedCnic: cnicData?.cnic || "",
+        normalizedInputCnic: normalizedCnic,
+      },
+    });
   }
 
   if (!cnicData?.name || !isNameMatch(normalizeName(name), cnicData.name)) {
-    return jsonError(res, 400, "Information does not match CNIC");
+    return verificationFail({
+      reason: "NAME_MISMATCH",
+      details: {
+        extractedName: cnicData?.name || "",
+        normalizedInputName: normalizeName(name),
+      },
+    });
   }
 
   if (!cnicData?.dob || !isSameDate(normalizedDob, cnicData.dob)) {
-    return jsonError(res, 400, "Information does not match CNIC");
+    return verificationFail({
+      reason: "DOB_MISMATCH",
+      details: {
+        extractedDob: cnicData?.dob || "",
+        normalizedInputDob: normalizedDob,
+      },
+    });
   }
 
   if (role === "driver") {
@@ -605,14 +652,31 @@ const strictSignup = async ({ req, res, role }) => {
     }
   }
 
-  const faceResult = await compareFaces(
-    toStoredUploadPath(cnicFrontFile),
-    toStoredUploadPath(profileImageFile),
-    Number(process.env.FACE_MATCH_THRESHOLD || 80)
-  );
+  let faceResult;
+  try {
+    faceResult = await compareFaces(
+      toStoredUploadPath(cnicFrontFile),
+      toStoredUploadPath(profileImageFile),
+      Number(process.env.FACE_MATCH_THRESHOLD || 80)
+    );
+  } catch (error) {
+    console.error("[AUTH][SIGNUP][FACE_COMPARE_ERROR]", {
+      role,
+      message: error?.message,
+      stack: error?.stack,
+    });
+
+    return verificationFail({ reason: "FACE_CHECK_FAILED" });
+  }
 
   if (!faceResult?.matched) {
-    return jsonError(res, 400, "Information does not match CNIC");
+    return verificationFail({
+      reason: "FACE_MISMATCH",
+      details: {
+        similarity: Number(faceResult?.similarity || 0),
+        threshold: Number(process.env.FACE_MATCH_THRESHOLD || 80),
+      },
+    });
   }
 
   const normalizedEmail = `${normalizedMobile.replace(/[^\d+]/g, "")}.${role}@noemail.local`;
