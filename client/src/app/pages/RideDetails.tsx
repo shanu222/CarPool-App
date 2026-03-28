@@ -88,8 +88,14 @@ export function RideDetails() {
   const isDriverOwner = Boolean(currentUserId && driverUserId && currentUserId === driverUserId);
   const canRequestBooking = ride.availableSeats > 0 && ['scheduled', 'ongoing'].includes(ride.status || 'scheduled');
   const interactionLocked = !interactionUnlocked;
+  const hasChatTokens = Number(user?.tokens ?? user?.tokenBalance ?? 0) >= 2;
 
   const openChat = async () => {
+    if (!hasChatTokens && !interactionUnlocked) {
+      setShowUnlockModal(true);
+      return;
+    }
+
     try {
       const response = await startRideChatAccess(ride._id);
 
@@ -138,10 +144,17 @@ export function RideDetails() {
           {!interactionUnlocked ? (
             <button
               type="button"
-              onClick={() => setShowUnlockModal(true)}
+              onClick={() => {
+                if (hasChatTokens) {
+                  openChat();
+                  return;
+                }
+
+                setShowUnlockModal(true);
+              }}
               className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm text-white"
             >
-              Pay & Unlock Chat
+              {hasChatTokens ? 'Open Chat' : 'Pay & Unlock Chat'}
             </button>
           ) : (
             <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">

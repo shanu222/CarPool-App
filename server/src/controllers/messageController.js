@@ -271,8 +271,8 @@ const validateChatContext = async ({ rideId, user }) => {
 
   const currentStatus = await resolveRideStatusForChat(ride);
 
-  if (!isMatchedRide && currentStatus !== "live") {
-    return { errorStatus: 403, errorPayload: { message: "Chat is only available for live rides." } };
+  if (!isMatchedRide && !["live", "scheduled", "nearby"].includes(String(currentStatus))) {
+    return { errorStatus: 403, errorPayload: { message: "Chat is only available for live and scheduled rides." } };
   }
 
   const participant = await isRideParticipant(ride, user._id);
@@ -408,8 +408,8 @@ export const sendMessage = async (req, res, next) => {
       return res.status(403).json({ message: "This ride is completed. Chat is disabled." });
     }
 
-    if (!isMatchedRide && chatStatus !== "live") {
-      return res.status(403).json({ message: "Chat is only available for live rides." });
+    if (!isMatchedRide && !["live", "scheduled", "nearby"].includes(String(chatStatus))) {
+      return res.status(403).json({ message: "Chat is only available for live and scheduled rides." });
     }
 
     const participant = await isRideParticipant(ride, req.user._id);

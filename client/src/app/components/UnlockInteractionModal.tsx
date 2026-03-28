@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import type { Payment, PaymentQuote, PaymentSettings } from '../types';
-import { useAuth } from '../context/AuthContext';
+import type { Payment } from '../types';
 import { toast } from 'sonner';
 
 type PaymentsApiResponse = Payment[] | { payments?: Payment[] };
@@ -26,47 +25,48 @@ interface UnlockInteractionModalProps {
 }
 
 export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: UnlockInteractionModalProps) {
-  const { user } = useAuth();
   const [method, setMethod] = useState<'easypaisa' | 'jazzcash' | 'bank'>('easypaisa');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [amount, setAmount] = useState('');
-  const [settings, setSettings] = useState<PaymentSettings | null>(null);
-  const [quote, setQuote] = useState<PaymentQuote | null>(null);
   const [latestStatus, setLatestStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const roleLabel = useMemo(() => (user?.role === 'driver' ? 'Driver' : 'Passenger'), [user?.role]);
+  const paymentAccounts = {
+    easypaisa: {
+      title: 'Shahnawaz',
+      number: '03403318127',
+    },
+    jazzcash: {
+      title: 'Shahnawaz',
+      number: '03403318127',
+    },
+    bank: {
+      label: 'HBL Bank',
+      title: 'Shahnawaz',
+      number: '24897000279603',
+    },
+  };
 
   useEffect(() => {
-    if (!open || !rideId || !user?.role || (user.role !== 'driver' && user.role !== 'passenger')) {
+    if (!open || !rideId) {
       return;
     }
 
-    const loadSettings = async () => {
+    const loadStatus = async () => {
       try {
-        const [settingsResponse, quoteResponse, paymentsResponse] = await Promise.all([
-          api.get<PaymentSettings>('/api/payments/settings'),
-          api.get<PaymentQuote>(`/api/payments/quote/${rideId}`),
-          api.get<PaymentsApiResponse>(`/api/payments/my?rideId=${rideId}`),
-        ]);
-
-        setSettings(settingsResponse.data);
-        setQuote(quoteResponse.data);
-        setAmount(String(quoteResponse.data?.amount ?? ''));
+        const paymentsResponse = await api.get<PaymentsApiResponse>(`/api/payments/my?rideId=${rideId}`);
 
         const latest = extractPayments(paymentsResponse.data)
           .filter((payment) => payment.type === 'interaction_unlock')
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         setLatestStatus(latest?.status || null);
       } catch {
-        setSettings(null);
-        setQuote(null);
         setLatestStatus(null);
       }
     };
 
-    loadSettings();
-  }, [open, rideId, user?.role]);
+    loadStatus();
+  }, [open, rideId]);
 
   if (!open) {
     return null;
@@ -121,15 +121,27 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
         <h3 className="text-lg font-semibold text-slate-900">Pay & Unlock Chat</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Interaction payment is required before joining this ride chat.
+          Use these payment methods to submit your proof.
         </p>
 
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          <p>Distance: {quote ? `${Math.round(quote.distanceKm)} KM` : '-'}</p>
-          <p>Price: {roleLabel} → PKR {quote?.amount ?? '-'}</p>
-          <p className="mt-1 text-xs text-slate-600">
-            1 PKR = {settings?.tokenRate || 2} Tokens, and each chat/post/request costs {settings?.actionTokenCost || 2} tokens.
-          </p>
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="font-semibold text-slate-900">Easypaisa</p>
+            <p className="mt-1">Title: {paymentAccounts.easypaisa.title}</p>
+            <p>Number: {paymentAccounts.easypaisa.number}</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="font-semibold text-slate-900">JazzCash</p>
+            <p className="mt-1">Title: {paymentAccounts.jazzcash.title}</p>
+            <p>Number: {paymentAccounts.jazzcash.number}</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="font-semibold text-slate-900">{paymentAccounts.bank.label}</p>
+            <p className="mt-1">Title: {paymentAccounts.bank.title}</p>
+            <p>Account Number: {paymentAccounts.bank.number}</p>
+          </div>
         </div>
 
         {latestStatus ? (
@@ -141,13 +153,6 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
               : 'Payment rejected. Submit again to unlock chat'}
           </div>
         ) : null}
-
-        <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
-          <p>Easypaisa: {settings?.easypaisaNumber || '-'}</p>
-          <p>JazzCash: {settings?.jazzcashNumber || '-'}</p>
-          <p>Bank: {settings?.bankAccount || '-'}</p>
-          <p>Title: {settings?.accountTitle || '-'}</p>
-        </div>
 
         <div className="mt-4 space-y-3">
           <input

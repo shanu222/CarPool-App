@@ -437,7 +437,7 @@ interface TripCardProps {
 function TripCard({ trip, canUseChat, onOpenChat, onClick, onRate, onConfirm, onReschedule }: TripCardProps) {
   const { ride } = trip;
 
-  const canChat = canUseChat && ride?.status === 'live' && ['accepted', 'booked'].includes(trip.status);
+  const canChat = canUseChat && ['live', 'scheduled', 'nearby'].includes(String(ride?.status || '')) && ['accepted', 'booked'].includes(trip.status);
   const statusClass =
     trip.status === 'pending'
       ? 'bg-amber-100 text-amber-700'

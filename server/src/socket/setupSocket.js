@@ -254,10 +254,10 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      if (!isMatchedRide && chatStatus !== "live") {
+      if (!isMatchedRide && !["live", "scheduled", "nearby"].includes(String(chatStatus))) {
         socket.emit("chat_locked", {
           rideId,
-          message: "Chat is only available for live rides.",
+          message: "Chat is only available for live and scheduled rides.",
         });
         return;
       }
