@@ -9,6 +9,8 @@ import { DeletedUserArchive } from "../models/DeletedUserArchive.js";
 import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { createUserNotification } from "../services/notificationService.js";
 import { permanentlyDeleteUserAccount } from "../services/accountDeletionService.js";
+import fs from "node:fs";
+import path from "node:path";
 
 const getOrCreatePaymentSettings = async () => {
   let settings = await PaymentSettings.findOne().sort({ updatedAt: -1 });
@@ -18,6 +20,43 @@ const getOrCreatePaymentSettings = async () => {
   }
 
   return settings;
+};
+
+const paymentsUploadDir = path.join(process.cwd(), "uploads", "payments");
+
+const resolvePaymentProofPath = (payment) => {
+  const raw = String(payment?.proofImage || payment?.screenshot || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  let candidate = raw;
+
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const parsed = new URL(candidate);
+      candidate = parsed.pathname || "";
+    } catch {
+      return null;
+    }
+  }
+
+  if (candidate.startsWith("/uploads/payments/")) {
+    const fileName = path.basename(candidate);
+    return path.join(paymentsUploadDir, fileName);
+  }
+
+  if (candidate.startsWith("uploads/payments/")) {
+    const fileName = path.basename(candidate);
+    return path.join(paymentsUploadDir, fileName);
+  }
+
+  const fileName = path.basename(candidate);
+  if (!fileName) {
+    return null;
+  }
+
+  return path.join(paymentsUploadDir, fileName);
 };
 
 export const getAdminUsers = async (req, res, next) => {
@@ -325,6 +364,36 @@ export const getAdminPayments = async (_req, res, next) => {
       .sort({ createdAt: -1 });
 
     return res.json(payments);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAdminPaymentProof = async (req, res, next) => {
+  try {
+    const payment = await Payment.findById(req.params.paymentId).select("proofImage screenshot");
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    const proofPath = resolvePaymentProofPath(payment);
+    if (!proofPath) {
+      return res.status(404).json({ message: "Proof not found" });
+    }
+
+    const normalizedRoot = path.resolve(paymentsUploadDir);
+    const normalizedProof = path.resolve(proofPath);
+
+    if (!normalizedProof.startsWith(normalizedRoot)) {
+      return res.status(400).json({ message: "Invalid proof path" });
+    }
+
+    if (!fs.existsSync(normalizedProof)) {
+      return res.status(404).json({ message: "Proof file not found" });
+    }
+
+    return res.sendFile(normalizedProof);
   } catch (error) {
     return next(error);
   }

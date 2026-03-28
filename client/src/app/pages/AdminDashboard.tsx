@@ -98,6 +98,12 @@ export function AdminDashboard() {
   const [error, setError] = useState("");
   const [banReason, setBanReason] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [proofModalOpen, setProofModalOpen] = useState(false);
+  const [proofLoading, setProofLoading] = useState(false);
+  const [proofError, setProofError] = useState("");
+  const [proofUrl, setProofUrl] = useState<string | null>(null);
+  const [proofMimeType, setProofMimeType] = useState("");
+  const [proofFileName, setProofFileName] = useState("payment-proof");
 
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<UserReportItem[]>([]);
@@ -227,6 +233,61 @@ export function AdminDashboard() {
     const rejectionReason = status === "rejected" ? "Rejected by admin" : "";
     await api.post("/admin/approve-payment", { paymentId, status, rejectionReason });
   };
+
+  const extractProofFileName = (payment: Payment) => {
+    const raw = String(payment.proofImage || payment.screenshot || "").trim();
+    if (!raw) {
+      return `payment-proof-${payment._id}`;
+    }
+
+    const clean = raw.split("?")[0].split("#")[0];
+    const parts = clean.split("/").filter(Boolean);
+    return parts[parts.length - 1] || `payment-proof-${payment._id}`;
+  };
+
+  const closeProofModal = () => {
+    if (proofUrl) {
+      URL.revokeObjectURL(proofUrl);
+    }
+    setProofModalOpen(false);
+    setProofLoading(false);
+    setProofError("");
+    setProofUrl(null);
+    setProofMimeType("");
+    setProofFileName("payment-proof");
+  };
+
+  const openProofModal = async (payment: Payment) => {
+    try {
+      setProofModalOpen(true);
+      setProofLoading(true);
+      setProofError("");
+
+      if (proofUrl) {
+        URL.revokeObjectURL(proofUrl);
+      }
+
+      const fileName = extractProofFileName(payment);
+      const response = await api.get(`/admin/payments/${payment._id}/proof`, {
+        responseType: "blob",
+      });
+
+      const blob = response.data as Blob;
+      const nextUrl = URL.createObjectURL(blob);
+
+      setProofUrl(nextUrl);
+      setProofFileName(fileName);
+      setProofMimeType(String(response.headers?.["content-type"] || blob.type || ""));
+    } catch (requestError: any) {
+      setProofError(requestError?.response?.data?.message || "Could not load proof file");
+    } finally {
+      setProofLoading(false);
+    }
+  };
+
+  const isImageProof =
+    proofMimeType.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(proofFileName);
+  const isPdfProof = proofMimeType.includes("pdf") || /\.pdf$/i.test(proofFileName);
 
   const openConfirmation = (nextAction: ConfirmAction) => {
     setBanReason("");
@@ -724,14 +785,13 @@ export function AdminDashboard() {
                                 <td className="px-3 py-3">{formatDateTime(payment.createdAt)}</td>
                                 <td className="px-3 py-3">
                                   {payment.screenshot || payment.proofImage ? (
-                                    <a
-                                      href={payment.screenshot || payment.proofImage}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                    <button
+                                      type="button"
                                       className="text-cyan-200 underline"
+                                      onClick={() => openProofModal(payment)}
                                     >
-                                      View proof
-                                    </a>
+                                      View / Download
+                                    </button>
                                   ) : (
                                     "-"
                                   )}
@@ -878,6 +938,56 @@ export function AdminDashboard() {
                 className="h-10 w-full rounded-xl bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/20"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {proofModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 px-4">
+          <div className="w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-900/95 p-4 text-white">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold sm:text-lg">Payment Proof</h3>
+              <button
+                type="button"
+                onClick={closeProofModal}
+                className="rounded-lg bg-white/10 p-1 text-white hover:bg-white/20"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto rounded-xl border border-white/20 bg-black/20 p-2">
+              {proofLoading ? <p className="text-sm text-slate-200">Loading proof...</p> : null}
+              {!proofLoading && proofError ? <p className="text-sm text-red-200">{proofError}</p> : null}
+              {!proofLoading && !proofError && proofUrl && isImageProof ? (
+                <img src={proofUrl} alt="Payment proof" className="mx-auto max-h-[66vh] w-auto" />
+              ) : null}
+              {!proofLoading && !proofError && proofUrl && isPdfProof ? (
+                <iframe title="Payment proof" src={proofUrl} className="h-[66vh] w-full rounded-lg bg-white" />
+              ) : null}
+              {!proofLoading && !proofError && proofUrl && !isImageProof && !isPdfProof ? (
+                <p className="text-sm text-slate-200">Preview not supported for this file type. Use download.</p>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              {proofUrl ? (
+                <a
+                  href={proofUrl}
+                  download={proofFileName}
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-cyan-600 px-4 text-sm font-medium text-white hover:bg-cyan-500"
+                >
+                  Download Proof
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={closeProofModal}
+                className="h-10 rounded-xl bg-white/10 px-4 text-sm font-medium text-white hover:bg-white/20"
+              >
+                Close
               </button>
             </div>
           </div>

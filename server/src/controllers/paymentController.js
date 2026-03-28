@@ -8,7 +8,7 @@ const buildFilePath = (req, file) => {
     return undefined;
   }
 
-  return `${req.protocol}://${req.get("host")}/uploads/payments/${file.filename}`;
+  return `/uploads/payments/${file.filename}`;
 };
 
 export const getPaymentQuote = async (req, res, next) => {

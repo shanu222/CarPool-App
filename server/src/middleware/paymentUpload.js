@@ -18,12 +18,12 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (_req, file, cb) => {
-  if (file.mimetype.startsWith("image/")) {
+  if (file.mimetype.startsWith("image/") || file.mimetype === "application/pdf") {
     cb(null, true);
     return;
   }
 
-  cb(new Error("Only image uploads are allowed"));
+  cb(new Error("Only image or PDF uploads are allowed"));
 };
 
 export const paymentUpload = multer({

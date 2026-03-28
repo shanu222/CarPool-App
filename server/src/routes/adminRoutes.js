@@ -9,6 +9,7 @@ import {
   getAdminBookings,
   getAdminChangeRequests,
   getAdminPayments,
+  getAdminPaymentProof,
   getAdminReports,
   getAdminRides,
   getAdminUsers,
@@ -41,6 +42,7 @@ router.delete("/rides/:rideId", deleteRideByAdmin);
 router.post("/feature-ride", featureRideByAdmin);
 
 router.get("/payments", getAdminPayments);
+router.get("/payments/:paymentId/proof", getAdminPaymentProof);
 router.post("/approve-payment", approvePaymentByAdmin);
 router.post("/payment/approve", approvePaymentByAdmin);
 router.post("/approve-payment/:id", approvePaymentByAdminId);
