@@ -80,6 +80,21 @@ const parseFirstJsonObject = (text) => {
   }
 };
 
+const extractLabeledDate = (text, labelPattern) => {
+  const raw = String(text || "");
+  const labelRegex = new RegExp(
+    `(?:${labelPattern})[^\n\r\d]{0,20}(\\d{2}[./-]\\d{2}[./-]\\d{4}|\\d{4}-\\d{2}-\\d{2})`,
+    "i"
+  );
+
+  const match = raw.match(labelRegex);
+  if (!match?.[1]) {
+    return "";
+  }
+
+  return normalizeDob(match[1]);
+};
+
 const extractCnicDataWithOpenAI = async ({ frontBuffer, backBuffer }) => {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
@@ -91,11 +106,12 @@ const extractCnicDataWithOpenAI = async ({ frontBuffer, backBuffer }) => {
 
   const prompt = [
     "Extract Pakistani CNIC fields from these two images (front and back).",
-    "Return JSON only with keys: name, cnic, dob.",
+    "Return JSON only with keys: name, cnic, dob, cnicExpiry.",
     "Rules:",
     "- name: card holder name under Name label only",
     "- cnic: only CNIC number",
     "- dob: normalize to YYYY-MM-DD",
+    "- cnicExpiry: CNIC expiry date from card, normalize to YYYY-MM-DD",
     "- if uncertain, return empty string for that key",
   ].join("\n");
 
@@ -163,6 +179,7 @@ const extractCnicDataWithOpenAI = async ({ frontBuffer, backBuffer }) => {
     name: normalizeName(parsed.name || ""),
     cnic: normalizeCnic(parsed.cnic || ""),
     dob: normalizeDob(parsed.dob || ""),
+    cnicExpiry: normalizeDob(parsed.cnicExpiry || ""),
   };
 };
 
@@ -177,11 +194,12 @@ const extractCnicDataWithGemini = async ({ frontBuffer, backBuffer }) => {
 
   const prompt = [
     "Extract Pakistani CNIC fields from these two images (front and back).",
-    "Return JSON only with keys: name, cnic, dob.",
+    "Return JSON only with keys: name, cnic, dob, cnicExpiry.",
     "Rules:",
     "- name: card holder name under Name label only",
     "- cnic: only CNIC number",
     "- dob: normalize to YYYY-MM-DD",
+    "- cnicExpiry: CNIC expiry date from card, normalize to YYYY-MM-DD",
     "- if uncertain, return empty string for that key",
   ].join("\n");
 
@@ -252,6 +270,7 @@ const extractCnicDataWithGemini = async ({ frontBuffer, backBuffer }) => {
     name: normalizeName(parsed.name || ""),
     cnic: normalizeCnic(parsed.cnic || ""),
     dob: normalizeDob(parsed.dob || ""),
+    cnicExpiry: normalizeDob(parsed.cnicExpiry || ""),
   };
 };
 
@@ -397,6 +416,8 @@ const parseCnicText = (text) => {
   const raw = String(text || "");
   const cnicMatch = raw.match(/\b\d{5}-?\d{7}-?\d\b/);
   const dobMatch = raw.match(/\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b/);
+  const cnicExpiry =
+    extractLabeledDate(raw, "date\\s*of\\s*expiry|expiry|valid\\s*(?:till|until|upto|up to)") || "";
 
   const lines = raw
     .replace(/\r/g, "")
@@ -472,6 +493,7 @@ const parseCnicText = (text) => {
   return {
     cnic: normalizeCnic(cnicMatch?.[0] || ""),
     dob: normalizeDob(dobMatch?.[0] || ""),
+    cnicExpiry,
     name: normalizeName(name),
   };
 };
@@ -515,6 +537,23 @@ const parseLicenseText = (text) => {
   }
 
   return "";
+};
+
+const parseLicenseExpiry = (text) => {
+  const raw = String(text || "");
+  const labeledExpiry =
+    extractLabeledDate(raw, "expiry|valid\\s*(?:till|until|upto|up to)|date\\s*of\\s*expiry") || "";
+
+  if (labeledExpiry) {
+    return labeledExpiry;
+  }
+
+  const dateMatches = [...raw.matchAll(/\b(\d{2}[./-]\d{2}[./-]\d{4}|\d{4}-\d{2}-\d{2})\b/g)]
+    .map((match) => normalizeDob(match[1]))
+    .filter(Boolean)
+    .sort();
+
+  return dateMatches[dateMatches.length - 1] || "";
 };
 
 export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
@@ -561,6 +600,7 @@ export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
       allCandidates.push({
         cnic: parsedFront.cnic || parsedBack.cnic,
         dob: parsedFront.dob || parsedBack.dob,
+        cnicExpiry: parsedFront.cnicExpiry || parsedBack.cnicExpiry,
         name: parsedFront.name || parsedBack.name,
       });
     }
@@ -578,6 +618,9 @@ export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
       if (parsed.name) {
         score += 4;
       }
+      if (parsed.cnicExpiry) {
+        score += 2;
+      }
 
       return { parsed, score };
     })
@@ -594,4 +637,12 @@ export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
 export const extractLicenseNumber = async (licenseImagePath) => {
   const text = await extractText(licenseImagePath);
   return parseLicenseText(text);
+};
+
+export const extractLicenseData = async (licenseImagePath) => {
+  const text = await extractText(licenseImagePath);
+  return {
+    licenseNumber: parseLicenseText(text),
+    licenseExpiry: parseLicenseExpiry(text),
+  };
 };

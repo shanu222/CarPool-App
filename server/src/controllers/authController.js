@@ -6,7 +6,7 @@ import { User } from "../models/User.js";
 import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
 import { compareFaces } from "../services/faceService.js";
-import { extractCnicData, extractLicenseNumber } from "../services/ocrService.js";
+import { extractCnicData, extractLicenseData } from "../services/ocrService.js";
 import { isNameMatch, isSameDate, normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
 
 const getAdminEmails = () =>
@@ -62,6 +62,59 @@ const normalizeLicenseNumber = (value) =>
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .trim();
+
+const toDateOrNull = (value) => {
+  const normalized = normalizeDob(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = new Date(`${normalized}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isDateExpired = (dateValue) => {
+  if (!dateValue) {
+    return false;
+  }
+
+  const target = new Date(dateValue);
+  if (Number.isNaN(target.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return target < today;
+};
+
+const buildVerificationMeta = ({ isVerified, isCnicExpired, isLicenseExpired, role }) => {
+  let statusLabel = "Verified";
+
+  if (!isVerified) {
+    statusLabel = "Not Verified";
+  } else if (isCnicExpired) {
+    statusLabel = "CNIC Expired";
+  } else if (role === "driver" && isLicenseExpired) {
+    statusLabel = "License Expired";
+  }
+
+  return {
+    isVerified: Boolean(isVerified),
+    isCnicExpired: Boolean(isCnicExpired),
+    isLicenseExpired: Boolean(isLicenseExpired),
+    statusLabel,
+    visibility: isVerified ? "normal" : "low",
+  };
+};
+
+const getUserVerificationMeta = (user) =>
+  buildVerificationMeta({
+    isVerified: user?.isVerified,
+    isCnicExpired: user?.isCnicExpired,
+    isLicenseExpired: user?.isLicenseExpired,
+    role: user?.role,
+  });
 
 const buildFilePath = (req, file) => {
   if (!file?.filename) {
@@ -305,6 +358,9 @@ const sanitizeUser = (user) => ({
   canChat: user.canChat,
   paymentApproved: user.paymentApproved,
   blockedUsers: user.blockedUsers || [],
+  cnicExpiryDate: user.cnicExpiryDate || null,
+  licenseExpiryDate: user.licenseExpiryDate || null,
+  ...getUserVerificationMeta(user),
   notificationSettings: {
     messages: user.notificationSettings?.messages !== false,
     rides: user.notificationSettings?.rides !== false,
@@ -319,8 +375,10 @@ const minimalLoginUser = (user) => ({
   phone: user.phone,
   role: user.role,
   rating: Number(user.rating || 0),
-  isVerified: Boolean(user.isVerified),
   verificationStatus: user.verificationStatus,
+  cnicExpiryDate: user.cnicExpiryDate || null,
+  licenseExpiryDate: user.licenseExpiryDate || null,
+  ...getUserVerificationMeta(user),
 });
 
 const isBcryptHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ""));
@@ -513,7 +571,7 @@ export const register = async (req, res, next) => {
       });
 
       const token = signToken(user);
-      return res.status(201).json({ token, user: sanitizeUser(user) });
+      return res.status(201).json({ token, user: sanitizeUser(user), ...getUserVerificationMeta(user) });
     }
 
     const user = await User.create({
@@ -533,7 +591,7 @@ export const register = async (req, res, next) => {
     });
 
     const token = signToken(user);
-    return res.status(201).json({ token, user: sanitizeUser(user) });
+    return res.status(201).json({ token, user: sanitizeUser(user), ...getUserVerificationMeta(user) });
   } catch (error) {
     return next(error);
   }
@@ -542,6 +600,15 @@ export const register = async (req, res, next) => {
 const strictSignup = async ({ req, res, role }) => {
   const { name, dob, cnic, mobile, mobileNumber, password, licenseNumber } = req.body;
   const mobileInput = mobile || mobileNumber;
+  const normalizedMobile = normalizePhone(mobileInput);
+
+  if (!name || !mobileInput || !password) {
+    return jsonError(res, 400, "Missing required fields");
+  }
+
+  if (!normalizedMobile) {
+    return jsonError(res, 400, "Invalid mobile number format");
+  }
 
   const verificationFail = ({ reason, details = {} }) => {
     console.warn("[AUTH][SIGNUP][VERIFICATION_FAILED]", {
@@ -562,13 +629,77 @@ const strictSignup = async ({ req, res, role }) => {
     });
   };
 
-  if (!name || !dob || !cnic || !mobileInput || !password) {
-    return jsonError(res, 400, "Missing required fields");
+  const profileImageFile = req.files?.profileImage?.[0];
+  const cnicFrontFile = req.files?.cnicFront?.[0];
+  const cnicBackFile = req.files?.cnicBack?.[0];
+  const licenseImageFile = req.files?.licenseImage?.[0];
+
+  const hasAnyVerificationImage = Boolean(profileImageFile || cnicFrontFile || cnicBackFile || licenseImageFile);
+  const hasVerificationText = Boolean(cnic || dob);
+  const wantsVerifiedSignup = hasAnyVerificationImage || hasVerificationText;
+
+  const duplicateByPhone = await User.findOne({ phone: normalizedMobile, role });
+  if (duplicateByPhone) {
+    return jsonError(res, 409, "Account already exists");
+  }
+
+  if (!wantsVerifiedSignup) {
+    const normalizedEmail = `${normalizedMobile.replace(/[^\d+]/g, "")}.${role}@noemail.local`;
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const verificationMeta = buildVerificationMeta({
+      isVerified: false,
+      isCnicExpired: false,
+      isLicenseExpired: false,
+      role,
+    });
+
+    await User.create({
+      name: String(name).trim(),
+      email: normalizedEmail,
+      phone: normalizedMobile,
+      password: hashedPassword,
+      role,
+      status: "approved",
+      accountStatus: "active",
+      verificationStatus: "pending",
+      isVerified: false,
+      verified: false,
+      isCnicExpired: false,
+      isLicenseExpired: false,
+      statusLabel: verificationMeta.statusLabel,
+      visibility: verificationMeta.visibility,
+      tokens: 0,
+      tokenBalance: 0,
+      freeChats: 5,
+      freeChatsRemaining: 5,
+      freePosts: 5,
+      freePostsRemaining: 5,
+      freeRequests: 5,
+      freeRequestsRemaining: 5,
+    });
+
+    return jsonSuccess(res, 201, {
+      message: "Account created successfully. Please login.",
+      warningMessages: [
+        "You are registered as an unverified user. Your rides will have limited visibility.",
+      ],
+      ...verificationMeta,
+      ...getUserAccessSummary(req.user || {
+        tokens: 0,
+        freeChats: 5,
+        freePosts: 5,
+        freeRequests: 5,
+      }),
+    });
+  }
+
+  if (!dob || !cnic) {
+    return jsonError(res, 400, "cnic and dob are required for verified signup");
   }
 
   const normalizedCnic = normalizeCnic(cnic);
   const normalizedDob = normalizeDob(dob);
-  const normalizedMobile = normalizePhone(mobileInput);
 
   if (!normalizedCnic) {
     return verificationFail({
@@ -594,11 +725,6 @@ const strictSignup = async ({ req, res, role }) => {
     });
   }
 
-  const profileImageFile = req.files?.profileImage?.[0];
-  const cnicFrontFile = req.files?.cnicFront?.[0];
-  const cnicBackFile = req.files?.cnicBack?.[0];
-  const licenseImageFile = req.files?.licenseImage?.[0];
-
   if (!profileImageFile || !cnicFrontFile || !cnicBackFile) {
     return jsonError(res, 400, "Missing required verification images");
   }
@@ -608,7 +734,7 @@ const strictSignup = async ({ req, res, role }) => {
   }
 
   const duplicate = await User.findOne({
-    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }, { phone: normalizedMobile }],
+    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }],
   });
 
   if (duplicate) {
@@ -696,10 +822,15 @@ const strictSignup = async ({ req, res, role }) => {
     });
   }
 
+  let licenseExpiryDetected = "";
+
   if (role === "driver") {
     let extractedLicense = "";
+    let extractedLicenseExpiry = "";
     try {
-      extractedLicense = await extractLicenseNumber(toStoredUploadPath(licenseImageFile));
+      const licenseData = await extractLicenseData(toStoredUploadPath(licenseImageFile));
+      extractedLicense = licenseData?.licenseNumber || "";
+      extractedLicenseExpiry = licenseData?.licenseExpiry || "";
     } catch (error) {
       return verificationFail({
         reason: "LICENSE_EXTRACTION_FAILED",
@@ -724,6 +855,8 @@ const strictSignup = async ({ req, res, role }) => {
         },
       });
     }
+
+    licenseExpiryDetected = extractedLicenseExpiry;
   }
 
   let faceResult;
@@ -769,6 +902,25 @@ const strictSignup = async ({ req, res, role }) => {
   const normalizedEmail = `${normalizedMobile.replace(/[^\d+]/g, "")}.${role}@noemail.local`;
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  const cnicExpiryDate = toDateOrNull(cnicData?.cnicExpiry);
+  const licenseExpiryDate = toDateOrNull(licenseExpiryDetected);
+  const isCnicExpired = isDateExpired(cnicExpiryDate);
+  const isLicenseExpired = role === "driver" ? isDateExpired(licenseExpiryDate) : false;
+  const verificationMeta = buildVerificationMeta({
+    isVerified: true,
+    isCnicExpired,
+    isLicenseExpired,
+    role,
+  });
+
+  const warningMessages = [];
+  if (isCnicExpired) {
+    warningMessages.push("Your CNIC is expired. This will be visible to other users.");
+  }
+  if (role === "driver" && isLicenseExpired) {
+    warningMessages.push("Your license is expired. This will be visible to other users.");
+  }
+
   await User.create({
     name: String(name).trim(),
     email: normalizedEmail,
@@ -789,6 +941,12 @@ const strictSignup = async ({ req, res, role }) => {
     verificationStatus: "verified",
     isVerified: true,
     verified: true,
+    cnicExpiryDate,
+    licenseExpiryDate,
+    isCnicExpired,
+    isLicenseExpired,
+    statusLabel: verificationMeta.statusLabel,
+    visibility: verificationMeta.visibility,
     tokens: 0,
     tokenBalance: 0,
     freeChats: 5,
@@ -801,6 +959,8 @@ const strictSignup = async ({ req, res, role }) => {
 
   return jsonSuccess(res, 201, {
     message: "Account created successfully. Please login.",
+    warningMessages,
+    ...verificationMeta,
     ...getUserAccessSummary(req.user || {
       tokens: 0,
       freeChats: 5,
@@ -828,9 +988,9 @@ export const driverSignup = async (req, res, next) => {
 
 export const publicSignup = async (req, res, next) => {
   try {
-    const requestedRole = String(req.body?.role || "").trim().toLowerCase();
+    const requestedRole = String(req.body?.role || "passenger").trim().toLowerCase();
 
-    if (!requestedRole || !["passenger", "driver"].includes(requestedRole)) {
+    if (!["passenger", "driver"].includes(requestedRole)) {
       return jsonError(res, 400, "role must be passenger or driver");
     }
 
@@ -899,16 +1059,13 @@ export const publicLogin = async (req, res, next) => {
       return jsonError(res, 401, "Invalid password");
     }
 
-    if (user.verified !== true && user.isVerified !== true) {
-      return jsonError(res, 403, "Account not verified");
-    }
-
     const token = signToken(user);
 
     return jsonSuccess(res, 200, {
       message: "Login successful",
       token,
       user: minimalLoginUser(user),
+      ...getUserVerificationMeta(user),
       ...getUserAccessSummary(user),
     });
   } catch (error) {
@@ -975,13 +1132,6 @@ export const login = async (req, res, next) => {
       return res.status(403).json({ message: "This account is blocked for selected role" });
     }
 
-    const isVerificationApproved =
-      user.isVerified === true && ["verified", "approved"].includes(String(user.verificationStatus || ""));
-
-    if (!isVerificationApproved) {
-      return res.status(403).json({ message: "Account is not verified" });
-    }
-
     if (user.status === "pending") {
       return res.status(403).json({ message: "Your account is pending admin approval" });
     }
@@ -1014,7 +1164,7 @@ export const login = async (req, res, next) => {
     }
 
     const token = signToken(user);
-    return res.json({ token, user: sanitizeUser(user) });
+    return res.json({ token, user: sanitizeUser(user), ...getUserVerificationMeta(user) });
   } catch (error) {
     return next(error);
   }
@@ -1106,7 +1256,7 @@ export const adminLogin = async (req, res, next) => {
 
     const adminTokenTtl = process.env.ADMIN_JWT_EXPIRES_IN || "8h";
     const token = signToken(user, adminTokenTtl);
-    return res.json({ token, user: sanitizeUser(user) });
+    return res.json({ token, user: sanitizeUser(user), ...getUserVerificationMeta(user) });
   } catch (error) {
     return next(error);
   }

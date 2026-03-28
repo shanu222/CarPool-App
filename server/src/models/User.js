@@ -1,5 +1,21 @@
 import mongoose from "mongoose";
 
+const computeStatusLabel = ({ isVerified, isCnicExpired, isLicenseExpired, role }) => {
+  if (!isVerified) {
+    return "Not Verified";
+  }
+
+  if (isCnicExpired) {
+    return "CNIC Expired";
+  }
+
+  if (role === "driver" && isLicenseExpired) {
+    return "License Expired";
+  }
+
+  return "Verified";
+};
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -64,11 +80,41 @@ const userSchema = new mongoose.Schema(
     },
     isVerified: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     verified: {
       type: Boolean,
-      default: true,
+      default: false,
+    },
+    cnicExpiryDate: {
+      type: Date,
+      default: null,
+    },
+    licenseExpiryDate: {
+      type: Date,
+      default: null,
+    },
+    isCnicExpired: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isLicenseExpired: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    statusLabel: {
+      type: String,
+      enum: ["Not Verified", "CNIC Expired", "License Expired", "Verified"],
+      default: "Not Verified",
+      index: true,
+    },
+    visibility: {
+      type: String,
+      enum: ["low", "normal"],
+      default: "low",
+      index: true,
     },
     isDeleted: {
       type: Boolean,
@@ -358,6 +404,19 @@ userSchema.pre("save", function syncLegacyVerificationFields(next) {
   if (typeof this.verified === "boolean") {
     this.isVerified = this.verified;
   }
+
+  if (this.isVerified) {
+    this.visibility = "normal";
+  } else {
+    this.visibility = "low";
+  }
+
+  this.statusLabel = computeStatusLabel({
+    isVerified: Boolean(this.isVerified),
+    isCnicExpired: Boolean(this.isCnicExpired),
+    isLicenseExpired: Boolean(this.isLicenseExpired),
+    role: this.role,
+  });
 
   return next();
 });

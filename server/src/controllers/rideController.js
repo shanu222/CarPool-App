@@ -16,6 +16,22 @@ const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 
 const RIDE_POSTING_WINDOW_DAYS = 15;
 const NEARBY_WINDOW_HOURS = 24;
 
+const visibilityRank = (ride) => {
+  const visibility = String(ride?.driver?.visibility || "").toLowerCase();
+  if (visibility === "low") {
+    return 1;
+  }
+
+  if (ride?.driver?.isVerified === false) {
+    return 1;
+  }
+
+  return 0;
+};
+
+const prioritizeNormalVisibility = (rides) =>
+  [...rides].sort((left, right) => visibilityRank(left) - visibilityRank(right));
+
 const parseRideDateTime = (date, time) => {
   const value = new Date(`${date}T${time}:00`);
   if (Number.isNaN(value.getTime())) {
@@ -351,7 +367,7 @@ export const createRide = async (req, res, next) => {
 
     const populatedRide = await Ride.findById(ride._id).populate(
       "driver",
-      "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+      "name role rating isVerified visibility statusLabel profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
     );
 
     return res.status(201).json(populatedRide);
@@ -446,7 +462,7 @@ export const searchRides = async (req, res, next) => {
     const rides = await Ride.find(query)
       .populate(
         "driver",
-        "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+        "name role rating isVerified visibility statusLabel profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
       .sort(sortOption);
 
@@ -546,8 +562,10 @@ export const searchRides = async (req, res, next) => {
       })
       .filter(Boolean);
 
-    const liveRides = smartMatched.filter((ride) => ride.status === "live");
-    const scheduledRides = smartMatched.filter((ride) => ride.status === "scheduled");
+    const liveRides = prioritizeNormalVisibility(smartMatched.filter((ride) => ride.status === "live"));
+    const scheduledRides = prioritizeNormalVisibility(
+      smartMatched.filter((ride) => ride.status === "scheduled")
+    );
 
     return res.json({
       liveRides,
@@ -567,7 +585,7 @@ export const getRideById = async (req, res, next) => {
     await refreshRideLifecycleStatuses();
     const ride = await Ride.findById(req.params.id).populate(
       "driver",
-      "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+      "name role rating isVerified visibility statusLabel profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
     );
 
     if (!ride) {
@@ -591,7 +609,7 @@ export const getNearbyRides = async (req, res, next) => {
     })
       .populate(
         "driver",
-        "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+        "name role rating isVerified visibility statusLabel profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
       .sort({ featured: -1, dateTime: 1, createdAt: -1 });
 
@@ -600,8 +618,8 @@ export const getNearbyRides = async (req, res, next) => {
       status: ride.status === "nearby" ? "scheduled" : ride.status,
     }));
 
-    const liveRides = allRides.filter((ride) => ride.status === "live");
-    const scheduledRides = allRides.filter((ride) => ride.status === "scheduled");
+    const liveRides = prioritizeNormalVisibility(allRides.filter((ride) => ride.status === "live"));
+    const scheduledRides = prioritizeNormalVisibility(allRides.filter((ride) => ride.status === "scheduled"));
 
     return res.json({
       nearbyRides: [...liveRides, ...scheduledRides],
@@ -620,7 +638,7 @@ export const getMyRides = async (req, res, next) => {
     const rides = await Ride.find({ driver: req.user._id })
       .populate(
         "driver",
-        "name role rating isVerified profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
+        "name role rating isVerified visibility statusLabel profilePhoto carMake carModel carColor carPlateNumber carYear carPhoto"
       )
       .sort({ dateTime: 1, createdAt: -1 });
 
