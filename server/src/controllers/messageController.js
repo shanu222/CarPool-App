@@ -4,9 +4,11 @@ import { Payment } from "../models/Payment.js";
 import { sendPushNotification } from "../services/pushService.js";
 import { User } from "../models/User.js";
 import { Booking } from "../models/Booking.js";
+import { Match } from "../models/Match.js";
 import { getIo } from "../socket/io.js";
 import { isUserOnline } from "../socket/io.js";
 import { createUserNotification } from "../services/notificationService.js";
+import { reserveActionCredit } from "../services/tokenAccessService.js";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
 const FREE_CHAT_MESSAGE_LIMIT = 5;
@@ -16,6 +18,10 @@ const WHATSAPP_LINK_REGEX = /(wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/)/i;
 const resolveRideStatusForChat = async (ride) => {
   if (!ride) {
     return null;
+  }
+
+  if (String(ride.status) === "matched") {
+    return "matched";
   }
 
   if (["completed", "cancelled"].includes(String(ride.status))) {
@@ -88,7 +94,13 @@ const getRideParticipantIds = async (rideId, rideDriverId) => {
   }).select("passengerId");
 
   const passengerIds = acceptedBookings.map((item) => String(item.passengerId));
-  const participantSet = new Set([String(rideDriverId), ...passengerIds]);
+  const approvedMatches = await Match.find({
+    rideId,
+    status: "approved",
+  }).select("passengerId");
+
+  const matchedPassengerIds = approvedMatches.map((item) => String(item.passengerId));
+  const participantSet = new Set([String(rideDriverId), ...passengerIds, ...matchedPassengerIds]);
   return [...participantSet];
 };
 
@@ -103,7 +115,56 @@ const isRideParticipant = async (ride, userId) => {
     status: { $in: ["accepted", "booked", "ongoing", "completed"] },
   });
 
-  return Boolean(hasBooking);
+  if (hasBooking) {
+    return true;
+  }
+
+  const hasApprovedMatch = await Match.exists({
+    rideId: ride._id,
+    status: "approved",
+    $or: [{ driverId: userId }, { passengerId: userId }],
+  });
+
+  return Boolean(hasApprovedMatch);
+};
+
+const getApprovedMatchForUser = async (rideId, userId) => {
+  return Match.findOne({
+    rideId,
+    status: "approved",
+    $or: [{ driverId: userId }, { passengerId: userId }],
+  });
+};
+
+const ensureMatchedChatOpenAccess = async ({ match, user }) => {
+  if (!match || user?.role === "admin") {
+    return { ok: true };
+  }
+
+  const charged = (match.chatAccessChargedUsers || []).some((item) => String(item) === String(user._id));
+  if (charged) {
+    return { ok: true };
+  }
+
+  const reserved = await reserveActionCredit({ userId: user._id, action: "chat" });
+
+  if (!reserved?.reserved) {
+    return {
+      ok: false,
+      message: "Insufficient tokens. Please recharge.",
+      requiresPayment: true,
+      redirectTo: "/payment-methods",
+      tokenInfo: {
+        tokenRate: 2,
+        costPerAction: 2,
+      },
+    };
+  }
+
+  match.chatAccessChargedUsers = [...(match.chatAccessChargedUsers || []), user._id];
+  await match.save();
+
+  return { ok: true };
 };
 
 const hasInteractionAccess = async (userId, rideId, role) => {
@@ -145,9 +206,21 @@ export const getRideMessages = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    await resolveRideStatusForChat(ride);
+    const approvedMatch = await getApprovedMatchForUser(rideId, req.user._id);
+    const isMatchedRide = String(ride.status) === "matched";
 
-    if (ride.status !== "live") {
+    if (isMatchedRide && !approvedMatch && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Chat is available only after both users approve the match." });
+    }
+
+    const access = await ensureMatchedChatOpenAccess({ match: approvedMatch, user: req.user });
+    if (!access.ok) {
+      return res.status(403).json(access);
+    }
+
+    const currentStatus = await resolveRideStatusForChat(ride);
+
+    if (!isMatchedRide && currentStatus !== "live") {
       return res.status(403).json({ message: "Chat is only available for live rides." });
     }
 
@@ -227,13 +300,20 @@ export const sendMessage = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
+    const approvedMatch = await getApprovedMatchForUser(rideId, req.user._id);
+    const isMatchedRide = String(ride.status) === "matched";
+
+    if (isMatchedRide && !approvedMatch && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Chat is available only after both users approve the match." });
+    }
+
     const chatStatus = await resolveRideStatusForChat(ride);
 
     if (["completed", "cancelled"].includes(String(chatStatus))) {
       return res.status(403).json({ message: "This ride is completed. Chat is disabled." });
     }
 
-    if (chatStatus !== "live") {
+    if (!isMatchedRide && chatStatus !== "live") {
       return res.status(403).json({ message: "Chat is only available for live rides." });
     }
 

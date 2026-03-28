@@ -6,6 +6,7 @@ import { setIo, setUserOffline, setUserOnline, isUserOnline } from "./io.js";
 import { Location } from "../models/Location.js";
 import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
+import { Match } from "../models/Match.js";
 import { Payment } from "../models/Payment.js";
 import { Notification } from "../models/Notification.js";
 import { sendPushNotification } from "../services/pushService.js";
@@ -46,7 +47,17 @@ const getRideParticipantIds = async (rideId, driverId) => {
   }).select("passengerId");
 
   const passengerIds = acceptedBookings.map((item) => String(item.passengerId));
-  return [...new Set([String(driverId), ...passengerIds])];
+  const approvedMatches = await Match.find({ rideId, status: "approved" }).select("passengerId");
+  const matchedPassengerIds = approvedMatches.map((item) => String(item.passengerId));
+  return [...new Set([String(driverId), ...passengerIds, ...matchedPassengerIds])];
+};
+
+const getApprovedMatchForUser = async (rideId, userId) => {
+  return Match.findOne({
+    rideId,
+    status: "approved",
+    $or: [{ driverId: userId }, { passengerId: userId }],
+  });
 };
 
 const hasInteractionAccess = async (userId, rideId, role) => {
@@ -93,6 +104,10 @@ const containsLockedContactContent = (text) => {
 const resolveRideStatusForChat = async (ride) => {
   if (!ride) {
     return null;
+  }
+
+  if (String(ride.status) === "matched") {
+    return "matched";
   }
 
   if (["completed", "cancelled"].includes(String(ride.status))) {
@@ -185,6 +200,15 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
+      const approvedMatch = await getApprovedMatchForUser(rideId, socket.user._id);
+      if (String(ride.status) === "matched" && !approvedMatch && socket.user.role !== "admin") {
+        socket.emit("chat_locked", {
+          rideId,
+          message: "Chat is available only after both users approve the match.",
+        });
+        return;
+      }
+
       const participantIds = await getRideParticipantIds(rideId, ride.driver);
       if (!participantIds.includes(String(socket.user._id)) && socket.user.role !== "admin") {
         socket.emit("chat_locked", {
@@ -209,6 +233,17 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
+      const approvedMatch = await getApprovedMatchForUser(rideId, socket.user._id);
+      const isMatchedRide = String(ride.status) === "matched";
+
+      if (isMatchedRide && !approvedMatch && socket.user.role !== "admin") {
+        socket.emit("chat_locked", {
+          rideId,
+          message: "Chat is available only after both users approve the match.",
+        });
+        return;
+      }
+
       const chatStatus = await resolveRideStatusForChat(ride);
 
       if (["completed", "cancelled"].includes(String(chatStatus))) {
@@ -219,7 +254,7 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      if (chatStatus !== "live") {
+      if (!isMatchedRide && chatStatus !== "live") {
         socket.emit("chat_locked", {
           rideId,
           message: "Chat is only available for live rides.",

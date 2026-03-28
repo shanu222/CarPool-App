@@ -37,12 +37,6 @@ export function Home() {
   const { user, syncAccessSummary } = useAuth();
   const isDriver = user?.role === 'driver';
   const isPassenger = user?.role === 'passenger';
-  const roleLabel = isDriver ? 'Driver' : isPassenger ? 'Passenger' : '';
-  const roleBadgeClass = isDriver
-    ? 'bg-green-500/20 text-green-100 border border-green-300/40'
-    : isPassenger
-    ? 'bg-blue-500/20 text-blue-100 border border-blue-300/40'
-    : 'bg-white/15 text-slate-100 border border-white/20';
   const [driverTab, setDriverTab] = useState<DriverHomeTab>('live');
   const [passengerTab, setPassengerTab] = useState<PassengerHomeTab>('search');
 
@@ -168,13 +162,6 @@ export function Home() {
     <div className="min-h-screen bg-transparent overflow-x-hidden">
       <div className="glass-panel mx-3 mt-3 rounded-3xl px-4 pb-4 pt-8 md:mx-4 md:mt-4 md:px-6 md:pb-6 md:pt-12">
         <h1 className="mb-2 text-lg md:text-2xl text-white">Welcome back! 👋</h1>
-        {user && roleLabel ? (
-          <div className="mb-2">
-            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs md:text-sm font-medium ${roleBadgeClass}`}>
-              {roleLabel}
-            </span>
-          </div>
-        ) : null}
         <p className="text-sm md:text-base text-slate-200">Discover rides and routes near your location</p>
       </div>
 

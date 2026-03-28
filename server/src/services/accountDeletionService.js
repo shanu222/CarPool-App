@@ -9,6 +9,7 @@ import { Payment } from "../models/Payment.js";
 import { Review } from "../models/Review.js";
 import { Ride } from "../models/Ride.js";
 import { RideRequest } from "../models/RideRequest.js";
+import { Match } from "../models/Match.js";
 import { SupportRequest } from "../models/SupportRequest.js";
 import { User } from "../models/User.js";
 import { UserLocation } from "../models/UserLocation.js";
@@ -65,6 +66,9 @@ export const permanentlyDeleteUserAccount = async ({ user, deletedBy, deleteReas
     }),
     RideRequest.deleteMany({
       $or: [{ passengerId: userId }, ...rideRefFilter],
+    }),
+    Match.deleteMany({
+      $or: [{ driverId: userId }, { passengerId: userId }, ...rideRefFilter],
     }),
     Message.deleteMany({
       $or: [{ senderId: userId }, { receiverId: userId }, ...rideRefFilter],

@@ -310,3 +310,31 @@ export interface RideRequest {
   matchedRideId?: string;
   matchedBookingId?: string;
 }
+
+export interface MatchedTrip {
+  _id: string;
+  status: "pending" | "approved";
+  driverApproved: boolean;
+  passengerApproved: boolean;
+  rideId: string;
+  requestId?: string;
+  bookingId?: string;
+  ride?: {
+    _id: string;
+    fromCity: string;
+    toCity: string;
+    date?: string;
+    time?: string;
+    dateTime?: string;
+    status?: string;
+    pricePerSeat?: number;
+    totalSeats?: number;
+  };
+  otherUser?: {
+    id: string;
+    name: string;
+    profileImage?: string;
+    mobile?: string;
+  };
+  createdAt: string;
+}

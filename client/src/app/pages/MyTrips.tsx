@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router';
 import { MapPin, Calendar, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
-import type { Booking, MyRidesResponse, Ride, RideRequest } from '../types';
+import type { Booking, MatchedTrip, MyRidesResponse, Ride, RideRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
-type MyRidesTab = 'live' | 'scheduled' | 'expired' | 'completed';
+type MyRidesTab = 'live' | 'scheduled' | 'matched' | 'expired' | 'completed';
 
 export function MyTrips() {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ export function MyTrips() {
   const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
   const [driverExpiredRides, setDriverExpiredRides] = useState<Ride[]>([]);
   const [driverCompletedRides, setDriverCompletedRides] = useState<Ride[]>([]);
+  const [matchedTrips, setMatchedTrips] = useState<MatchedTrip[]>([]);
   const [tab, setTab] = useState<MyRidesTab>('live');
   const [loading, setLoading] = useState(true);
 
@@ -32,12 +33,14 @@ export function MyTrips() {
     try {
       setLoading(true);
       if (role === 'passenger') {
-        const [bookingResponse, requestResponse] = await Promise.all([
+        const [bookingResponse, requestResponse, matchedResponse] = await Promise.all([
           api.get<Booking[]>('/api/bookings/my'),
           api.get<RideRequest[]>('/api/requests/my'),
+          api.get<MatchedTrip[]>('/api/matches/my?status=approved'),
         ]);
         setBookings(bookingResponse.data);
         setRequests(requestResponse.data);
+        setMatchedTrips(matchedResponse.data || []);
         setDriverLiveRides([]);
         setDriverScheduledRides([]);
         setDriverExpiredRides([]);
@@ -45,11 +48,15 @@ export function MyTrips() {
       }
 
       if (role === 'driver') {
-        const response = await api.get<MyRidesResponse>('/api/rides/my');
+        const [response, matchedResponse] = await Promise.all([
+          api.get<MyRidesResponse>('/api/rides/my'),
+          api.get<MatchedTrip[]>('/api/matches/my?status=approved'),
+        ]);
         setDriverLiveRides(response.data.liveRides || response.data.ongoingRides || []);
         setDriverScheduledRides(response.data.scheduledRides || []);
         setDriverExpiredRides(response.data.expiredRides || []);
         setDriverCompletedRides(response.data.completedRides || []);
+        setMatchedTrips(matchedResponse.data || []);
         setBookings([]);
         setRequests([]);
       }
@@ -122,6 +129,26 @@ export function MyTrips() {
   const showPassengerView = role === 'passenger';
   const showDriverView = role === 'driver';
 
+  const acceptRideFromRequest = async (requestId: string) => {
+    try {
+      const response = await api.post('/api/matches/accept', { requestId });
+      toast.success(response?.data?.message || 'Ride match request sent');
+      await loadTrips();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Could not accept ride');
+    }
+  };
+
+  const acceptRideFromRide = async (rideId: string) => {
+    try {
+      const response = await api.post('/api/matches/accept', { rideId });
+      toast.success(response?.data?.message || 'Ride match request sent');
+      await loadTrips();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Could not accept ride');
+    }
+  };
+
   const passengerLiveBookings = bookings.filter((trip) => trip.ride?.status === 'live');
   const passengerScheduledBookings = bookings.filter((trip) => trip.ride?.status === 'scheduled');
 
@@ -140,6 +167,8 @@ export function MyTrips() {
       ? passengerLiveBookings
       : tab === 'scheduled'
       ? passengerScheduledBookings
+      : tab === 'matched'
+      ? []
       : tab === 'expired'
       ? passengerExpiredBookings
       : passengerCompletedBookings;
@@ -148,14 +177,19 @@ export function MyTrips() {
       ? passengerLiveRequests
       : tab === 'scheduled'
       ? passengerScheduledRequests
+      : tab === 'matched'
+      ? []
       : tab === 'expired'
       ? passengerExpiredRequests
       : passengerCompletedRequests;
+  const activeMatchedTrips = tab === 'matched' ? matchedTrips : [];
   const activeDriverTrips =
     tab === 'live'
       ? driverLiveRides
       : tab === 'scheduled'
       ? driverScheduledRides
+      : tab === 'matched'
+      ? []
       : tab === 'expired'
       ? driverExpiredRides
       : driverCompletedRides;
@@ -189,6 +223,13 @@ export function MyTrips() {
               className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'completed' ? 'active' : ''}`}
             >
               Completed
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('matched')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'matched' ? 'active' : ''}`}
+            >
+              Matched
             </button>
             <button
               type="button"
@@ -232,6 +273,7 @@ export function MyTrips() {
               <RequestTripCard
                 key={request._id}
                 request={request}
+                onAccept={() => acceptRideFromRequest(request._id)}
                 onReschedule={() =>
                   navigate('/request-ride', {
                     state: {
@@ -247,6 +289,17 @@ export function MyTrips() {
             ))
           : null}
 
+        {!loading && activeMatchedTrips.length > 0
+          ? activeMatchedTrips.map((match) => (
+              <MatchedTripCard
+                key={match._id}
+                match={match}
+                onOpenRide={() => navigate(`/ride/${match.rideId}`)}
+                onOpenChat={() => navigate(`/chat/${match.rideId}`)}
+              />
+            ))
+          : null}
+
         {!loading && showDriverView && activeDriverTrips.length > 0
           ? activeDriverTrips.map((ride) => (
               <DriverTripCard
@@ -254,6 +307,7 @@ export function MyTrips() {
                 ride={ride}
                 onClick={() => navigate(`/ride/${ride._id}`)}
                 onStatusChange={updateRideStatus}
+                onAccept={() => acceptRideFromRide(ride._id)}
                 onReschedule={() =>
                   navigate('/post-ride', {
                     state: {
@@ -270,19 +324,19 @@ export function MyTrips() {
             ))
           : null}
 
-        {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 ? (
+        {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 && activeMatchedTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Your ride history will appear here after completion.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
         ) : null}
 
-        {!loading && showDriverView && activeDriverTrips.length === 0 ? (
+        {!loading && showDriverView && activeDriverTrips.length === 0 && activeMatchedTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Completed rides appear here as history.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -481,11 +535,13 @@ function DriverTripCard({
   ride,
   onClick,
   onStatusChange,
+  onAccept,
   onReschedule,
 }: {
   ride: Ride;
   onClick: () => void;
   onStatusChange: (rideId: string, status: 'scheduled' | 'nearby' | 'live' | 'completed' | 'cancelled') => void;
+  onAccept: () => void;
   onReschedule: () => void;
 }) {
   const driverStatusBadge =
@@ -531,6 +587,18 @@ function DriverTripCard({
       </div>
       {showActionButtons ? (
         <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+          {isScheduledRide ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAccept();
+              }}
+              className="min-h-12 rounded-lg bg-amber-100 px-2 py-1 text-xs md:text-sm text-amber-700"
+            >
+              Accept Ride
+            </button>
+          ) : null}
+
           {isScheduledRide ? (
             <button
               onClick={(e) => {
@@ -594,10 +662,12 @@ function DriverTripCard({
 
 function RequestTripCard({
   request,
+  onAccept,
   onClick,
   onReschedule,
 }: {
   request: RideRequest;
+  onAccept: () => void;
   onClick: () => void;
   onReschedule: () => void;
 }) {
@@ -622,6 +692,18 @@ function RequestTripCard({
         {Number.isNaN(requestDate.getTime()) ? request.dateTime : requestDate.toLocaleString()}
       </div>
 
+      {request.status !== 'matched' && request.status !== 'expired' ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAccept();
+          }}
+          className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-amber-100 px-3 py-2 text-xs md:text-sm text-amber-700"
+        >
+          Accept Ride
+        </button>
+      ) : null}
+
       {request.status === 'expired' ? (
         <>
           <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
@@ -638,6 +720,67 @@ function RequestTripCard({
           </button>
         </>
       ) : null}
+    </motion.div>
+  );
+}
+
+function MatchedTripCard({
+  match,
+  onOpenRide,
+  onOpenChat,
+}: {
+  match: MatchedTrip;
+  onOpenRide: () => void;
+  onOpenChat: () => void;
+}) {
+  const ride = match.ride;
+
+  return (
+    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={onOpenRide} className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700">Matched</span>
+        <span className="text-xs text-slate-100">{ride?.date || ''} {ride?.time || ''}</span>
+      </div>
+
+      <div className="mb-2 text-base text-white">
+        {ride?.fromCity || 'Unknown'} → {ride?.toCity || 'Unknown'}
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 rounded-lg bg-white/10 px-3 py-3">
+        {match.otherUser?.profileImage ? (
+          <img src={match.otherUser.profileImage} alt={match.otherUser?.name || 'User'} className="h-10 w-10 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-700">
+            {(match.otherUser?.name || 'U').slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-white">{match.otherUser?.name || 'Unknown User'}</div>
+          {match.otherUser?.mobile ? (
+            <a
+              href={`tel:${match.otherUser.mobile}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-emerald-300 underline"
+            >
+              {match.otherUser.mobile}
+            </a>
+          ) : (
+            <div className="text-xs text-slate-200">Contact hidden until approval</div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenChat();
+          }}
+          className="min-h-12 rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
+        >
+          Open Chat
+        </button>
+      </div>
     </motion.div>
   );
 }
