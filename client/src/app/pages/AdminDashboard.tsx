@@ -135,7 +135,8 @@ export function AdminDashboard() {
         api.get<Payment[]>("/admin/payments"),
       ]);
 
-      setUsers(usersResponse.data || []);
+      const userRows = Array.isArray(usersResponse.data) ? usersResponse.data : [];
+      setUsers(userRows.filter((item) => item.role !== "admin"));
       setReports(reportsResponse.data || []);
       setDeletedUsers(deletedResponse.data || []);
       setPayments(paymentsResponse.data || []);

@@ -47,14 +47,20 @@ export const getAdminUsers = async (req, res, next) => {
   try {
     const { role, status } = req.query;
 
+    const normalizedRole = String(role || "").trim();
+    const roleQuery =
+      normalizedRole && ["passenger", "driver"].includes(normalizedRole)
+        ? { role: normalizedRole }
+        : { role: { $in: ["passenger", "driver"] } };
+
     const query = {
-      ...(role ? { role } : {}),
+      ...roleQuery,
       ...(status ? { status } : {}),
     };
 
     const users = await User.find(query)
       .select(
-        "name email phone role status rating isVerified verificationStatus cnicNumber cnic dob cnicFrontImage cnicBackImage selfieImage profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason bannedAt isBlocked tokenBalance freeRideCredits freeChatCredits canPostRide canBookRide canChat paymentApproved createdAt"
+        "name email phone role status isVerified verificationStatus cnicNumber cnic dob cnicFrontImage cnicBackImage selfieImage profilePhoto licensePhoto cnicPhoto carPhoto carMake carModel carColor carPlateNumber carYear accountStatus suspensionReason bannedAt isBlocked createdAt"
       )
       .sort({ createdAt: -1 });
 
@@ -95,6 +101,10 @@ export const verifyUserByAdmin = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Admin account cannot be modified" });
+    }
+
     user.isVerified = action === "approve";
     user.verificationStatus = action === "approve" ? "verified" : "rejected";
     user.status = action === "approve" ? "approved" : "pending";
@@ -127,6 +137,10 @@ export const updateUserStatusByAdmin = async (req, res, next) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Admin account cannot be modified" });
     }
 
     user.status = status;
@@ -191,6 +205,10 @@ export const deleteUserByAdmin = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Admin account cannot be deleted" });
+    }
+
     await archiveAndDeleteUser({ user, adminUserId: req.user._id });
 
     return res.json({ message: "User deleted" });
@@ -206,6 +224,10 @@ export const unbanUserByAdmin = async (req, res, next) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Admin account cannot be modified" });
     }
 
     user.status = "approved";
