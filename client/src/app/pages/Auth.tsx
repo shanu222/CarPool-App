@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2, XCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import backgroundImage from '../../assets/carpool-bg.png';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 type Screen = 'login' | 'signup' | 'forgot' | 'reset' | 'success';
-type VerifyStep = 'Checking CNIC' | 'Matching Face' | 'Validating DOB';
+type VerifyStep = 'Checking CNIC' | 'Matching Name' | 'Validating DOB' | 'Matching Face';
 
 type SignupForm = {
   fullName: string;
@@ -35,7 +35,7 @@ const colors = {
   bg: '#F5F7FA',
 };
 
-const verifySteps: VerifyStep[] = ['Checking CNIC', 'Matching Face', 'Validating DOB'];
+const verifySteps: VerifyStep[] = ['Checking CNIC', 'Matching Name', 'Validating DOB', 'Matching Face'];
 
 const emptySignup: SignupForm = {
   fullName: '',
@@ -124,9 +124,36 @@ export function Auth() {
 
   const [isVerifyingOverlayVisible, setIsVerifyingOverlayVisible] = useState(false);
   const [verifyIndex, setVerifyIndex] = useState(0);
+  const [verifyFailedIndex, setVerifyFailedIndex] = useState<number | null>(null);
+
+  const reasonToVerifyStepIndex = (reason?: string) => {
+    const code = String(reason || '').trim().toUpperCase();
+
+    if (['CNIC_FORMAT_INVALID', 'CNIC_MISMATCH', 'OCR_EXTRACTION_FAILED'].includes(code)) {
+      return 0;
+    }
+
+    if (code === 'NAME_MISMATCH') {
+      return 1;
+    }
+
+    if (['DOB_FORMAT_INVALID', 'DOB_MISMATCH'].includes(code)) {
+      return 2;
+    }
+
+    if (['FACE_CHECK_FAILED', 'FACE_MISMATCH'].includes(code)) {
+      return 3;
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     if (!isVerifyingOverlayVisible) {
+      return;
+    }
+
+    if (verifyFailedIndex !== null) {
       return;
     }
 
@@ -148,7 +175,7 @@ export function Auth() {
     }, 950);
 
     return () => window.clearTimeout(timer);
-  }, [isVerifyingOverlayVisible, verifyIndex]);
+  }, [isVerifyingOverlayVisible, verifyIndex, verifyFailedIndex, isLoading]);
 
   const signupValid = useMemo(() => {
     const mobileDigits = signup.mobile.replace(/\D/g, '');
@@ -250,6 +277,7 @@ export function Auth() {
     try {
       setIsLoading(true);
       setVerifyIndex(0);
+      setVerifyFailedIndex(null);
       setIsVerifyingOverlayVisible(true);
 
       const formData = new FormData();
@@ -283,11 +311,23 @@ export function Auth() {
 
       const baseMessage = payload?.error || payload?.message || 'Information does not match';
       const details = verificationReasonMessage(payload?.reason);
+      const failedIndexFromReason = reasonToVerifyStepIndex(payload?.reason);
+
+      if (failedIndexFromReason !== null) {
+        setVerifyFailedIndex(failedIndexFromReason);
+        setVerifyIndex(failedIndexFromReason);
+      } else {
+        setVerifyFailedIndex(Math.min(verifyIndex, verifySteps.length - 1));
+      }
 
       resetError(details ? `${baseMessage} ${details}` : baseMessage);
-      setIsVerifyingOverlayVisible(false);
       setIsLoading(false);
-      setVerifyIndex(0);
+
+      window.setTimeout(() => {
+        setIsVerifyingOverlayVisible(false);
+        setVerifyIndex(0);
+        setVerifyFailedIndex(null);
+      }, 1400);
     }
   };
 
@@ -367,7 +407,9 @@ export function Auth() {
     setConfirmPassword('');
   };
 
-  const verificationProgress = Math.round((verifyIndex / verifySteps.length) * 100);
+  const verificationProgress = Math.round(
+    ((verifyFailedIndex !== null ? verifyFailedIndex + 1 : verifyIndex) / verifySteps.length) * 100
+  );
   const activeAccent = signupRole === 'driver' ? colors.green : '#1B6FA3';
 
   return (
@@ -789,20 +831,35 @@ export function Auth() {
             <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ backgroundColor: '#DCE8F4' }}>
               <div
                 className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${verificationProgress}%`, backgroundColor: colors.green }}
+                style={{
+                  width: `${verificationProgress}%`,
+                  backgroundColor: verifyFailedIndex !== null ? '#E74C3C' : colors.green,
+                }}
               />
             </div>
 
             <div className="mt-4 space-y-2">
               {verifySteps.map((step, index) => {
-                const done = verifyIndex > index;
-                const active = verifyIndex === index;
+                const failed = verifyFailedIndex === index;
+                const done = verifyFailedIndex !== null ? index < verifyFailedIndex : verifyIndex > index;
+                const active = verifyFailedIndex === null && verifyIndex === index;
+
+                const rowBg = failed
+                  ? 'rgba(231,76,60,0.14)'
+                  : done || active
+                    ? 'rgba(46,204,113,0.12)'
+                    : '#FFFFFF';
+
+                const rowText = failed ? '#B42318' : done || active ? '#0C6A39' : '#516A81';
+
                 return (
-                  <div key={step} className="flex items-center justify-between rounded-xl px-3 py-2" style={{ backgroundColor: done || active ? 'rgba(46,204,113,0.12)' : '#FFFFFF' }}>
-                    <span className="text-sm" style={{ color: done || active ? '#0C6A39' : '#516A81' }}>
+                  <div key={step} className="flex items-center justify-between rounded-xl px-3 py-2" style={{ backgroundColor: rowBg }}>
+                    <span className="text-sm" style={{ color: rowText }}>
                       {step}
                     </span>
-                    {done ? (
+                    {failed ? (
+                      <XCircle className="h-4 w-4" style={{ color: '#E74C3C' }} />
+                    ) : done ? (
                       <CheckCircle2 className="h-4 w-4" style={{ color: colors.green }} />
                     ) : active ? (
                       <Loader2 className="h-4 w-4 animate-spin" style={{ color: colors.navy }} />
