@@ -72,7 +72,7 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
     }
 
     if (!proof) {
-      toast.error('Upload payment proof image to continue');
+      toast.error('Upload payment proof file to continue');
       return;
     }
 
@@ -129,7 +129,7 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
 
           <input
             type="file"
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
             onChange={(event) => setProof(event.target.files?.[0] || null)}
             disabled={latestStatus === 'pending' || latestStatus === 'approved'}
             className="w-full text-sm disabled:cursor-not-allowed"

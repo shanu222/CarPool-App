@@ -9,6 +9,7 @@ import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/ky
 import { permanentlyDeleteUserAccount } from "../services/accountDeletionService.js";
 import { buildVerificationMeta, verifyIdentityDocuments } from "../services/verificationFlowService.js";
 import { normalizeCnic, normalizeDob } from "../utils/kycUtils.js";
+import { optimizeUploadedImage, toPublicUploadPath } from "../utils/mediaUtils.js";
 
 const getAdminEmails = () =>
   (process.env.ADMIN_EMAILS || "")
@@ -67,12 +68,12 @@ const getUserVerificationMeta = (user) =>
     role: user?.role,
   });
 
-const buildFilePath = (req, file) => {
-  if (!file?.filename) {
+const buildFilePath = (file) => {
+  if (!file) {
     return "";
   }
 
-  return `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+  return toPublicUploadPath(file);
 };
 
 const toStoredUploadPath = (file) => (file?.path ? file.path : "");
@@ -698,9 +699,9 @@ export const register = async (req, res, next) => {
         cnicNumber: normalizedInputCnic,
         cnic: normalizedInputCnic,
         dob: normalizedInputDob,
-        cnicFrontImage: buildFilePath(req, cnicFrontFile),
-        cnicBackImage: buildFilePath(req, cnicBackFile),
-        selfieImage: buildFilePath(req, selfieFile),
+        cnicFrontImage: buildFilePath(cnicFrontFile),
+        cnicBackImage: buildFilePath(cnicBackFile),
+        selfieImage: buildFilePath(selfieFile),
         status: "approved",
         isBlocked: false,
         canPostRide: false,
@@ -775,9 +776,13 @@ const strictSignup = async ({ req, res, role }) => {
   const cnicBackFile = req.files?.cnicBack?.[0];
   const licenseImageFile = req.files?.licenseImage?.[0];
 
-  const hasAnyVerificationImage = Boolean(profileImageFile || cnicFrontFile || cnicBackFile || licenseImageFile);
-  const hasVerificationText = Boolean(cnic || dob);
-  const wantsVerifiedSignup = hasAnyVerificationImage || hasVerificationText;
+  if (profileImageFile?.path) {
+    await optimizeUploadedImage(profileImageFile.path);
+  }
+
+  const hasVerificationFiles = Boolean(cnicFrontFile || cnicBackFile || licenseImageFile);
+  const hasVerificationText = Boolean(cnic || dob || licenseNumber);
+  const wantsVerifiedSignup = hasVerificationFiles || hasVerificationText;
 
   const normalizedInputCnic = normalizeCnic(cnic);
   const identityConflict = await resolveSignupIdentityConflict({
@@ -807,6 +812,8 @@ const strictSignup = async ({ req, res, role }) => {
       phone: normalizedMobile,
       password: hashedPassword,
       role,
+      profilePhoto: buildFilePath(profileImageFile) || null,
+      selfieImage: buildFilePath(profileImageFile) || "",
       status: "approved",
       accountStatus: "active",
       verificationStatus: "pending",
@@ -847,8 +854,8 @@ const strictSignup = async ({ req, res, role }) => {
 
   const normalizedCnic = normalizedInputCnic;
 
-  if (!profileImageFile || !cnicFrontFile || !cnicBackFile) {
-    return jsonError(res, 400, "Missing required verification images");
+  if (!cnicFrontFile || !cnicBackFile) {
+    return jsonError(res, 400, "Missing required CNIC verification images");
   }
 
   if (role === "driver" && (!licenseNumber || !licenseImageFile)) {
@@ -906,12 +913,12 @@ const strictSignup = async ({ req, res, role }) => {
     cnicNumber: normalizedCnic,
     cnic: normalizedCnic,
     dob: verificationResult.normalizedDob,
-    selfieImage: buildFilePath(req, profileImageFile),
-    profilePhoto: buildFilePath(req, profileImageFile),
-    cnicFrontImage: buildFilePath(req, cnicFrontFile),
-    cnicBackImage: buildFilePath(req, cnicBackFile),
-    licensePhoto: role === "driver" ? buildFilePath(req, licenseImageFile) : "",
-    cnicPhoto: role === "driver" ? buildFilePath(req, licenseImageFile) : "",
+    selfieImage: buildFilePath(profileImageFile),
+    profilePhoto: buildFilePath(profileImageFile) || null,
+    cnicFrontImage: buildFilePath(cnicFrontFile),
+    cnicBackImage: buildFilePath(cnicBackFile),
+    licensePhoto: role === "driver" ? buildFilePath(licenseImageFile) : "",
+    cnicPhoto: role === "driver" ? buildFilePath(licenseImageFile) : "",
     status: "approved",
     accountStatus: "active",
     verificationStatus: "verified",

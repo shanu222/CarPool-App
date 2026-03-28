@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
 import { Button } from '../components/Button';
+import { handleAvatarError, toAvatarUrl } from '../lib/avatar';
 
 const getUserId = (value: { id?: string; _id?: string } | null | undefined) => value?.id || value?._id || '';
 
@@ -196,6 +197,7 @@ export function Chat() {
 
   const isDriverOwner = getUserId(ride.driver) === getUserId(user);
   const chatDisplayName = isDriverOwner ? 'Ride Group' : receiverProfile?.name || ride.driver.name;
+  const chatAvatarUrl = toAvatarUrl(isDriverOwner ? ride.driver.profilePhoto : receiverProfile?.profilePhoto || ride.driver.profilePhoto);
 
   const handleSend = async () => {
     if (isChatClosedByRide) {
@@ -374,8 +376,10 @@ export function Chat() {
             <ArrowLeft className="w-6 h-6" />
           </button>
           <img
-            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chatDisplayName)}`}
+            src={chatAvatarUrl}
             alt={chatDisplayName}
+            loading="lazy"
+            onError={handleAvatarError}
             className="w-10 h-10 rounded-full object-cover"
           />
           <div className="flex-1">

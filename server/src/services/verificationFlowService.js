@@ -222,36 +222,45 @@ export const verifyIdentityDocuments = async ({
     }
   }
 
-  let faceResult;
-  try {
-    faceResult = await compareFaces(cnicFrontPath, profileImagePath, Number(faceThreshold));
-  } catch {
-    return {
-      ok: false,
-      reason: "FACE_CHECK_FAILED",
-      details: {
-        failedField: "profileImage",
-        why: "Face comparison could not run",
-        hint: "Use a clear front-facing selfie and ensure CNIC face is fully visible.",
-      },
-    };
-  }
+  let faceResult = {
+    matched: true,
+    similarity: 0,
+    threshold: Number(faceThreshold),
+    source: "skipped",
+    skipped: true,
+  };
 
-  if (!faceResult?.matched) {
-    return {
-      ok: false,
-      reason: "FACE_MISMATCH",
-      details: {
-        failedField: "face",
-        why: "Face does not match CNIC photo",
-        hint: "Retake selfie in good light, without blur, sunglasses, or heavy angle.",
-        similarity: Number(faceResult?.similarity || 0),
-        threshold: Number(faceThreshold),
-        source: faceResult?.source || "aws",
-        openAiConfidence: Number(faceResult?.openAiConfidence || 0),
-        openAiReason: faceResult?.openAiReason || "",
-      },
-    };
+  if (profileImagePath) {
+    try {
+      faceResult = await compareFaces(cnicFrontPath, profileImagePath, Number(faceThreshold));
+    } catch {
+      return {
+        ok: false,
+        reason: "FACE_CHECK_FAILED",
+        details: {
+          failedField: "profileImage",
+          why: "Face comparison could not run",
+          hint: "Use a clear front-facing selfie and ensure CNIC face is fully visible.",
+        },
+      };
+    }
+
+    if (!faceResult?.matched) {
+      return {
+        ok: false,
+        reason: "FACE_MISMATCH",
+        details: {
+          failedField: "face",
+          why: "Face does not match CNIC photo",
+          hint: "Retake selfie in good light, without blur, sunglasses, or heavy angle.",
+          similarity: Number(faceResult?.similarity || 0),
+          threshold: Number(faceThreshold),
+          source: faceResult?.source || "aws",
+          openAiConfidence: Number(faceResult?.openAiConfidence || 0),
+          openAiReason: faceResult?.openAiReason || "",
+        },
+      };
+    }
   }
 
   const cnicExpiryDate = toDateOrNull(cnicData?.cnicExpiry);

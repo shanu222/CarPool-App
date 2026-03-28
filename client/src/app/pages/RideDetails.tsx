@@ -4,6 +4,7 @@ import { ArrowLeft, Star, MapPin, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 import type { Payment, PaymentQuote, Ride } from '../types';
+import { handleAvatarError, toAvatarUrl } from '../lib/avatar';
 import { useAuth } from '../context/AuthContext';
 import { LiveRideMap } from '../components/LiveRideMap';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -136,9 +137,13 @@ export function RideDetails() {
           className="glass-panel rounded-2xl p-4"
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl">
-              {ride.driver.name.slice(0, 1).toUpperCase()}
-            </div>
+            <img
+              src={toAvatarUrl(ride.driver.profilePhoto)}
+              alt={ride.driver.name}
+              loading="lazy"
+              onError={handleAvatarError}
+              className="w-16 h-16 rounded-full border-2 border-white/70 object-cover shadow-md"
+            />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-lg text-white">{ride.driver.name}</h2>

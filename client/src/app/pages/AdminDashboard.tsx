@@ -269,6 +269,21 @@ export function AdminDashboard() {
     return `${base}${normalizedPath}`;
   };
 
+  const checkProofUrlAccessible = async (url: string) => {
+    try {
+      const headResponse = await fetch(url, { method: "HEAD" });
+      if (headResponse.ok) {
+        return true;
+      }
+
+      // Some deployments/proxies may not handle HEAD consistently, so fall back to GET.
+      const getResponse = await fetch(url, { method: "GET" });
+      return getResponse.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const openProofModal = async (payment: Payment) => {
     setProofModalOpen(true);
     setProofLoading(true);
@@ -281,6 +296,14 @@ export function AdminDashboard() {
     setProofMimeType("");
 
     if (!resolvedUrl) {
+      setProofError("Could not load proof file");
+      setProofUrl(null);
+      setProofLoading(false);
+      return;
+    }
+
+    const exists = await checkProofUrlAccessible(resolvedUrl);
+    if (!exists) {
       setProofError("Could not load proof file");
       setProofUrl(null);
       setProofLoading(false);
@@ -981,6 +1004,7 @@ export function AdminDashboard() {
                   src={proofUrl}
                   className="h-[66vh] w-full rounded-lg bg-white"
                   onLoad={() => setProofMimeType("application/pdf")}
+                  onError={() => setProofError("Could not load proof file")}
                 />
               ) : null}
               {!proofLoading && !proofError && proofUrl && !isImageProof && !isPdfProof ? (
@@ -993,6 +1017,8 @@ export function AdminDashboard() {
                 <a
                   href={proofUrl}
                   download={proofFileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex h-10 items-center justify-center rounded-xl bg-cyan-600 px-4 text-sm font-medium text-white hover:bg-cyan-500"
                 >
                   Download Proof

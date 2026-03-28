@@ -7,6 +7,7 @@ import { User } from "../models/User.js";
 import { UserLocation } from "../models/UserLocation.js";
 import { isWithinPakistanBounds } from "../utils/pakistanLocation.js";
 import { UserReport } from "../models/UserReport.js";
+import { optimizeUploadedImage, removeUploadFileIfExists, toPublicUploadPath } from "../utils/mediaUtils.js";
 
 const router = Router();
 
@@ -23,6 +24,25 @@ const maskPhone = (value) => {
   }
 
   return `${phone.slice(0, 4)}****${phone.slice(-3)}`;
+};
+
+const assignProfilePhoto = async ({ user, file }) => {
+  if (!file) {
+    return;
+  }
+
+  if (file.path) {
+    await optimizeUploadedImage(file.path);
+  }
+
+  const previousPhoto = String(user.profilePhoto || "").trim();
+  const nextPhoto = toPublicUploadPath(file);
+
+  user.profilePhoto = nextPhoto || null;
+
+  if (previousPhoto && previousPhoto !== user.profilePhoto) {
+    await removeUploadFileIfExists(previousPhoto);
+  }
 };
 
 router.post("/location", protect, async (req, res, next) => {
@@ -134,7 +154,7 @@ router.post("/report", protect, async (req, res, next) => {
 router.patch(
   "/profile",
   protect,
-  upload.fields([{ name: "profilePhoto", maxCount: 1 }]),
+  upload.single("profilePhoto"),
   async (req, res, next) => {
     try {
       const user = await User.findById(req.user._id);
@@ -144,7 +164,7 @@ router.patch(
 
       const nextName = String(req.body?.name || "").trim();
       const nextPhone = String(req.body?.phone || "").trim();
-      const profileFile = req.files?.profilePhoto?.[0];
+      const profileFile = req.file;
 
       if (nextName) {
         user.name = nextName;
@@ -164,9 +184,7 @@ router.patch(
         user.phone = nextPhone;
       }
 
-      if (profileFile) {
-        user.profilePhoto = `${req.protocol}://${req.get("host")}/uploads/${profileFile.filename}`;
-      }
+      await assignProfilePhoto({ user, file: profileFile });
 
       await user.save();
 
@@ -194,6 +212,41 @@ router.patch(
     }
   }
 );
+
+router.patch("/profile-photo", protect, upload.single("profilePhoto"), async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Profile photo is required" });
+    }
+
+    await assignProfilePhoto({ user, file: req.file });
+    await user.save();
+
+    return res.json({
+      message: "Profile photo updated",
+      profilePhoto: user.profilePhoto || null,
+      user: {
+        id: user._id,
+        _id: user._id,
+        name: user.name,
+        phone: user.phone,
+        maskedPhone: maskPhone(user.phone),
+        role: user.role,
+        rating: user.rating,
+        isVerified: Boolean(user.isVerified),
+        verificationStatus: user.verificationStatus,
+        profilePhoto: user.profilePhoto || null,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get("/:id", protect, async (req, res, next) => {
   try {

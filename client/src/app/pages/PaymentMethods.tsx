@@ -45,7 +45,7 @@ export function PaymentMethods() {
     }
 
     if (!proof) {
-      toast.error("Upload payment proof screenshot");
+      toast.error("Upload payment proof file");
       return;
     }
 
@@ -117,7 +117,7 @@ export function PaymentMethods() {
 
             <div className="mt-4 rounded-2xl border border-white/25 bg-white/10 p-4">
               <h2 className="text-sm md:text-base text-white">Upload Payment Proof</h2>
-              <p className="mt-1 text-xs text-slate-100">Make payment manually, then upload screenshot.</p>
+              <p className="mt-1 text-xs text-slate-100">Make payment manually, then upload proof file.</p>
 
               <div className="mt-3 space-y-3">
                 <div>
@@ -153,10 +153,10 @@ export function PaymentMethods() {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-slate-200">Proof Screenshot</label>
+                  <label className="block text-xs text-slate-200">Proof File</label>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                     onChange={(event) => setProof(event.target.files?.[0] || null)}
                     className="mt-1 w-full text-xs text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/90 file:px-3 file:py-2 file:text-slate-900"
                   />

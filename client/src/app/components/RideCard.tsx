@@ -3,6 +3,7 @@ import { Star, Users, MapPin, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Ride } from '../types';
 import { VerifiedBadge } from './VerifiedBadge';
+import { handleAvatarError, toAvatarUrl } from '../lib/avatar';
 
 interface RideCardProps {
   ride: Ride;
@@ -26,9 +27,13 @@ export function RideCard({ ride }: RideCardProps) {
       className="glass-panel responsive-card rounded-xl shadow-md cursor-pointer"
     >
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg">
-          {ride.driver.name.slice(0, 1).toUpperCase()}
-        </div>
+        <img
+          src={toAvatarUrl(ride.driver.profilePhoto)}
+          alt={ride.driver.name}
+          loading="lazy"
+          onError={handleAvatarError}
+          className="w-12 h-12 rounded-full border-2 border-white/70 object-cover shadow-md"
+        />
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-sm md:text-base text-white">{ride.driver.name}</h3>

@@ -310,7 +310,6 @@ export function Auth() {
     const wantsVerifiedSignup = Boolean(
       signup.cnic.trim() ||
         signup.dob ||
-        signup.profileImage ||
         signup.cnicFront ||
         signup.cnicBack ||
         signup.licenseImage ||
@@ -322,7 +321,6 @@ export function Auth() {
       cnic: !wantsVerifiedSignup || cnicPattern.test(signup.cnic),
       dob: !wantsVerifiedSignup || (Boolean(signup.dob) && signup.dob < today),
       mobile: mobileDigits.length >= 10 && mobileDigits.length <= 11,
-      profile: !wantsVerifiedSignup || Boolean(signup.profileImage),
       front: !wantsVerifiedSignup || Boolean(signup.cnicFront),
       back: !wantsVerifiedSignup || Boolean(signup.cnicBack),
       licenseNumber: !wantsVerifiedSignup || signupRole !== 'driver' || licensePattern.test(signup.licenseNumber.trim()),
@@ -342,7 +340,6 @@ export function Auth() {
         ? baseValidation.cnic &&
           baseValidation.dob &&
           baseValidation.mobile &&
-          baseValidation.profile &&
           baseValidation.front &&
           baseValidation.back &&
           baseValidation.licenseNumber &&
@@ -350,7 +347,6 @@ export function Auth() {
         : baseValidation.cnic &&
           baseValidation.dob &&
           baseValidation.mobile &&
-          baseValidation.profile &&
           baseValidation.front &&
           baseValidation.back);
 
@@ -976,7 +972,7 @@ export function Auth() {
                     </FloatingField>
 
                     <UploadRow
-                      title="Profile Image Upload"
+                      title="Profile Image Upload (Optional)"
                       file={signup.profileImage}
                       onChange={(file) => setSignup((prev) => ({ ...prev, profileImage: file }))}
                     />

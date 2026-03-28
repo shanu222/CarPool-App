@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { MapPin, Calendar, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
+import { handleAvatarError, toAvatarUrl } from '../lib/avatar';
 import type { Booking, MatchedTrip, MyRidesResponse, Ride, RideRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
@@ -450,9 +451,13 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm, onReschedule }
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-white/30">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
-            {ride.driver.name.slice(0, 1).toUpperCase()}
-          </div>
+          <img
+            src={toAvatarUrl(ride.driver.profilePhoto)}
+            alt={ride.driver.name}
+            loading="lazy"
+            onError={handleAvatarError}
+            className="w-8 h-8 rounded-full border border-white/70 object-cover shadow-sm"
+          />
           <div className="text-sm text-white">{ride.driver.name}</div>
         </div>
         <div className="flex items-center gap-3 text-sm text-slate-100">
@@ -712,13 +717,13 @@ function MatchedTripCard({
       </div>
 
       <div className="mt-3 flex items-center gap-3 rounded-lg bg-white/10 px-3 py-3">
-        {match.otherUser?.profileImage ? (
-          <img src={match.otherUser.profileImage} alt={match.otherUser?.name || 'User'} className="h-10 w-10 rounded-full object-cover" />
-        ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-700">
-            {(match.otherUser?.name || 'U').slice(0, 1).toUpperCase()}
-          </div>
-        )}
+        <img
+          src={toAvatarUrl(match.otherUser?.profileImage)}
+          alt={match.otherUser?.name || 'User'}
+          loading="lazy"
+          onError={handleAvatarError}
+          className="h-10 w-10 rounded-full border border-white/70 object-cover shadow-sm"
+        />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm text-white">{match.otherUser?.name || 'Unknown User'}</div>
           {match.otherUser?.mobile ? (

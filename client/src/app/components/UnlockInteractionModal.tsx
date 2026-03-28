@@ -86,7 +86,7 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
     }
 
     if (!screenshot) {
-      toast.error('Upload payment screenshot to continue');
+      toast.error('Upload payment proof file to continue');
       return;
     }
 
@@ -171,7 +171,7 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
 
           <input
             type="file"
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
             onChange={(event) => setScreenshot(event.target.files?.[0] || null)}
             className="w-full text-sm"
           />

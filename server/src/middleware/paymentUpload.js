@@ -17,13 +17,19 @@ const storage = multer.diskStorage({
   },
 });
 
+const allowedMimeTypes = new Set(["image/jpeg", "image/jpg", "image/png", "application/pdf"]);
+const allowedExtensions = new Set([".jpg", ".jpeg", ".png", ".pdf"]);
+
 const fileFilter = (_req, file, cb) => {
-  if (file.mimetype.startsWith("image/") || file.mimetype === "application/pdf") {
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const mime = String(file.mimetype || "").toLowerCase();
+
+  if (allowedMimeTypes.has(mime) && allowedExtensions.has(ext)) {
     cb(null, true);
     return;
   }
 
-  cb(new Error("Only image or PDF uploads are allowed"));
+  cb(new Error("Only .jpg, .jpeg, .png, and .pdf uploads are allowed"));
 };
 
 export const paymentUpload = multer({

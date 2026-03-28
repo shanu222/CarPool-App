@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
+import { handleAvatarError, toAvatarUrl } from "../lib/avatar";
 import { Button } from "../components/Button";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { VerificationStatusBanner } from "../components/VerificationStatusBanner";
@@ -86,9 +87,6 @@ export function Profile() {
       const formData = new FormData();
       formData.append("name", name.trim());
       formData.append("phone", phone.trim());
-      if (profilePhoto) {
-        formData.append("profilePhoto", profilePhoto);
-      }
 
       const response = await api.patch<User>("/api/user/profile", formData, {
         headers: {
@@ -101,6 +99,35 @@ export function Profile() {
       toast.success("Profile updated");
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Could not update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const uploadProfilePhoto = async () => {
+    if (!profilePhoto) {
+      toast.error("Select a profile photo first");
+      return;
+    }
+
+    try {
+      setSavingProfile(true);
+
+      const formData = new FormData();
+      formData.append("profilePhoto", profilePhoto);
+
+      const response = await api.patch<{ user?: User; profilePhoto?: string }>("/api/user/profile-photo", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      const nextUser = response.data?.user || ({ ...user, profilePhoto: response.data?.profilePhoto || user.profilePhoto } as User);
+      setCurrentUser({ ...user, ...nextUser });
+      setProfilePhoto(null);
+      toast.success("Profile photo updated");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Could not update profile photo");
     } finally {
       setSavingProfile(false);
     }
@@ -306,9 +333,13 @@ export function Profile() {
           >
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-subtle rounded-2xl p-4">
               <div className="flex items-center gap-3">
-                <div className="h-16 w-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-2xl">
-                  {user.name?.slice(0, 1).toUpperCase()}
-                </div>
+                <img
+                  src={toAvatarUrl(user.profilePhoto)}
+                  alt={user.name || "Profile photo"}
+                  loading="lazy"
+                  onError={handleAvatarError}
+                  className="h-16 w-16 rounded-full border-2 border-white/70 object-cover shadow-md"
+                />
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base md:text-xl text-white">{user.name}</h2>
@@ -337,10 +368,13 @@ export function Profile() {
                 <input value={phone} onChange={(event) => setPhone(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
               </div>
               <div>
-                <label className="block text-sm text-slate-100 mb-1">Profile Photo</label>
+                <label className="block text-sm text-slate-100 mb-1">Upload / Change Profile Photo</label>
                 <input type="file" accept="image/*" onChange={(event) => setProfilePhoto(event.target.files?.[0] || null)} className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/90 file:px-3 file:py-2 file:text-slate-900" />
               </div>
-              <Button onClick={saveProfile} loading={savingProfile} loadingText="Processing..." variant="primary">
+              <Button onClick={uploadProfilePhoto} loading={savingProfile} loadingText="Uploading..." variant="primary">
+                Upload / Change Profile Photo
+              </Button>
+              <Button onClick={saveProfile} loading={savingProfile} loadingText="Processing..." variant="secondary">
                 Save Profile
               </Button>
             </section>
