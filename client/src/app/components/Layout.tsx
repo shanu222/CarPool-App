@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router';
 import { Home, Calendar, MessageCircle, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { RoleIndicator } from './RoleIndicator';
+import { TokenIndicator } from './TokenIndicator';
 
 export function Layout() {
   const navigate = useNavigate();
@@ -17,8 +18,9 @@ export function Layout() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
-      <div className="pointer-events-none fixed right-3 top-3 z-40 md:right-4 md:top-4">
+      <div className="pointer-events-none absolute right-3 top-3 z-40 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-end gap-2 md:right-4 md:top-4 md:max-w-[calc(100%-2rem)]">
         <RoleIndicator role={user?.role} />
+        <TokenIndicator user={user} />
       </div>
 
       {/* Main Content */}
