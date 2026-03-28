@@ -63,16 +63,43 @@ export function LiveRideMap({ ride, currentUserId, isDriver }: RideMapProps) {
   const [sharing, setSharing] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [routePoints, setRoutePoints] = useState<LatLngExpression[] | null>(null);
 
-  const routePoints = useMemo(() => {
-    if (!ride.fromCoordinates || !ride.toCoordinates) {
-      return null;
-    }
+  useEffect(() => {
+    const loadRoute = async () => {
+      if (!ride.fromCoordinates || !ride.toCoordinates) {
+        setRoutePoints(null);
+        return;
+      }
 
-    return [
-      [ride.fromCoordinates.lat, ride.fromCoordinates.lng],
-      [ride.toCoordinates.lat, ride.toCoordinates.lng],
-    ] as LatLngExpression[];
+      const from = ride.fromCoordinates;
+      const to = ride.toCoordinates;
+
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+        const response = await fetch(url);
+        const payload = await response.json();
+        const coordinates = payload?.routes?.[0]?.geometry?.coordinates;
+
+        if (Array.isArray(coordinates) && coordinates.length > 1) {
+          setRoutePoints(
+            coordinates
+              .map((pair: [number, number]) => [pair[1], pair[0]] as LatLngExpression)
+              .filter(Boolean)
+          );
+          return;
+        }
+      } catch {
+        // Fallback to straight line when routing service is unavailable.
+      }
+
+      setRoutePoints([
+        [from.lat, from.lng],
+        [to.lat, to.lng],
+      ]);
+    };
+
+    loadRoute();
   }, [ride.fromCoordinates, ride.toCoordinates]);
 
   const remainingDistance = useMemo(() => {

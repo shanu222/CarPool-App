@@ -262,6 +262,38 @@ export interface UserReportItem {
   createdAt: string;
 }
 
+export interface BlockedRelation {
+  _id: string;
+  blockerId?: Pick<User, "id" | "_id" | "name" | "role" | "profilePhoto">;
+  blockedUserId?: Pick<User, "id" | "_id" | "name" | "role" | "profilePhoto">;
+  createdAt: string;
+}
+
+export interface ConversationListItem {
+  rideId: string;
+  rideStatus: string;
+  isActive: boolean;
+  route: string;
+  ride: {
+    _id: string;
+    fromCity: string;
+    toCity: string;
+    date?: string;
+    time?: string;
+    status?: string;
+  };
+  counterpart?: {
+    _id: string;
+    name: string;
+    role: "admin" | "passenger" | "driver";
+    profilePhoto?: string;
+    isVerified?: boolean;
+  } | null;
+  lastMessage: string;
+  lastMessageAt: string;
+  hasMessages: boolean;
+}
+
 export interface DeletedUserArchiveItem {
   _id: string;
   originalUserId: string;

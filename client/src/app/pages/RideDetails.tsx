@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Star, MapPin, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
-import type { Payment, PaymentQuote, Ride } from '../types';
+import type { Ride } from '../types';
 import { handleAvatarError, toAvatarUrl } from '../lib/avatar';
 import { useAuth } from '../context/AuthContext';
 import { LiveRideMap } from '../components/LiveRideMap';
@@ -21,8 +21,6 @@ export function RideDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [interactionQuote, setInteractionQuote] = useState<PaymentQuote | null>(null);
-  const [interactionUnlocked, setInteractionUnlocked] = useState(false);
 
   useEffect(() => {
     const loadRide = async () => {
@@ -43,37 +41,6 @@ export function RideDetails() {
     }
   }, [id]);
 
-  useEffect(() => {
-    const loadQuote = async () => {
-      if (!id || !user?.role || (user.role !== 'driver' && user.role !== 'passenger')) {
-        setInteractionQuote(null);
-        setInteractionUnlocked(false);
-        return;
-      }
-
-      try {
-        const [quoteResponse, paymentResponse] = await Promise.all([
-          api.get<PaymentQuote>(`/api/payments/quote/${id}`),
-          api.get<{ payments?: Payment[] } | Payment[]>(`/api/payments/my?rideId=${id}`),
-        ]);
-
-        setInteractionQuote(quoteResponse.data);
-        const paymentRows = Array.isArray(paymentResponse.data)
-          ? paymentResponse.data
-          : paymentResponse.data?.payments || [];
-        const hasApproved = paymentRows.some(
-          (payment) => payment.type === 'interaction_unlock' && payment.status === 'approved',
-        );
-        setInteractionUnlocked(hasApproved);
-      } catch {
-        setInteractionQuote(null);
-        setInteractionUnlocked(false);
-      }
-    };
-
-    loadQuote();
-  }, [id, user?.role, showUnlockModal]);
-
   if (loading) {
     return <div className="p-6">Loading ride...</div>;
   }
@@ -86,16 +53,11 @@ export function RideDetails() {
   const currentUserId = user?.id || user?._id || '';
   const driverUserId = ride.driver.id || ride.driver._id || '';
   const isDriverOwner = Boolean(currentUserId && driverUserId && currentUserId === driverUserId);
-  const canRequestBooking = ride.availableSeats > 0 && ['scheduled', 'ongoing'].includes(ride.status || 'scheduled');
-  const interactionLocked = !interactionUnlocked;
-  const hasChatTokens = Number(user?.tokens ?? user?.tokenBalance ?? 0) >= 2;
+  const rideStatus = String(ride.status || '').toLowerCase();
+  const canRequestBooking =
+    ride.availableSeats > 0 && !['completed', 'cancelled', 'expired'].includes(rideStatus);
 
   const openChat = async () => {
-    if (!hasChatTokens && !interactionUnlocked) {
-      setShowUnlockModal(true);
-      return;
-    }
-
     try {
       const response = await startRideChatAccess(ride._id);
 
@@ -129,40 +91,6 @@ export function RideDetails() {
       </div>
 
       <div className="px-6 py-6 space-y-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel rounded-2xl p-4"
-        >
-          <h3 className="text-base mb-3 text-white">Interaction Unlock</h3>
-          <div className="rounded-xl bg-white/10 p-3 text-sm text-slate-100">
-            <p>Distance: {interactionQuote ? `${Math.round(interactionQuote.distanceKm)} KM` : '...'}</p>
-            <p>
-              Price: {user?.role === 'driver' ? 'Driver' : 'Passenger'} → PKR {interactionQuote?.amount ?? '-'}
-            </p>
-          </div>
-          {!interactionUnlocked ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (hasChatTokens) {
-                  openChat();
-                  return;
-                }
-
-                setShowUnlockModal(true);
-              }}
-              className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm text-white"
-            >
-              {hasChatTokens ? 'Open Chat' : 'Pay & Unlock Chat'}
-            </button>
-          ) : (
-            <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-              Chat unlocked for this ride
-            </div>
-          )}
-        </motion.div>
-
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -316,11 +244,6 @@ export function RideDetails() {
           </div>
           <button
             onClick={() => {
-              if (interactionLocked) {
-                setShowUnlockModal(true);
-                return;
-              }
-
               navigate(`/booking/${ride._id}?seats=${selectedSeats}`);
             }}
             disabled={!canRequestBooking}
@@ -335,7 +258,6 @@ export function RideDetails() {
         open={showUnlockModal}
         rideId={ride._id}
         onClose={() => setShowUnlockModal(false)}
-        onSubmitted={() => setInteractionUnlocked(false)}
       />
     </div>
   );

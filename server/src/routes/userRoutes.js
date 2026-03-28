@@ -7,6 +7,7 @@ import { User } from "../models/User.js";
 import { UserLocation } from "../models/UserLocation.js";
 import { isWithinPakistanBounds } from "../utils/pakistanLocation.js";
 import { UserReport } from "../models/UserReport.js";
+import { BlockedUser } from "../models/BlockedUser.js";
 import { optimizeUploadedImage, removeUploadFileIfExists, toPublicUploadPath } from "../utils/mediaUtils.js";
 
 const router = Router();
@@ -86,6 +87,21 @@ router.post("/block", protect, async (req, res, next) => {
       $addToSet: { blockedUsers: targetUserId },
     });
 
+    await BlockedUser.updateOne(
+      {
+        blockerId: req.user._id,
+        blockedUserId: targetUserId,
+      },
+      {
+        $setOnInsert: {
+          blockerId: req.user._id,
+          blockedUserId: targetUserId,
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
     return res.json({ message: "User blocked" });
   } catch (error) {
     return next(error);
@@ -94,18 +110,28 @@ router.post("/block", protect, async (req, res, next) => {
 
 router.get("/blocked", protect, async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).populate("blockedUsers", "name role profilePhoto isVerified");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const blockedRelations = await BlockedUser.find({ blockerId: req.user._id })
+      .populate("blockedUserId", "name role profilePhoto isVerified")
+      .sort({ createdAt: -1 });
 
-    const blocked = (user.blockedUsers || []).map((item) => ({
-      _id: item._id,
-      name: item.name,
-      role: item.role,
-      profilePhoto: item.profilePhoto,
-      isVerified: Boolean(item.isVerified),
-    }));
+    const blocked = blockedRelations
+      .map((relation) => {
+        const user = relation.blockedUserId;
+        if (!user) {
+          return null;
+        }
+
+        return {
+          _id: user._id,
+          name: user.name,
+          role: user.role,
+          profilePhoto: user.profilePhoto,
+          isVerified: Boolean(user.isVerified),
+          blockedAt: relation.createdAt,
+          relationId: relation._id,
+        };
+      })
+      .filter(Boolean);
 
     return res.json(blocked);
   } catch (error) {
@@ -122,6 +148,11 @@ router.delete("/block/:targetUserId", protect, async (req, res, next) => {
 
     await User.findByIdAndUpdate(req.user._id, {
       $pull: { blockedUsers: targetUserId },
+    });
+
+    await BlockedUser.deleteOne({
+      blockerId: req.user._id,
+      blockedUserId: targetUserId,
     });
 
     return res.json({ message: "User unblocked" });

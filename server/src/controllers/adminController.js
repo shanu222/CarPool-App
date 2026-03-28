@@ -6,6 +6,7 @@ import { PaymentSettings } from "../models/PaymentSettings.js";
 import { ChangeRequest } from "../models/ChangeRequest.js";
 import { UserReport } from "../models/UserReport.js";
 import { DeletedUserArchive } from "../models/DeletedUserArchive.js";
+import { BlockedUser } from "../models/BlockedUser.js";
 import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { createUserNotification } from "../services/notificationService.js";
 import { permanentlyDeleteUserAccount } from "../services/accountDeletionService.js";
@@ -751,6 +752,41 @@ export const reviewUserReportByAdmin = async (req, res, next) => {
     }
 
     return res.json({ message: `Report action '${action}' applied` });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAdminBlockedUsers = async (_req, res, next) => {
+  try {
+    const blockedRelations = await BlockedUser.find({})
+      .populate("blockerId", "name role profilePhoto")
+      .populate("blockedUserId", "name role profilePhoto")
+      .sort({ createdAt: -1 });
+
+    return res.json(blockedRelations);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const unblockRelationByAdmin = async (req, res, next) => {
+  try {
+    const { relationId } = req.params;
+
+    const relation = await BlockedUser.findById(relationId);
+    if (!relation) {
+      return res.status(404).json({ message: "Blocked relation not found" });
+    }
+
+    await Promise.all([
+      User.findByIdAndUpdate(relation.blockerId, {
+        $pull: { blockedUsers: relation.blockedUserId },
+      }),
+      BlockedUser.findByIdAndDelete(relation._id),
+    ]);
+
+    return res.json({ message: "User unblocked" });
   } catch (error) {
     return next(error);
   }

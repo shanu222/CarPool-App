@@ -15,9 +15,9 @@ import {
 import "./AdminDashboard.css";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import type { DeletedUserArchiveItem, Payment, User, UserReportItem } from "../types";
+import type { BlockedRelation, DeletedUserArchiveItem, Payment, User, UserReportItem } from "../types";
 
-type SectionKey = "active" | "banned" | "deleted" | "passengers" | "drivers" | "payments" | "reports";
+type SectionKey = "active" | "banned" | "blocked" | "deleted" | "passengers" | "drivers" | "payments" | "reports";
 type RoleFilter = "all" | "passenger" | "driver";
 type Viewport = "mobile" | "tablet" | "desktop";
 
@@ -28,6 +28,7 @@ type ConfirmAction =
   | { kind: "report-ignore"; reportId: string; label: string }
   | { kind: "report-ban"; reportId: string; label: string }
   | { kind: "report-delete"; reportId: string; label: string }
+  | { kind: "unblock-relation"; relationId: string; label: string }
   | { kind: "payment-approve"; paymentId: string }
   | { kind: "payment-reject"; paymentId: string };
 
@@ -35,6 +36,7 @@ const SIDEBAR_WIDTH = 280;
 const sidebarItems: Array<{ key: SectionKey; label: string; icon: ReactNode }> = [
   { key: "active", label: "Active Users", icon: <Users className="h-4 w-4" /> },
   { key: "banned", label: "Banned Users", icon: <UserMinus className="h-4 w-4" /> },
+  { key: "blocked", label: "Blocked Users", icon: <Ban className="h-4 w-4" /> },
   { key: "deleted", label: "Deleted Users", icon: <Trash2 className="h-4 w-4" /> },
   { key: "passengers", label: "Passenger Management", icon: <Users className="h-4 w-4" /> },
   { key: "drivers", label: "Driver Management", icon: <Users className="h-4 w-4" /> },
@@ -45,6 +47,7 @@ const sidebarItems: Array<{ key: SectionKey; label: string; icon: ReactNode }> =
 const sectionDescriptions: Record<SectionKey, string> = {
   active: "Monitor active accounts and moderation actions",
   banned: "Review suspensions and manage ban appeals",
+  blocked: "Inspect block relationships and unblock when needed",
   deleted: "Inspect archived user records",
   passengers: "Oversee passenger activity and enforcement",
   drivers: "Manage driver verification and status",
@@ -107,6 +110,7 @@ export function AdminDashboard() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<UserReportItem[]>([]);
+  const [blockedRelations, setBlockedRelations] = useState<BlockedRelation[]>([]);
   const [deletedUsers, setDeletedUsers] = useState<DeletedUserArchiveItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
 
@@ -134,9 +138,10 @@ export function AdminDashboard() {
       setLoading(true);
       setError("");
 
-      const [usersResponse, reportsResponse, deletedResponse, paymentsResponse] = await Promise.all([
+      const [usersResponse, reportsResponse, blockedResponse, deletedResponse, paymentsResponse] = await Promise.all([
         api.get<User[]>("/admin/users"),
         api.get<UserReportItem[]>("/admin/reports"),
+        api.get<BlockedRelation[]>("/admin/blocked-users"),
         api.get<DeletedUserArchiveItem[]>("/admin/deleted-users"),
         api.get<Payment[]>("/admin/payments"),
       ]);
@@ -144,6 +149,7 @@ export function AdminDashboard() {
       const userRows = Array.isArray(usersResponse.data) ? usersResponse.data : [];
       setUsers(userRows.filter((item) => item.role !== "admin"));
       setReports(reportsResponse.data || []);
+      setBlockedRelations(blockedResponse.data || []);
       setDeletedUsers(deletedResponse.data || []);
       setPayments(paymentsResponse.data || []);
     } catch (requestError: any) {
@@ -227,6 +233,10 @@ export function AdminDashboard() {
 
   const performReportAction = async (reportId: string, action: "ignore" | "ban" | "delete") => {
     await api.post(`/admin/reports/${reportId}/action`, { action });
+  };
+
+  const unblockRelation = async (relationId: string) => {
+    await api.post(`/admin/blocked-users/${relationId}/unblock`);
   };
 
   const performPaymentReview = async (paymentId: string, status: "approved" | "rejected") => {
@@ -352,6 +362,10 @@ export function AdminDashboard() {
 
       if (confirmAction.kind === "report-delete") {
         await performReportAction(confirmAction.reportId, "delete");
+      }
+
+      if (confirmAction.kind === "unblock-relation") {
+        await unblockRelation(confirmAction.relationId);
       }
 
       if (confirmAction.kind === "payment-approve") {
@@ -625,6 +639,53 @@ export function AdminDashboard() {
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </SectionCard>
+          ) : null}
+
+          {!loading && section === "blocked" ? (
+            <SectionCard title="Blocked Users" subtitle="Bidirectional block relationships with unblock control">
+              <TableWrap>
+                <table className="admin-table min-w-[920px] text-left text-sm text-slate-100">
+                  <thead>
+                    <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
+                      <th className="px-3 py-3">Blocked By</th>
+                      <th className="px-3 py-3">Blocked User</th>
+                      <th className="px-3 py-3">Date</th>
+                      <th className="px-3 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blockedRelations.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-4 text-slate-300" colSpan={4}>
+                          No blocked users found
+                        </td>
+                      </tr>
+                    ) : (
+                      blockedRelations.map((relation) => (
+                        <tr key={relation._id} className="border-b border-white/10">
+                          <td className="px-3 py-3">{relation.blockerId?.name || "Unknown"}</td>
+                          <td className="px-3 py-3">{relation.blockedUserId?.name || "Unknown"}</td>
+                          <td className="px-3 py-3">{formatDateTime(relation.createdAt)}</td>
+                          <td className="px-3 py-3">
+                            <ActionButton
+                              tone="neutral"
+                              label="Unblock"
+                              onClick={() =>
+                                openConfirmation({
+                                  kind: "unblock-relation",
+                                  relationId: relation._id,
+                                  label: relation.blockedUserId?.name || "this user",
+                                })
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </TableWrap>
@@ -1183,6 +1244,10 @@ function getConfirmMessage(action: ConfirmAction) {
 
   if (action.kind === "report-ban") {
     return `Ban ${action.label} based on this report?`;
+  }
+
+  if (action.kind === "unblock-relation") {
+    return `Unblock ${action.label}?`;
   }
 
   if (action.kind === "payment-approve") {

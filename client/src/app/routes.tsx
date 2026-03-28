@@ -11,6 +11,7 @@ import { PostRequest } from "./pages/PostRequest";
 import { Booking } from "./pages/Booking";
 import { MyTrips } from "./pages/MyTrips";
 import { Chat } from "./pages/Chat";
+import { Messages } from "./pages/Messages";
 import { Profile } from "./pages/Profile";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -114,6 +115,10 @@ export const router = createBrowserRouter(
                 {
                   path: "/trips",
                   element: <MyTrips />,
+                },
+                {
+                  path: "/messages",
+                  element: <Messages />,
                 },
                 {
                   path: "/chat/:id",

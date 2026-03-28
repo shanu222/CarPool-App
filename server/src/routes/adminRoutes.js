@@ -7,6 +7,7 @@ import {
   featureRideByAdmin,
   getAdminAnalytics,
   getAdminBookings,
+  getAdminBlockedUsers,
   getAdminChangeRequests,
   getAdminPayments,
   getAdminPaymentProof,
@@ -16,6 +17,7 @@ import {
   getDeletedUsersByAdmin,
   reviewAdminChangeRequest,
   reviewUserReportByAdmin,
+  unblockRelationByAdmin,
   unbanUserByAdmin,
   getPaymentSettingsAdmin,
   rejectPaymentByAdminId,
@@ -57,5 +59,7 @@ router.get("/change-requests", getAdminChangeRequests);
 router.post("/change-requests/:id/review", reviewAdminChangeRequest);
 router.get("/reports", getAdminReports);
 router.post("/reports/:reportId/action", reviewUserReportByAdmin);
+router.get("/blocked-users", getAdminBlockedUsers);
+router.post("/blocked-users/:relationId/unblock", unblockRelationByAdmin);
 
 export default router;

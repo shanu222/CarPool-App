@@ -10,6 +10,7 @@ import { Match } from "../models/Match.js";
 import { Notification } from "../models/Notification.js";
 import { sendPushNotification } from "../services/pushService.js";
 import { createUserNotification } from "../services/notificationService.js";
+import { areUsersBlocked } from "../utils/blocking.js";
 
 const mapMessagePayload = (messageDoc) => {
   const messageObj = typeof messageDoc.toObject === "function" ? messageDoc.toObject() : messageDoc;
@@ -22,21 +23,6 @@ const mapMessagePayload = (messageDoc) => {
     text: messageObj.message,
     createdAt: messageObj.createdAt || messageObj.timestamp,
   };
-};
-
-const isConversationBlocked = async (aUserId, bUserId) => {
-  const [aUser, bUser] = await Promise.all([
-    User.findById(aUserId).select("blockedUsers"),
-    User.findById(bUserId).select("blockedUsers"),
-  ]);
-
-  if (!aUser || !bUser) {
-    return false;
-  }
-
-  const aBlockedB = (aUser.blockedUsers || []).some((id) => String(id) === String(bUserId));
-  const bBlockedA = (bUser.blockedUsers || []).some((id) => String(id) === String(aUserId));
-  return aBlockedB || bBlockedA;
 };
 
 const getRideParticipantIds = async (rideId, driverId) => {
@@ -121,6 +107,18 @@ const resolveRideStatusForChat = async (ride) => {
   return ride.status;
 };
 
+const hasBlockedParticipants = async (rideId, driverId, currentUserId) => {
+  const participantIds = await getRideParticipantIds(rideId, driverId);
+  const otherParticipantIds = participantIds.filter((id) => String(id) !== String(currentUserId));
+
+  if (!otherParticipantIds.length) {
+    return false;
+  }
+
+  const checks = await Promise.all(otherParticipantIds.map((id) => areUsersBlocked(currentUserId, id)));
+  return checks.some(Boolean);
+};
+
 export const initializeSocket = (httpServer) => {
   const origins = (process.env.CLIENT_ORIGIN || "")
     .split(",")
@@ -194,6 +192,17 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
+      if (socket.user.role !== "admin") {
+        const blocked = await hasBlockedParticipants(rideId, ride.driver, socket.user._id);
+        if (blocked) {
+          socket.emit("chat_blocked", {
+            rideId,
+            message: "Chat unavailable due to block settings.",
+          });
+          return;
+        }
+      }
+
       socket.join(`ride:${rideId}`);
     });
 
@@ -256,7 +265,7 @@ export const initializeSocket = (httpServer) => {
         return;
       }
 
-      const blockedChecks = await Promise.all(recipients.map((targetId) => isConversationBlocked(socket.user._id, targetId)));
+      const blockedChecks = await Promise.all(recipients.map((targetId) => areUsersBlocked(socket.user._id, targetId)));
       if (blockedChecks.some(Boolean)) {
         socket.emit("chat_blocked", { rideId, receiverId: normalizedReceiverId });
         return;

@@ -8,6 +8,8 @@ import { ChatAccess } from "../models/ChatAccess.js";
 import { getIo } from "../socket/io.js";
 import { isUserOnline } from "../socket/io.js";
 import { createUserNotification } from "../services/notificationService.js";
+import { areUsersBlocked } from "../utils/blocking.js";
+import mongoose from "mongoose";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
 const CHAT_OPEN_TOKEN_COST = 2;
@@ -70,21 +72,6 @@ const mapMessagePayload = (messageDoc) => {
   };
 };
 
-const isConversationBlocked = async (aUserId, bUserId) => {
-  const [aUser, bUser] = await Promise.all([
-    User.findById(aUserId).select("blockedUsers"),
-    User.findById(bUserId).select("blockedUsers"),
-  ]);
-
-  if (!aUser || !bUser) {
-    return false;
-  }
-
-  const aBlockedB = (aUser.blockedUsers || []).some((id) => String(id) === String(bUserId));
-  const bBlockedA = (bUser.blockedUsers || []).some((id) => String(id) === String(aUserId));
-  return aBlockedB || bBlockedA;
-};
-
 const getRideParticipantIds = async (rideId, rideDriverId) => {
   const acceptedBookings = await Booking.find({
     rideId,
@@ -132,6 +119,18 @@ const getApprovedMatchForUser = async (rideId, userId) => {
     status: "approved",
     $or: [{ driverId: userId }, { passengerId: userId }],
   });
+};
+
+const ensureNoBlockedParticipant = async (rideId, rideDriverId, currentUserId) => {
+  const participantIds = await getRideParticipantIds(rideId, rideDriverId);
+  const otherParticipantIds = participantIds.filter((id) => String(id) !== String(currentUserId));
+
+  if (!otherParticipantIds.length) {
+    return false;
+  }
+
+  const checks = await Promise.all(otherParticipantIds.map((id) => areUsersBlocked(currentUserId, id)));
+  return checks.some(Boolean);
 };
 
 const normalizeCount = (value) => Math.max(0, Number(value || 0));
@@ -246,10 +245,228 @@ const validateChatContext = async ({ rideId, user }) => {
     return { errorStatus: 403, errorPayload: { message: "Only ride participants can access chat" } };
   }
 
+  if (user?.role !== "admin") {
+    const hasBlockedParticipant = await ensureNoBlockedParticipant(rideId, ride.driver, user._id);
+    if (hasBlockedParticipant) {
+      return { errorStatus: 403, errorPayload: { message: "Chat unavailable due to block settings." } };
+    }
+  }
+
   return {
     ride,
     isMatchedRide,
   };
+};
+
+const ACTIVE_RIDE_STATUSES = new Set(["live", "scheduled", "nearby", "matched"]);
+
+const toIsoOrNull = (value) => {
+  const parsed = new Date(value || 0);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
+const asComparableTime = (value) => {
+  const parsed = new Date(value || 0);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
+export const getConversationList = async (req, res, next) => {
+  try {
+    const userId = String(req.user?._id || "").trim();
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const [driverRides, passengerBookings, matches, messageRideIds] = await Promise.all([
+      Ride.find({ driver: userId }).select("_id"),
+      Booking.find({
+        passengerId: userId,
+        status: { $ne: "rejected" },
+      }).select("rideId"),
+      Match.find({
+        $or: [{ driverId: userId }, { passengerId: userId }],
+      }).select("rideId"),
+      Message.distinct("rideId", {
+        $or: [{ senderId: userId }, { receiverId: userId }],
+      }),
+    ]);
+
+    const rideIdSet = new Set([
+      ...driverRides.map((item) => String(item._id)),
+      ...passengerBookings.map((item) => String(item.rideId)),
+      ...matches.map((item) => String(item.rideId)),
+      ...messageRideIds.map((item) => String(item)),
+    ]);
+
+    const allRideIds = [...rideIdSet].filter(Boolean);
+    if (!allRideIds.length) {
+      return res.json([]);
+    }
+
+    const objectRideIds = allRideIds.map((item) => new mongoose.Types.ObjectId(item));
+
+    const [rides, bookingRows, matchRows, lastMessages] = await Promise.all([
+      Ride.find({ _id: { $in: allRideIds } })
+        .populate("driver", "name role profilePhoto isVerified")
+        .lean(),
+      Booking.find({
+        rideId: { $in: allRideIds },
+        status: { $ne: "rejected" },
+      })
+        .select("rideId passengerId")
+        .populate("passengerId", "name role profilePhoto isVerified")
+        .lean(),
+      Match.find({ rideId: { $in: allRideIds } })
+        .select("rideId driverId passengerId")
+        .populate("driverId", "name role profilePhoto isVerified")
+        .populate("passengerId", "name role profilePhoto isVerified")
+        .lean(),
+      Message.aggregate([
+        {
+          $match: {
+            rideId: { $in: objectRideIds },
+          },
+        },
+        {
+          $sort: {
+            timestamp: -1,
+            createdAt: -1,
+          },
+        },
+        {
+          $group: {
+            _id: "$rideId",
+            message: { $first: "$message" },
+            timestamp: { $first: "$timestamp" },
+            createdAt: { $first: "$createdAt" },
+            senderId: { $first: "$senderId" },
+            receiverId: { $first: "$receiverId" },
+          },
+        },
+      ]),
+    ]);
+
+    const lastMessageByRide = new Map(lastMessages.map((row) => [String(row._id), row]));
+
+    const participantByRide = new Map();
+    const addParticipant = (rideId, participant) => {
+      if (!participant || !rideId) {
+        return;
+      }
+
+      const list = participantByRide.get(String(rideId)) || [];
+      const participantId = String(participant._id || participant.id || "");
+      if (!participantId || participantId === userId) {
+        participantByRide.set(String(rideId), list);
+        return;
+      }
+
+      if (!list.some((item) => String(item._id || item.id || "") === participantId)) {
+        list.push(participant);
+      }
+
+      participantByRide.set(String(rideId), list);
+    };
+
+    bookingRows.forEach((row) => {
+      addParticipant(row.rideId, row.passengerId);
+    });
+
+    matchRows.forEach((row) => {
+      addParticipant(row.rideId, row.driverId);
+      addParticipant(row.rideId, row.passengerId);
+    });
+
+    const senderReceiverIds = [...new Set(
+      lastMessages
+        .flatMap((item) => [item.senderId, item.receiverId])
+        .filter(Boolean)
+        .map((item) => String(item))
+    )];
+
+    const senderReceiverUsers = await User.find({ _id: { $in: senderReceiverIds } })
+      .select("name role profilePhoto isVerified")
+      .lean();
+
+    const senderReceiverMap = new Map(senderReceiverUsers.map((item) => [String(item._id), item]));
+
+    const conversations = rides
+      .filter((ride) => {
+        const driverId = String(ride.driver?._id || ride.driver || "");
+        if (driverId === userId) {
+          return true;
+        }
+
+        return (participantByRide.get(String(ride._id)) || []).some(
+          (participant) => String(participant?._id || "") === userId
+        );
+      })
+      .map((ride) => {
+        const rideId = String(ride._id);
+        const rideStatus = String(ride.status || "scheduled").toLowerCase();
+        const isActive = ACTIVE_RIDE_STATUSES.has(rideStatus);
+        const lastMessage = lastMessageByRide.get(rideId);
+        const participants = participantByRide.get(rideId) || [];
+
+        const lastSenderId = String(lastMessage?.senderId || "");
+        const lastReceiverId = String(lastMessage?.receiverId || "");
+
+        const lastOtherId =
+          lastSenderId && lastSenderId !== userId
+            ? lastSenderId
+            : lastReceiverId && lastReceiverId !== userId
+            ? lastReceiverId
+            : "";
+
+        const fromLastMessage = lastOtherId ? senderReceiverMap.get(lastOtherId) : null;
+        const defaultCounterpart =
+          String(ride.driver?._id || ride.driver || "") === userId ? participants[0] || null : ride.driver || null;
+        const counterpart = fromLastMessage || defaultCounterpart || null;
+
+        const lastMessageAt =
+          toIsoOrNull(lastMessage?.timestamp || lastMessage?.createdAt) ||
+          toIsoOrNull(ride.updatedAt || ride.createdAt || ride.dateTime) ||
+          new Date(0).toISOString();
+
+        return {
+          rideId,
+          rideStatus,
+          isActive,
+          route: `${ride.fromCity || ""} -> ${ride.toCity || ""}`,
+          ride: {
+            _id: rideId,
+            fromCity: ride.fromCity,
+            toCity: ride.toCity,
+            date: ride.date,
+            time: ride.time,
+            status: ride.status,
+          },
+          counterpart: counterpart
+            ? {
+                _id: counterpart._id,
+                name: counterpart.name,
+                role: counterpart.role,
+                profilePhoto: counterpart.profilePhoto,
+                isVerified: Boolean(counterpart.isVerified),
+              }
+            : null,
+          lastMessage: lastMessage?.message || "No messages yet",
+          lastMessageAt,
+          hasMessages: Boolean(lastMessage?.message),
+        };
+      })
+      .sort((left, right) => {
+        if (left.isActive !== right.isActive) {
+          return left.isActive ? -1 : 1;
+        }
+
+        return asComparableTime(right.lastMessageAt) - asComparableTime(left.lastMessageAt);
+      });
+
+    return res.json(conversations);
+  } catch (error) {
+    return next(error);
+  }
 };
 
 export const startRideChatAccess = async (req, res, next) => {
@@ -386,7 +603,7 @@ export const sendMessage = async (req, res, next) => {
       return res.status(400).json({ message: "No chat recipients available" });
     }
 
-    const blockedChecks = await Promise.all(recipients.map((participantId) => isConversationBlocked(req.user._id, participantId)));
+    const blockedChecks = await Promise.all(recipients.map((participantId) => areUsersBlocked(req.user._id, participantId)));
     if (blockedChecks.some(Boolean)) {
       return res.status(403).json({ message: "User blocked" });
     }

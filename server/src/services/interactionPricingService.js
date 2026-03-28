@@ -1,5 +1,5 @@
 import { Ride } from "../models/Ride.js";
-import { getRouteDistanceAndDuration } from "./mapsService.js";
+import { geocodeCity, getRouteDistanceAndDuration } from "./mapsService.js";
 
 export const PRICING_CURRENCY = "PKR";
 
@@ -16,11 +16,14 @@ export const calculateInteractionAmount = (distanceKm, role) => {
 };
 
 export const getRideDistanceKm = async (ride) => {
-  if (!ride?.fromCoordinates || !ride?.toCoordinates) {
+  const fromCoords = ride?.fromCoordinates || (ride?.fromCity ? await geocodeCity(`${ride.fromCity}, Pakistan`) : null);
+  const toCoords = ride?.toCoordinates || (ride?.toCity ? await geocodeCity(`${ride.toCity}, Pakistan`) : null);
+
+  if (!fromCoords || !toCoords) {
     return null;
   }
 
-  const route = await getRouteDistanceAndDuration(ride.fromCoordinates, ride.toCoordinates);
+  const route = await getRouteDistanceAndDuration(fromCoords, toCoords);
   if (!route?.distanceKm) {
     return null;
   }

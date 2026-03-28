@@ -5,6 +5,7 @@ import { Booking } from "../models/Booking.js";
 import { checkExpiredRides } from "../services/rideExpiryService.js";
 import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
 import { sendPushNotification } from "../services/pushService.js";
+import { getBlockedPartnerIdsForUser } from "../utils/blocking.js";
 import {
   getKnownPakistanCity,
   isKnownPakistanCity,
@@ -445,8 +446,11 @@ export const searchRides = async (req, res, next) => {
       return res.status(400).json({ message: "Only Pakistani cities allowed" });
     }
 
+    const blockedPartnerIds = await getBlockedPartnerIdsForUser(req.user._id);
+    const excludedDriverIds = [req.user._id, ...blockedPartnerIds];
+
     const andConditions = [
-      { driver: { $ne: req.user._id } },
+      { driver: { $nin: excludedDriverIds } },
       ...(dateTime ? [{ dateTime: { $gte: new Date(String(dateTime)) } }] : []),
       { availableSeats: { $gt: 0 } },
       { status: { $in: ["scheduled", "nearby", "live"] } },
@@ -613,6 +617,15 @@ export const getRideById = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
+    const requesterId = String(req.user?._id || "");
+    const ownerId = String(ride.driver?._id || ride.driver || "");
+    if (requesterId && requesterId !== ownerId) {
+      const blockedPartnerIds = await getBlockedPartnerIdsForUser(requesterId);
+      if (blockedPartnerIds.includes(ownerId)) {
+        return res.status(404).json({ message: "Ride not found" });
+      }
+    }
+
     if (String(ride.status || "") === "expired") {
       const isOwner = String(ride.driver?._id || ride.driver) === String(req.user?._id || "");
 
@@ -645,7 +658,11 @@ export const getNearbyRides = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    const blockedPartnerIds = await getBlockedPartnerIdsForUser(req.user._id);
+    const excludedDriverIds = [req.user._id, ...blockedPartnerIds];
+
     const rides = await Ride.find({
+      driver: { $nin: excludedDriverIds },
       status: { $in: ["scheduled", "nearby", "live"] },
       "fromCoordinates.lat": { $exists: true },
       "fromCoordinates.lng": { $exists: true },
