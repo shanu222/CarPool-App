@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Loader2, Lock, Phone, Upload, UserCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BadgeCheck, CheckCircle2, Eye, EyeOff, FileText, IdCard, Info, Loader2, Lock, Phone, Upload, UserCircle2, XCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import backgroundImage from '../../assets/carpool-bg.png';
 import { api } from '../lib/api';
@@ -307,40 +307,62 @@ export function Auth() {
 
   const signupValid = useMemo(() => {
     const mobileDigits = signup.mobile.replace(/\D/g, '');
+    const wantsVerifiedSignup = Boolean(
+      signup.cnic.trim() ||
+        signup.dob ||
+        signup.profileImage ||
+        signup.cnicFront ||
+        signup.cnicBack ||
+        signup.licenseImage ||
+        signup.licenseNumber.trim()
+    );
+
     const baseValidation = {
       name: signup.fullName.trim().length >= 3,
-      cnic: cnicPattern.test(signup.cnic),
-      dob: Boolean(signup.dob) && signup.dob < today,
+      cnic: !wantsVerifiedSignup || cnicPattern.test(signup.cnic),
+      dob: !wantsVerifiedSignup || (Boolean(signup.dob) && signup.dob < today),
       mobile: mobileDigits.length >= 10 && mobileDigits.length <= 11,
-      profile: Boolean(signup.profileImage),
-      front: Boolean(signup.cnicFront),
-      back: Boolean(signup.cnicBack),
-      licenseNumber: licensePattern.test(signup.licenseNumber.trim()),
-      licenseImage: Boolean(signup.licenseImage),
+      profile: !wantsVerifiedSignup || Boolean(signup.profileImage),
+      front: !wantsVerifiedSignup || Boolean(signup.cnicFront),
+      back: !wantsVerifiedSignup || Boolean(signup.cnicBack),
+      licenseNumber: !wantsVerifiedSignup || signupRole !== 'driver' || licensePattern.test(signup.licenseNumber.trim()),
+      licenseImage: !wantsVerifiedSignup || signupRole !== 'driver' || Boolean(signup.licenseImage),
     };
+
+    const passwordReady =
+      signupPassword.length >= 8 &&
+      /[A-Z]/.test(signupPassword) &&
+      /\d/.test(signupPassword) &&
+      /[^A-Za-z0-9]/.test(signupPassword) &&
+      signupPassword === signupConfirmPassword;
+
+    const verificationReady =
+      !wantsVerifiedSignup ||
+      (signupRole === 'driver'
+        ? baseValidation.cnic &&
+          baseValidation.dob &&
+          baseValidation.mobile &&
+          baseValidation.profile &&
+          baseValidation.front &&
+          baseValidation.back &&
+          baseValidation.licenseNumber &&
+          baseValidation.licenseImage
+        : baseValidation.cnic &&
+          baseValidation.dob &&
+          baseValidation.mobile &&
+          baseValidation.profile &&
+          baseValidation.front &&
+          baseValidation.back);
 
     return {
       ...baseValidation,
+      wantsVerifiedSignup,
       passwordLength: signupPassword.length >= 8,
       passwordUpper: /[A-Z]/.test(signupPassword),
       passwordNumber: /\d/.test(signupPassword),
       passwordSpecial: /[^A-Za-z0-9]/.test(signupPassword),
       passwordMatch: signupPassword.length > 0 && signupPassword === signupConfirmPassword,
-      ready:
-        signupRole === 'driver'
-          ? Object.values(baseValidation).every(Boolean)
-          : baseValidation.name &&
-            baseValidation.cnic &&
-            baseValidation.dob &&
-            baseValidation.mobile &&
-            baseValidation.profile &&
-            baseValidation.front &&
-            baseValidation.back &&
-            signupPassword.length >= 8 &&
-            /[A-Z]/.test(signupPassword) &&
-            /\d/.test(signupPassword) &&
-            /[^A-Za-z0-9]/.test(signupPassword) &&
-            signupPassword === signupConfirmPassword,
+      ready: baseValidation.name && baseValidation.mobile && passwordReady && verificationReady,
     };
   }, [signup, signupRole, signupPassword, signupConfirmPassword]);
 
@@ -404,25 +426,50 @@ export function Auth() {
 
     try {
       setIsLoading(true);
-      setVerifyIndex(0);
-      setVerifyFailedIndex(null);
-      setIsVerifyingOverlayVisible(true);
+      if (signupValid.wantsVerifiedSignup) {
+        setVerifyIndex(0);
+        setVerifyFailedIndex(null);
+        setIsVerifyingOverlayVisible(true);
+      } else {
+        setIsVerifyingOverlayVisible(false);
+        setVerifyFailedIndex(null);
+      }
 
       const formData = new FormData();
       formData.append('role', signupRole);
       formData.append('name', signup.fullName.trim());
-      formData.append('cnic', signup.cnic);
-      formData.append('dob', signup.dob);
       formData.append('mobile', `${signup.countryCode}${signup.mobile}`);
       formData.append('password', signupPassword);
       formData.append('confirmPassword', signupConfirmPassword);
-      formData.append('profileImage', signup.profileImage as Blob);
-      formData.append('cnicFront', signup.cnicFront as Blob);
-      formData.append('cnicBack', signup.cnicBack as Blob);
+
+      if (signup.cnic.trim()) {
+        formData.append('cnic', signup.cnic.trim());
+      }
+
+      if (signup.dob) {
+        formData.append('dob', signup.dob);
+      }
+
+      if (signup.profileImage) {
+        formData.append('profileImage', signup.profileImage as Blob);
+      }
+
+      if (signup.cnicFront) {
+        formData.append('cnicFront', signup.cnicFront as Blob);
+      }
+
+      if (signup.cnicBack) {
+        formData.append('cnicBack', signup.cnicBack as Blob);
+      }
 
       if (signupRole === 'driver') {
-        formData.append('licenseNumber', signup.licenseNumber);
-        formData.append('licenseImage', signup.licenseImage as Blob);
+        if (signup.licenseNumber.trim()) {
+          formData.append('licenseNumber', signup.licenseNumber.trim());
+        }
+
+        if (signup.licenseImage) {
+          formData.append('licenseImage', signup.licenseImage as Blob);
+        }
       }
 
       await api.post('/api/signup', formData, {
@@ -432,6 +479,15 @@ export function Auth() {
       });
 
       setIsLoading(false);
+
+      if (!signupValid.wantsVerifiedSignup) {
+        setSignup(emptySignup);
+        setSignupPassword('');
+        setSignupConfirmPassword('');
+        setSignupAttempted(false);
+        setScreen('login');
+        return;
+      }
     } catch (error) {
       const payload = (error as {
         response?: {
@@ -820,6 +876,31 @@ export function Auth() {
                   Signing up as {signupRole === 'driver' ? 'Driver' : 'Passenger'}
                 </p>
 
+                <div
+                  className="mt-3 rounded-2xl border px-3 py-3"
+                  style={{
+                    backgroundColor: 'rgba(219, 236, 255, 0.7)',
+                    borderColor: '#B8D2EB',
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    <Info className="mt-0.5 h-4 w-4" style={{ color: '#1B6FA3' }} />
+                    <div>
+                      <p className="text-xs" style={{ color: '#204765' }}>
+                        You can create an account using only your name, mobile number, and password.
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: '#204765' }}>
+                        However, your account will not be verified, and your profile/rides will be shown to fewer users. To increase
+                        visibility and trust, you can verify your account anytime by uploading your CNIC (and license for drivers).
+                      </p>
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]" style={{ backgroundColor: 'rgba(255,255,255,0.65)', color: '#28506E' }}>
+                        <AlertTriangle className="h-3 w-3" />
+                        Unverified accounts have limited visibility
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mt-3 space-y-3">
                   <FloatingField label="Name (as on CNIC)">
                     <IconInput
@@ -937,9 +1018,9 @@ export function Auth() {
                 </div>
 
                 <StickyActionButton
-                  text="Create Account & Verify Identity"
+                  text={signupValid.wantsVerifiedSignup ? 'Create Account & Verify Identity' : 'Create Account'}
                   loading={isLoading}
-                  loadingText="Verifying identity..."
+                  loadingText={signupValid.wantsVerifiedSignup ? 'Verifying identity...' : 'Creating account...'}
                   disabled={!isSignupReady}
                   onClick={startAutoVerification}
                   theme={signupRole}
