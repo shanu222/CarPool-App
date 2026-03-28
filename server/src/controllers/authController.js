@@ -8,7 +8,7 @@ import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
 import { permanentlyDeleteUserAccount } from "../services/accountDeletionService.js";
 import { buildVerificationMeta, verifyIdentityDocuments } from "../services/verificationFlowService.js";
-import { normalizeCnic } from "../utils/kycUtils.js";
+import { normalizeCnic, normalizeDob } from "../utils/kycUtils.js";
 
 const getAdminEmails = () =>
   (process.env.ADMIN_EMAILS || "")
@@ -448,13 +448,13 @@ const buildDeletedLoginResponse = (deletedRecord) => {
     const reasonText = reason || "No reason provided";
 
     return {
-      message: `Your account was deleted by admin. Reason: ${reasonText}. You can create a new account again.`,
+      message: `Your account was deleted by admin. Reason: ${reasonText}. Please create a new account.`,
       canReRegister: true,
     };
   }
 
   return {
-    message: "Your account was deleted by you. You can create a new account again.",
+    message: "Your account was deleted by you. Please create a new account.",
     canReRegister: true,
   };
 };
@@ -1396,6 +1396,151 @@ export const forgotPassword = async (req, res, next) => {
     }
 
     return res.json(responsePayload);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getIdentityRecoveryCandidates = async ({ mobileNumber, cnic, dob }) => {
+  const normalizedPhone = normalizePhone(mobileNumber);
+  const normalizedCnic = normalizeCnic(cnic);
+  const normalizedDob = normalizeDob(dob);
+
+  if (!normalizedPhone || !normalizedCnic || !normalizedDob) {
+    return { invalid: true, users: [], normalizedPhone: "", normalizedCnic: "", normalizedDob: "" };
+  }
+
+  const users = await User.find({
+    role: { $in: ["passenger", "driver"] },
+    phone: normalizedPhone,
+    $or: [{ cnicNumber: normalizedCnic }, { cnic: normalizedCnic }],
+    dob: normalizedDob,
+  }).select("role phone cnicNumber cnic dob +resetSessionToken +resetSessionExpiry +otp +otpExpiry +otpResendAvailableAt +resetToken +resetTokenExpiry");
+
+  return {
+    invalid: false,
+    users,
+    normalizedPhone,
+    normalizedCnic,
+    normalizedDob,
+  };
+};
+
+export const verifyForgotPasswordIdentity = async (req, res, next) => {
+  try {
+    const { mobileNumber, mobile, cnic, dob, role } = req.body;
+    const requestedRole = String(role || "").trim().toLowerCase();
+
+    if (requestedRole && !["passenger", "driver"].includes(requestedRole)) {
+      return res.status(400).json({ success: false, error: "role must be passenger or driver" });
+    }
+
+    const lookup = await getIdentityRecoveryCandidates({
+      mobileNumber: mobileNumber || mobile,
+      cnic,
+      dob,
+    });
+
+    if (lookup.invalid) {
+      return res.status(400).json({ success: false, error: "mobileNumber, cnic and dob are required" });
+    }
+
+    if (!lookup.users.length) {
+      return res.status(404).json({ success: false, error: "No account found for provided identity" });
+    }
+
+    if (!requestedRole && lookup.users.length > 1) {
+      const roles = [...new Set(lookup.users.map((user) => String(user.role || "").toLowerCase()))]
+        .filter((item) => ["driver", "passenger"].includes(item))
+        .map((item) => ({ role: item }));
+
+      return res.json({
+        success: true,
+        requiresRoleSelection: true,
+        roles,
+      });
+    }
+
+    const user = requestedRole
+      ? lookup.users.find((item) => String(item.role || "").toLowerCase() === requestedRole)
+      : lookup.users[0];
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: "No account found for selected role" });
+    }
+
+    const rawResetSessionToken = crypto.randomBytes(32).toString("hex");
+    const resetSessionTokenHash = crypto.createHash("sha256").update(rawResetSessionToken).digest("hex");
+
+    user.resetSessionToken = resetSessionTokenHash;
+    user.resetSessionExpiry = new Date(Date.now() + FORGOT_OTP_VERIFIED_SESSION_MINUTES * 60 * 1000);
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+    user.otpResendAvailableAt = undefined;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    await user.save();
+
+    return res.json({
+      success: true,
+      requiresRoleSelection: false,
+      role: user.role,
+      resetSessionToken: rawResetSessionToken,
+      resetSessionExpiresInSeconds: FORGOT_OTP_VERIFIED_SESSION_MINUTES * 60,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resetForgotPasswordByIdentity = async (req, res, next) => {
+  try {
+    const { mobileNumber, mobile, cnic, dob, role, resetSessionToken, newPassword } = req.body;
+    const requestedRole = String(role || "").trim().toLowerCase();
+
+    if (!newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, error: "password must be at least 6 characters" });
+    }
+
+    if (!resetSessionToken || !requestedRole || !["passenger", "driver"].includes(requestedRole)) {
+      return res.status(400).json({ success: false, error: "role and resetSessionToken are required" });
+    }
+
+    const lookup = await getIdentityRecoveryCandidates({
+      mobileNumber: mobileNumber || mobile,
+      cnic,
+      dob,
+    });
+
+    if (lookup.invalid) {
+      return res.status(400).json({ success: false, error: "mobileNumber, cnic and dob are required" });
+    }
+
+    const resetSessionTokenHash = crypto.createHash("sha256").update(String(resetSessionToken)).digest("hex");
+
+    const user = lookup.users.find(
+      (item) =>
+        String(item.role || "").toLowerCase() === requestedRole &&
+        String(item.resetSessionToken || "") === resetSessionTokenHash &&
+        item.resetSessionExpiry &&
+        new Date(item.resetSessionExpiry).getTime() > Date.now()
+    );
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid or expired reset session" });
+    }
+
+    user.password = await bcrypt.hash(String(newPassword), 10);
+    user.resetSessionToken = undefined;
+    user.resetSessionExpiry = undefined;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+    user.otpResendAvailableAt = undefined;
+    await user.save();
+
+    return res.json({ success: true, message: "Password reset successful" });
   } catch (error) {
     return next(error);
   }

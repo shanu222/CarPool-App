@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Bell, ChevronDown, ChevronUp, CreditCard, Crown, HelpCircle, LogOut, Shield, UserCircle2 } from "lucide-react";
+import { AlertTriangle, Bell, ChevronDown, ChevronUp, CreditCard, Crown, HelpCircle, LogOut, Shield, Trash2, UserCircle2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
@@ -45,6 +45,11 @@ export function Profile() {
   const [verificationProfileImage, setVerificationProfileImage] = useState<File | null>(null);
   const [verificationLicenseImage, setVerificationLicenseImage] = useState<File | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey | null>("profile");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteConfirmChecked, setDeleteConfirmChecked] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -214,6 +219,55 @@ export function Profile() {
     navigate("/auth");
   };
 
+  const closeDeleteModal = () => {
+    if (deletingAccount) {
+      return;
+    }
+
+    setDeleteModalOpen(false);
+    setDeletePassword("");
+    setDeleteReason("");
+    setDeleteConfirmChecked(false);
+  };
+
+  const submitDeleteAccount = async () => {
+    const password = String(deletePassword || "").trim();
+    const reason = String(deleteReason || "").trim();
+
+    if (!password) {
+      toast.error("Password is required");
+      return;
+    }
+
+    if (!reason) {
+      toast.error("Delete reason is required");
+      return;
+    }
+
+    if (!deleteConfirmChecked) {
+      toast.error("Please confirm permanent deletion");
+      return;
+    }
+
+    try {
+      setDeletingAccount(true);
+
+      await api.post("/api/user/delete-account", {
+        password,
+        reason,
+      });
+
+      toast.success("Account deleted successfully");
+      closeDeleteModal();
+      logout();
+      navigate("/auth");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Could not delete account");
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent pb-24">
       <div className="glass-panel mx-3 mt-3 rounded-3xl px-4 pb-4 pt-8 md:mx-4 md:mt-4 md:px-6 md:pb-6 md:pt-12">
@@ -303,12 +357,93 @@ export function Profile() {
               <SettingsCard icon={<CreditCard className="h-4 w-4" />} label="Payment Methods" onClick={() => navigate("/payment-methods")} />
               <SettingsCard icon={<Shield className="h-4 w-4" />} label="Privacy & Security" onClick={() => navigate("/privacy")} />
               <SettingsCard icon={<HelpCircle className="h-4 w-4" />} label="Help & Support" onClick={() => navigate("/support")} />
+              <SettingsCard
+                icon={<Trash2 className="h-4 w-4" />}
+                label="Delete Account"
+                onClick={() => setDeleteModalOpen(true)}
+                danger
+              />
             </section>
           </AccordionSection>
         </div>
       </div>
 
       <AnimatePresence>
+        {deleteModalOpen ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+              className="glass-panel w-full max-w-lg rounded-3xl p-4 md:p-5"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-5 w-5 text-red-300" />
+                <div>
+                  <h3 className="text-base md:text-lg text-white">Delete Account</h3>
+                  <p className="mt-1 text-xs md:text-sm text-slate-200">
+                    This action is permanent and cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="block text-sm text-slate-100 mb-1">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(event) => setDeletePassword(event.target.value)}
+                    className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white"
+                    placeholder="Enter your password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-100 mb-1">Reason</label>
+                  <textarea
+                    value={deleteReason}
+                    onChange={(event) => setDeleteReason(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white"
+                    placeholder="Why are you deleting your account?"
+                  />
+                </div>
+
+                <label className="inline-flex items-start gap-2 text-xs text-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={deleteConfirmChecked}
+                    onChange={(event) => setDeleteConfirmChecked(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-white/40 bg-white/20"
+                  />
+                  <span>Are you sure? This action is permanent.</span>
+                </label>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <Button variant="secondary" onClick={closeDeleteModal} disabled={deletingAccount}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  className="!bg-red-500 hover:!bg-red-400"
+                  onClick={submitDeleteAccount}
+                  loading={deletingAccount}
+                  loadingText="Deleting..."
+                >
+                  Delete Account
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+
         {verificationMode ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
@@ -474,19 +609,23 @@ function AccordionSection({
   );
 }
 
-function SettingsCard({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function SettingsCard({ icon, label, onClick, danger = false }: { icon: ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return (
     <motion.button
       type="button"
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="flex min-h-12 w-full items-center justify-between rounded-xl border border-white/25 bg-white/10 px-3 py-3 text-left transition-all duration-200 hover:bg-white/20"
+      className={`flex min-h-12 w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition-all duration-200 ${
+        danger
+          ? "border-red-300/50 bg-red-500/10 hover:bg-red-500/20"
+          : "border-white/25 bg-white/10 hover:bg-white/20"
+      }`}
     >
-      <span className="inline-flex items-center gap-2 text-sm text-white">
+      <span className={`inline-flex items-center gap-2 text-sm ${danger ? "text-red-100" : "text-white"}`}>
         {icon}
         {label}
       </span>
-      <span className="text-xs text-slate-200">Open</span>
+      <span className={`text-xs ${danger ? "text-red-200" : "text-slate-200"}`}>Open</span>
     </motion.button>
   );
 }

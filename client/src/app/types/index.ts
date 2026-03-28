@@ -23,6 +23,7 @@ export interface User {
   isFeatured?: boolean;
   verificationStatus?: "none" | "pending" | "approved" | "rejected";
   cnicNumber?: string;
+  dob?: string;
   cnicPhoto?: string;
   cnicExpiryDate?: string;
   licenseExpiryDate?: string;

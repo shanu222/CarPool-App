@@ -229,6 +229,9 @@ export function Auth() {
 
   const [signup, setSignup] = useState<SignupForm>(emptySignup);
   const [recover, setRecover] = useState<RecoverForm>(emptyRecover);
+  const [recoverRoles, setRecoverRoles] = useState<Array<'passenger' | 'driver'>>([]);
+  const [recoverSelectedRole, setRecoverSelectedRole] = useState<'passenger' | 'driver' | null>(null);
+  const [recoverResetSessionToken, setRecoverResetSessionToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -236,6 +239,7 @@ export function Auth() {
 
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [canReRegister, setCanReRegister] = useState(false);
 
   const [isVerifyingOverlayVisible, setIsVerifyingOverlayVisible] = useState(false);
   const [verifyIndex, setVerifyIndex] = useState(0);
@@ -484,6 +488,7 @@ export function Auth() {
 
   const submitLogin = async () => {
     resetError('');
+    setCanReRegister(false);
 
     if (!loginMobile || !loginPassword) {
       resetError('Information does not match');
@@ -514,7 +519,11 @@ export function Auth() {
       navigate('/home');
     } catch (error) {
       const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
-      resetError(message?.error || message?.message || 'Information does not match');
+      const nextError = message?.error || message?.message || 'Information does not match';
+      const allowReRegister = Boolean((error as { response?: { data?: { canReRegister?: boolean } } })?.response?.data?.canReRegister);
+
+      setCanReRegister(allowReRegister);
+      resetError(nextError);
       setIsLoading(false);
     }
   };
@@ -527,17 +536,78 @@ export function Auth() {
       return;
     }
 
-    if (recover.cnic.startsWith('00000')) {
-      resetError('User not found');
-      return;
-    }
+    const verify = async () => {
+      try {
+        setIsLoading(true);
 
-    if (recover.cnic.endsWith('-0')) {
-      resetError('Verification failed');
-      return;
-    }
+        const response = await api.post('/api/forgot-password/verify-identity', {
+          mobileNumber: `${recover.countryCode}${recover.mobile}`,
+          cnic: recover.cnic,
+          dob: recover.dob,
+        });
 
-    setScreen('reset');
+        const payload = response?.data || {};
+
+        if (payload.requiresRoleSelection) {
+          const roles = Array.isArray(payload.roles)
+            ? payload.roles
+                .map((item: { role?: string }) => String(item?.role || '').toLowerCase())
+                .filter((item: string): item is 'passenger' | 'driver' => item === 'passenger' || item === 'driver')
+            : [];
+
+          setRecoverRoles(roles);
+          setRecoverSelectedRole(null);
+          setRecoverResetSessionToken('');
+          return;
+        }
+
+        const role = String(payload.role || '').toLowerCase();
+        const selectedRole = role === 'driver' ? 'driver' : 'passenger';
+
+        setRecoverRoles([]);
+        setRecoverSelectedRole(selectedRole);
+        setRecoverResetSessionToken(String(payload.resetSessionToken || ''));
+        setScreen('reset');
+      } catch (error) {
+        const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+        resetError(message?.error || message?.message || 'Verification failed');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void verify();
+  };
+
+  const selectRecoverRole = async (role: 'passenger' | 'driver') => {
+    resetError('');
+
+    try {
+      setIsLoading(true);
+
+      const response = await api.post('/api/forgot-password/verify-identity', {
+        mobileNumber: `${recover.countryCode}${recover.mobile}`,
+        cnic: recover.cnic,
+        dob: recover.dob,
+        role,
+      });
+
+      const payload = response?.data || {};
+
+      if (!payload.resetSessionToken) {
+        resetError('Verification failed');
+        return;
+      }
+
+      setRecoverSelectedRole(role);
+      setRecoverResetSessionToken(String(payload.resetSessionToken || ''));
+      setScreen('reset');
+    } catch (error) {
+      const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+      resetError(message?.error || message?.message || 'Verification failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const submitReset = () => {
@@ -553,9 +623,40 @@ export function Auth() {
       return;
     }
 
-    setScreen('login');
-    setNewPassword('');
-    setConfirmPassword('');
+    if (!recoverSelectedRole || !recoverResetSessionToken) {
+      resetError('Verification failed');
+      return;
+    }
+
+    const reset = async () => {
+      try {
+        setIsLoading(true);
+
+        await api.post('/api/forgot-password/reset-identity', {
+          mobileNumber: `${recover.countryCode}${recover.mobile}`,
+          cnic: recover.cnic,
+          dob: recover.dob,
+          role: recoverSelectedRole,
+          resetSessionToken: recoverResetSessionToken,
+          newPassword,
+        });
+
+        setScreen('login');
+        setNewPassword('');
+        setConfirmPassword('');
+        setRecoverRoles([]);
+        setRecoverSelectedRole(null);
+        setRecoverResetSessionToken('');
+        setRecover(emptyRecover);
+      } catch (error) {
+        const message = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+        resetError(message?.error || message?.message || 'Verification failed');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void reset();
   };
 
   const completedStepCount =
@@ -645,12 +746,28 @@ export function Auth() {
 
               <StickyActionButton text="Login" loading={isLoading} onClick={submitLogin} theme={loginRole} />
 
+              {canReRegister && errorMessage ? (
+                <button
+                  type="button"
+                  className="mt-3 w-full text-center text-sm"
+                  style={{ color: colors.navy, textDecoration: 'underline' }}
+                  onClick={() => {
+                    setScreen('signup');
+                    setCanReRegister(false);
+                    resetError('');
+                  }}
+                >
+                  Create New Account
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 className="mt-3 w-full text-center text-sm"
                 style={{ color: colors.navy, textDecoration: 'underline' }}
                 onClick={() => {
                   setScreen('signup');
+                  setCanReRegister(false);
                   resetError('');
                 }}
               >
@@ -887,8 +1004,56 @@ export function Auth() {
               <StickyActionButton
                 text="Verify Identity"
                 disabled={!forgotValid.mobile || !forgotValid.cnic || !forgotValid.dob}
+                loading={isLoading}
+                loadingText="Verifying..."
                 onClick={verifyIdentity}
               />
+
+              {recoverRoles.length > 1 ? (
+                <div
+                  className="mt-3 rounded-2xl border p-3"
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.74)',
+                    borderColor: '#C8D8E8',
+                  }}
+                >
+                  <p className="mb-2 text-sm" style={{ color: colors.navy, fontWeight: 600 }}>
+                    Select Account Type
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {recoverRoles.includes('driver') ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void selectRecoverRole('driver');
+                        }}
+                        className="rounded-xl px-3 py-2 text-sm"
+                        style={{
+                          color: '#FFFFFF',
+                          background: 'linear-gradient(135deg, #2ECC71 0%, #0B3C5D 125%)',
+                        }}
+                      >
+                        Driver
+                      </button>
+                    ) : null}
+                    {recoverRoles.includes('passenger') ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void selectRecoverRole('passenger');
+                        }}
+                        className="rounded-xl px-3 py-2 text-sm"
+                        style={{
+                          color: '#FFFFFF',
+                          background: 'linear-gradient(135deg, #0B3C5D 0%, #1B6FA3 125%)',
+                        }}
+                      >
+                        Passenger
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               <button
                 type="button"
@@ -896,6 +1061,9 @@ export function Auth() {
                 style={{ color: colors.navy, textDecoration: 'underline' }}
                 onClick={() => {
                   setScreen('login');
+                  setRecoverRoles([]);
+                  setRecoverSelectedRole(null);
+                  setRecoverResetSessionToken('');
                   resetError('');
                 }}
               >
