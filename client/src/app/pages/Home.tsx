@@ -4,7 +4,7 @@ import { MapPin, Calendar, Clock, Search, Plus, Users, Banknote } from 'lucide-r
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import type { Ride } from '../types';
+import type { Ride, RideRequest } from '../types';
 import { RideCard } from '../components/RideCard';
 import { pakistanCities } from '../../data/pakistanCities';
 import { CityAutocomplete } from '../components/CityAutocomplete';
@@ -18,6 +18,20 @@ interface NearbyRideResponse {
   scheduledRides: Ride[];
 }
 
+const classifyRequestTime = (request: RideRequest) => {
+  const explicit = String(request.timeClass || '').toLowerCase();
+  if (explicit === 'live' || explicit === 'scheduled') {
+    return explicit;
+  }
+
+  const parsed = new Date(request.dateTime);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'scheduled';
+  }
+
+  return parsed <= new Date() ? 'live' : 'scheduled';
+};
+
 type DriverHomeTab = 'offer' | 'live' | 'scheduled' | 'search';
 type PassengerHomeTab = 'search' | 'request' | 'live' | 'scheduled';
 
@@ -30,7 +44,10 @@ export function Home() {
   const [price, setPrice] = useState('100');
   const [liveRides, setLiveRides] = useState<Ride[]>([]);
   const [scheduledRides, setScheduledRides] = useState<Ride[]>([]);
+  const [driverLiveRequests, setDriverLiveRequests] = useState<RideRequest[]>([]);
+  const [driverScheduledRequests, setDriverScheduledRequests] = useState<RideRequest[]>([]);
   const [ridesError, setRidesError] = useState('');
+  const [requestsError, setRequestsError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const navigate = useNavigate();
@@ -138,25 +155,53 @@ export function Home() {
 
     fetchHomeRides();
 
+    if (isDriver) {
+      setDriverLiveRequests([]);
+      setDriverScheduledRequests([]);
+      setRequestsError('');
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            await api.post('/api/user/location', {
+            const locationPayload = {
               lat: position.coords.latitude,
               lng: position.coords.longitude,
-            });
+            };
+
+            await api.post('/api/user/location', locationPayload);
+
+            if (isDriver) {
+              const requestResponse = await api.get<RideRequest[]>(
+                `/api/requests/nearby?lat=${locationPayload.lat}&lng=${locationPayload.lng}`
+              );
+
+              const liveRequests = (requestResponse.data || []).filter((item) => classifyRequestTime(item) === 'live');
+              const scheduledRequests = (requestResponse.data || []).filter(
+                (item) => classifyRequestTime(item) === 'scheduled'
+              );
+
+              setDriverLiveRequests(liveRequests);
+              setDriverScheduledRequests(scheduledRequests);
+            }
           } catch {
             // Location sync is best-effort only; home rides list should still load.
+            if (isDriver) {
+              setRequestsError('Could not load nearby passenger requests.');
+            }
           }
         },
         () => {
           // Ignore geolocation denial for the home feed.
+          if (isDriver) {
+            setRequestsError('Enable location to view nearby passenger requests.');
+          }
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
-  }, []);
+  }, [isDriver]);
 
   return (
     <div className="min-h-screen bg-transparent overflow-x-hidden">
@@ -322,6 +367,23 @@ export function Home() {
             ) : (
               <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">{ridesError || 'No live rides available.'}</div>
             )}
+
+            {isDriver ? (
+              <>
+                <h3 className="mt-4 mb-2 text-xs md:text-sm text-emerald-100">Live Passenger Requests</h3>
+                {driverLiveRequests.length > 0 ? (
+                  <div className="space-y-2">
+                    {driverLiveRequests.map((request) => (
+                      <DriverRequestCard key={request._id} request={request} onOpen={() => navigate(`/requests/${request._id}`)} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="glass-subtle rounded-2xl p-3 md:p-4 text-xs md:text-sm text-slate-100">
+                    {requestsError || 'No live passenger requests available.'}
+                  </div>
+                )}
+              </>
+            ) : null}
           </section>
           ) : null}
 
@@ -337,6 +399,23 @@ export function Home() {
             ) : (
               <div className="glass-subtle rounded-2xl p-3 md:p-5 text-xs md:text-sm text-slate-100">{ridesError || 'No scheduled rides available.'}</div>
             )}
+
+            {isDriver ? (
+              <>
+                <h3 className="mt-4 mb-2 text-xs md:text-sm text-sky-100">Scheduled Passenger Requests</h3>
+                {driverScheduledRequests.length > 0 ? (
+                  <div className="space-y-2">
+                    {driverScheduledRequests.map((request) => (
+                      <DriverRequestCard key={request._id} request={request} onOpen={() => navigate(`/requests/${request._id}`)} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="glass-subtle rounded-2xl p-3 md:p-4 text-xs md:text-sm text-slate-100">
+                    {requestsError || 'No scheduled passenger requests available.'}
+                  </div>
+                )}
+              </>
+            ) : null}
           </section>
           ) : null}
         </div>
@@ -349,5 +428,22 @@ export function Home() {
         </button>
       </div>
     </div>
+  );
+}
+
+function DriverRequestCard({ request, onOpen }: { request: RideRequest; onOpen: () => void }) {
+  const requestDate = new Date(request.dateTime);
+  const dateText = Number.isNaN(requestDate.getTime()) ? request.dateTime : requestDate.toLocaleString();
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="glass-subtle w-full rounded-2xl border border-white/20 p-3 text-left"
+    >
+      <div className="text-sm text-white">{request.fromCity} → {request.toCity}</div>
+      <div className="mt-1 text-xs text-slate-100">{dateText}</div>
+      <div className="mt-1 text-xs text-slate-100">Seats needed: {request.seatsNeeded}</div>
+    </button>
   );
 }

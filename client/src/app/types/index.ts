@@ -297,6 +297,7 @@ export interface MyRidesResponse {
   scheduledRides: Ride[];
   expiredRides?: Ride[];
   completedRides: Ride[];
+  cancelledRides?: Ride[];
   rides: Ride[];
 }
 

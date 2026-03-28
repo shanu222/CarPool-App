@@ -8,7 +8,7 @@ import type { Booking, MatchedTrip, MyRidesResponse, Ride, RideRequest } from '.
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
-type MyRidesTab = 'live' | 'scheduled' | 'matched' | 'expired' | 'completed';
+type MyRidesTab = 'live' | 'scheduled' | 'matched' | 'expired' | 'cancelled' | 'completed';
 
 export function MyTrips() {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ export function MyTrips() {
   const [driverLiveRides, setDriverLiveRides] = useState<Ride[]>([]);
   const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
   const [driverExpiredRides, setDriverExpiredRides] = useState<Ride[]>([]);
+  const [driverCancelledRides, setDriverCancelledRides] = useState<Ride[]>([]);
   const [driverCompletedRides, setDriverCompletedRides] = useState<Ride[]>([]);
   const [matchedTrips, setMatchedTrips] = useState<MatchedTrip[]>([]);
   const [tab, setTab] = useState<MyRidesTab>('live');
@@ -45,6 +46,7 @@ export function MyTrips() {
         setDriverLiveRides([]);
         setDriverScheduledRides([]);
         setDriverExpiredRides([]);
+        setDriverCancelledRides([]);
         setDriverCompletedRides([]);
       }
 
@@ -56,6 +58,7 @@ export function MyTrips() {
         setDriverLiveRides(response.data.liveRides || response.data.ongoingRides || []);
         setDriverScheduledRides(response.data.scheduledRides || []);
         setDriverExpiredRides(response.data.expiredRides || []);
+        setDriverCancelledRides(response.data.cancelledRides || []);
         setDriverCompletedRides(response.data.completedRides || []);
         setMatchedTrips(matchedResponse.data || []);
         setBookings([]);
@@ -147,6 +150,7 @@ export function MyTrips() {
   const passengerCompletedBookings = bookings.filter((trip) => {
     return trip.status === 'completed' || trip.ride?.status === 'completed';
   });
+  const passengerCancelledBookings = bookings.filter((trip) => trip.status === 'cancelled' || trip.ride?.status === 'cancelled');
   const passengerExpiredBookings = bookings.filter((trip) => trip.ride?.status === 'expired');
 
   const passengerLiveRequests = requests.filter(
@@ -156,6 +160,7 @@ export function MyTrips() {
     (item) => item.timeClass === 'scheduled' && !matchedRideIds.has(String(item.matchedRideId || ''))
   );
   const passengerCompletedRequests = requests.filter((item) => item.timeClass === 'completed' || item.status === 'completed');
+  const passengerCancelledRequests = requests.filter((item) => String(item.status || '').toLowerCase() === 'cancelled');
   const passengerExpiredRequests = requests.filter((item) => item.timeClass === 'expired' || item.status === 'expired');
 
   const activePassengerTrips =
@@ -167,6 +172,8 @@ export function MyTrips() {
       ? []
       : tab === 'expired'
       ? passengerExpiredBookings
+      : tab === 'cancelled'
+      ? passengerCancelledBookings
       : passengerCompletedBookings;
   const activePassengerRequests =
     tab === 'live'
@@ -177,6 +184,8 @@ export function MyTrips() {
       ? []
       : tab === 'expired'
       ? passengerExpiredRequests
+      : tab === 'cancelled'
+      ? passengerCancelledRequests
       : passengerCompletedRequests;
   const activeMatchedTrips = tab === 'matched' ? matchedTrips.filter((item) => item.status === 'approved') : [];
   const activeDriverTrips =
@@ -188,6 +197,8 @@ export function MyTrips() {
       ? []
       : tab === 'expired'
       ? driverExpiredRides
+      : tab === 'cancelled'
+      ? driverCancelledRides
       : driverCompletedRides;
 
   return (
@@ -219,6 +230,13 @@ export function MyTrips() {
               className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'completed' ? 'active' : ''}`}
             >
               Completed
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('cancelled')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'cancelled' ? 'active' : ''}`}
+            >
+              Cancelled
             </button>
             <button
               type="button"
@@ -320,8 +338,8 @@ export function MyTrips() {
 
         {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 && activeMatchedTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Ride expired. No match found. Please reschedule.' : 'Your ride history will appear here after completion.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : tab === 'cancelled' ? 'No cancelled rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Ride expired. No match found. Please reschedule.' : tab === 'cancelled' ? 'Cancelled rides appear here.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
@@ -329,8 +347,8 @@ export function MyTrips() {
 
         {!loading && showDriverView && activeDriverTrips.length === 0 && activeMatchedTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Ride expired. No match found. Please reschedule.' : 'Completed rides appear here as history.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'matched' ? 'No matched rides' : tab === 'expired' ? 'No expired rides' : tab === 'cancelled' ? 'No cancelled rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'matched' ? 'Once both users approve, rides move to this tab.' : tab === 'expired' ? 'Ride expired. No match found. Please reschedule.' : tab === 'cancelled' ? 'Cancelled rides appear here.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -400,6 +418,8 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm, onReschedule }
       : trip.status === 'completed'
       ? 'bg-slate-200 text-slate-700'
       : trip.ride?.status === 'expired'
+      ? 'bg-red-100 text-red-700'
+      : trip.status === 'cancelled' || trip.ride?.status === 'cancelled'
       ? 'bg-red-100 text-red-700'
       : 'bg-red-100 text-red-600';
 

@@ -646,7 +646,6 @@ export const getNearbyRides = async (req, res, next) => {
     }
 
     const rides = await Ride.find({
-      driver: { $ne: req.user._id },
       status: { $in: ["scheduled", "nearby", "live"] },
       "fromCoordinates.lat": { $exists: true },
       "fromCoordinates.lng": { $exists: true },
@@ -714,6 +713,7 @@ export const getMyRides = async (req, res, next) => {
     const scheduledRides = normalizedRides.filter((ride) => ride.status === "scheduled");
     const expiredRides = normalizedRides.filter((ride) => ride.status === "expired");
     const completedRides = normalizedRides.filter((ride) => ride.status === "completed");
+    const cancelledRides = normalizedRides.filter((ride) => ride.status === "cancelled");
 
     return res.json({
       liveRides,
@@ -722,6 +722,7 @@ export const getMyRides = async (req, res, next) => {
       scheduledRides,
       expiredRides,
       completedRides,
+      cancelledRides,
       rides: normalizedRides,
     });
   } catch (error) {
