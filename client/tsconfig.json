@@ -8,8 +8,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "strict": false,
-    "allowSyntheticDefaultImports": true,
-    "types": ["vite/client"]
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src"]
 }
