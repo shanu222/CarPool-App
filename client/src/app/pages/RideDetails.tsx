@@ -9,11 +9,13 @@ import { useAuth } from '../context/AuthContext';
 import { LiveRideMap } from '../components/LiveRideMap';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
+import { startRideChatAccess } from '../lib/chatAccess';
+import { toast } from 'sonner';
 
 export function RideDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, syncAccessSummary } = useAuth();
   const [selectedSeats, setSelectedSeats] = useState(1);
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,23 @@ export function RideDetails() {
   const canRequestBooking = ride.availableSeats > 0 && ['scheduled', 'ongoing'].includes(ride.status || 'scheduled');
   const interactionLocked = !interactionUnlocked;
 
+  const openChat = async () => {
+    try {
+      const response = await startRideChatAccess(ride._id);
+
+      if (!response.ok && response.insufficientTokens) {
+        syncAccessSummary(response.payload);
+        setShowUnlockModal(true);
+        return;
+      }
+
+      syncAccessSummary(response.payload);
+      navigate(`/chat/${ride._id}`);
+    } catch (requestError: any) {
+      toast.error(requestError?.response?.data?.message || 'Could not open chat');
+    }
+  };
+
   return (
     <div className="relative min-h-screen bg-transparent pb-28">
       {/* Header */}
@@ -156,12 +175,7 @@ export function RideDetails() {
             </div>
             <button
               onClick={() => {
-                if (interactionLocked) {
-                  setShowUnlockModal(true);
-                  return;
-                }
-
-                navigate(`/chat/${ride._id}`);
+                openChat();
               }}
               className="p-3 bg-white/20 text-white rounded-xl"
             >

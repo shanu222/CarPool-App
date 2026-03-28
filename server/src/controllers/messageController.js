@@ -5,13 +5,15 @@ import { sendPushNotification } from "../services/pushService.js";
 import { User } from "../models/User.js";
 import { Booking } from "../models/Booking.js";
 import { Match } from "../models/Match.js";
+import { ChatAccess } from "../models/ChatAccess.js";
 import { getIo } from "../socket/io.js";
 import { isUserOnline } from "../socket/io.js";
 import { createUserNotification } from "../services/notificationService.js";
-import { reserveActionCredit } from "../services/tokenAccessService.js";
 
 const RIDE_AUTO_COMPLETE_HOURS = Number(process.env.RIDE_AUTO_COMPLETE_HOURS || 6);
 const FREE_CHAT_MESSAGE_LIMIT = 5;
+const CHAT_OPEN_TOKEN_COST = 2;
+const TOKEN_RATE_PER_PKR = 2;
 const PHONE_REGEX = /(\+?\d[\d\s\-()]{7,}\d)/;
 const WHATSAPP_LINK_REGEX = /(wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/)/i;
 
@@ -136,35 +138,88 @@ const getApprovedMatchForUser = async (rideId, userId) => {
   });
 };
 
-const ensureMatchedChatOpenAccess = async ({ match, user }) => {
-  if (!match || user?.role === "admin") {
-    return { ok: true };
+const normalizeCount = (value) => Math.max(0, Number(value || 0));
+
+const buildInsufficientTokenPayload = (userDoc) => ({
+  error: "INSUFFICIENT_TOKENS",
+  message: "Insufficient tokens. Please recharge.",
+  requiresPayment: true,
+  redirectTo: "/payment-methods",
+  tokenInfo: {
+    tokenRate: TOKEN_RATE_PER_PKR,
+    costPerAction: CHAT_OPEN_TOKEN_COST,
+  },
+  tokensLeft: normalizeCount(userDoc?.tokens),
+  tokensSpent: normalizeCount(userDoc?.tokensSpent),
+});
+
+const ensureChatOpenAccess = async ({ user, rideId }) => {
+  if (user?.role === "admin") {
+    return { ok: true, alreadyUnlocked: true };
   }
 
-  const charged = (match.chatAccessChargedUsers || []).some((item) => String(item) === String(user._id));
-  if (charged) {
-    return { ok: true };
+  const existingAccess = await ChatAccess.findOne({
+    userId: user._id,
+    rideId,
+    unlocked: true,
+  }).select("_id");
+
+  if (existingAccess) {
+    return { ok: true, alreadyUnlocked: true };
   }
 
-  const reserved = await reserveActionCredit({ userId: user._id, action: "chat" });
+  const chargedUser = await User.findOneAndUpdate(
+    {
+      _id: user._id,
+      tokens: { $gte: CHAT_OPEN_TOKEN_COST },
+    },
+    {
+      $inc: {
+        tokens: -CHAT_OPEN_TOKEN_COST,
+        tokenBalance: -CHAT_OPEN_TOKEN_COST,
+        tokensSpent: CHAT_OPEN_TOKEN_COST,
+      },
+    },
+    {
+      new: true,
+    }
+  ).select("_id tokens tokenBalance tokensSpent");
 
-  if (!reserved?.reserved) {
+  if (!chargedUser) {
+    const latestUser = await User.findById(user._id).select("tokens tokensSpent");
     return {
       ok: false,
-      message: "Insufficient tokens. Please recharge.",
-      requiresPayment: true,
-      redirectTo: "/payment-methods",
-      tokenInfo: {
-        tokenRate: 2,
-        costPerAction: 2,
-      },
+      payload: buildInsufficientTokenPayload(latestUser),
     };
   }
 
-  match.chatAccessChargedUsers = [...(match.chatAccessChargedUsers || []), user._id];
-  await match.save();
+  try {
+    await ChatAccess.create({
+      userId: user._id,
+      rideId,
+      unlocked: true,
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      await User.findByIdAndUpdate(user._id, {
+        $inc: {
+          tokens: CHAT_OPEN_TOKEN_COST,
+          tokenBalance: CHAT_OPEN_TOKEN_COST,
+          tokensSpent: -CHAT_OPEN_TOKEN_COST,
+        },
+      });
+      return { ok: true, alreadyUnlocked: true };
+    }
 
-  return { ok: true };
+    throw error;
+  }
+
+  return {
+    ok: true,
+    alreadyUnlocked: false,
+    tokensLeft: normalizeCount(chargedUser.tokens),
+    tokensSpent: normalizeCount(chargedUser.tokensSpent),
+  };
 };
 
 const hasInteractionAccess = async (userId, rideId, role) => {
@@ -197,37 +252,77 @@ const getFreeMessageUsage = async ({ rideId, userId }) => {
   };
 };
 
+const validateChatContext = async ({ rideId, user }) => {
+  const ride = await Ride.findById(rideId).select("driver status dateTime startTime");
+
+  if (!ride) {
+    return { errorStatus: 404, errorPayload: { message: "Ride not found" } };
+  }
+
+  const approvedMatch = await getApprovedMatchForUser(rideId, user._id);
+  const isMatchedRide = String(ride.status) === "matched";
+
+  if (isMatchedRide && !approvedMatch && user?.role !== "admin") {
+    return {
+      errorStatus: 403,
+      errorPayload: { message: "Chat is available only after both users approve the match." },
+    };
+  }
+
+  const currentStatus = await resolveRideStatusForChat(ride);
+
+  if (!isMatchedRide && currentStatus !== "live") {
+    return { errorStatus: 403, errorPayload: { message: "Chat is only available for live rides." } };
+  }
+
+  const participant = await isRideParticipant(ride, user._id);
+  if (!participant && user?.role !== "admin") {
+    return { errorStatus: 403, errorPayload: { message: "Only ride participants can access chat" } };
+  }
+
+  return {
+    ride,
+    isMatchedRide,
+  };
+};
+
+export const startRideChatAccess = async (req, res, next) => {
+  try {
+    const { rideId } = req.params;
+
+    const context = await validateChatContext({ rideId, user: req.user });
+    if (context?.errorStatus) {
+      return res.status(context.errorStatus).json(context.errorPayload);
+    }
+
+    const access = await ensureChatOpenAccess({ user: req.user, rideId });
+    if (!access.ok) {
+      return res.status(403).json(access.payload);
+    }
+
+    return res.json({
+      ok: true,
+      unlocked: true,
+      alreadyUnlocked: access.alreadyUnlocked,
+      tokensLeft: normalizeCount(access.tokensLeft ?? req.user?.tokens),
+      tokensSpent: normalizeCount(access.tokensSpent ?? req.user?.tokensSpent),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const getRideMessages = async (req, res, next) => {
   try {
     const { rideId } = req.params;
-    const ride = await Ride.findById(rideId).select("driver status dateTime startTime");
-
-    if (!ride) {
-      return res.status(404).json({ message: "Ride not found" });
+    const context = await validateChatContext({ rideId, user: req.user });
+    if (context?.errorStatus) {
+      return res.status(context.errorStatus).json(context.errorPayload);
     }
 
-    const approvedMatch = await getApprovedMatchForUser(rideId, req.user._id);
-    const isMatchedRide = String(ride.status) === "matched";
-
-    if (isMatchedRide && !approvedMatch && req.user?.role !== "admin") {
-      return res.status(403).json({ message: "Chat is available only after both users approve the match." });
-    }
-
-    const access = await ensureMatchedChatOpenAccess({ match: approvedMatch, user: req.user });
+    const access = await ensureChatOpenAccess({ user: req.user, rideId });
     if (!access.ok) {
-      return res.status(403).json(access);
-    }
-
-    const currentStatus = await resolveRideStatusForChat(ride);
-
-    if (!isMatchedRide && currentStatus !== "live") {
-      return res.status(403).json({ message: "Chat is only available for live rides." });
-    }
-
-    const participant = await isRideParticipant(ride, req.user._id);
-
-    if (!participant && req.user?.role !== "admin") {
-      return res.status(403).json({ message: "Only ride participants can access chat" });
+      return res.status(403).json(access.payload);
     }
 
     const unlocked = await hasInteractionAccess(req.user._id, rideId, req.user?.role);

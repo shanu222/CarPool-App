@@ -75,10 +75,14 @@ export function Chat() {
         }
         await api.patch(`/api/messages/${id}/seen`);
       } catch (requestError: any) {
+        const errorCode = requestError?.response?.data?.error;
         const apiMessage = requestError?.response?.data?.message || 'Ride not found';
         if (apiMessage === 'User blocked') {
           setIsConversationBlocked(true);
           setMessages([]);
+        }
+        if (errorCode === 'INSUFFICIENT_TOKENS') {
+          setShowUnlockModal(true);
         }
         if (String(apiMessage).toLowerCase().includes('payment')) {
           setShowUnlockModal(true);
@@ -519,6 +523,10 @@ export function Chat() {
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white px-3 py-3 md:px-4 md:py-4">
+        <div className="mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          Each chat costs 2 tokens.
+        </div>
+
         <div className="flex items-center gap-2">
           <input
             type="text"

@@ -6,15 +6,17 @@ import { useAuth } from '../context/AuthContext';
 import type { RideRequest } from '../types';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
+import { startRideChatAccess } from '../lib/chatAccess';
 import { toast } from 'sonner';
 
 export function RideRequestDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, syncAccessSummary } = useAuth();
   const [request, setRequest] = useState<RideRequest | null>(null);
   const [error, setError] = useState('');
   const [showUnlock, setShowUnlock] = useState(false);
+  const [unlockRideId, setUnlockRideId] = useState<string>('');
 
   useEffect(() => {
     if (!id) {
@@ -41,6 +43,7 @@ export function RideRequestDetails() {
     }
 
     if (!user?.isVerified) {
+      setUnlockRideId(String(request?.matchedRideId || ''));
       setShowUnlock(true);
       return;
     }
@@ -50,6 +53,16 @@ export function RideRequestDetails() {
       const rideId = response?.data?.ride?._id;
       toast.success('Request matched successfully');
       if (rideId) {
+        const chatAccess = await startRideChatAccess(rideId);
+
+        if (!chatAccess.ok && chatAccess.insufficientTokens) {
+          syncAccessSummary(chatAccess.payload);
+          setUnlockRideId(String(rideId));
+          setShowUnlock(true);
+          return;
+        }
+
+        syncAccessSummary(chatAccess.payload);
         navigate(`/chat/${rideId}`);
       } else {
         navigate('/trips');
@@ -116,7 +129,14 @@ export function RideRequestDetails() {
         </button>
       </div>
 
-      <UnlockInteractionModal open={showUnlock} rideId={request.matchedRideId} onClose={() => setShowUnlock(false)} />
+      <UnlockInteractionModal
+        open={showUnlock}
+        rideId={unlockRideId || request.matchedRideId}
+        onClose={() => {
+          setShowUnlock(false);
+          setUnlockRideId('');
+        }}
+      />
     </div>
   );
 }

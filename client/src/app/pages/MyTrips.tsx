@@ -6,13 +6,15 @@ import { api } from '../lib/api';
 import { handleAvatarError, toAvatarUrl } from '../lib/avatar';
 import type { Booking, MatchedTrip, MyRidesResponse, Ride, RideRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { startRideChatAccess } from '../lib/chatAccess';
+import { UnlockInteractionModal } from '../components/UnlockInteractionModal';
 import { toast } from 'sonner';
 
 type MyRidesTab = 'live' | 'scheduled' | 'matched' | 'expired' | 'cancelled' | 'completed';
 
 export function MyTrips() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, syncAccessSummary } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [requests, setRequests] = useState<RideRequest[]>([]);
   const [driverLiveRides, setDriverLiveRides] = useState<Ride[]>([]);
@@ -23,6 +25,7 @@ export function MyTrips() {
   const [matchedTrips, setMatchedTrips] = useState<MatchedTrip[]>([]);
   const [tab, setTab] = useState<MyRidesTab>('live');
   const [loading, setLoading] = useState(true);
+  const [unlockRideId, setUnlockRideId] = useState<string | null>(null);
 
   const role = user?.role;
 
@@ -127,6 +130,30 @@ export function MyTrips() {
       await loadTrips();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Could not confirm ride');
+    }
+  };
+
+  const handleOpenChat = async (rideId?: string | null) => {
+    const normalizedRideId = String(rideId || '').trim();
+
+    if (!normalizedRideId) {
+      toast.error('Ride is required to open chat');
+      return;
+    }
+
+    try {
+      const response = await startRideChatAccess(normalizedRideId);
+
+      if (!response.ok && response.insufficientTokens) {
+        syncAccessSummary(response.payload);
+        setUnlockRideId(normalizedRideId);
+        return;
+      }
+
+      syncAccessSummary(response.payload);
+      navigate(`/chat/${normalizedRideId}`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Could not open chat');
     }
   };
 
@@ -265,6 +292,7 @@ export function MyTrips() {
                 key={trip._id}
                 trip={trip}
                 canUseChat={true}
+                onOpenChat={handleOpenChat}
                 onRate={() => submitReview(trip)}
                 onConfirm={() => confirmRide(trip)}
                 onReschedule={() =>
@@ -308,7 +336,7 @@ export function MyTrips() {
                 key={match._id}
                 match={match}
                 onOpenRide={() => navigate(`/ride/${match.rideId}`)}
-                onOpenChat={() => navigate(`/chat/${match.rideId}`)}
+                onOpenChat={() => handleOpenChat(match.rideId)}
               />
             ))
           : null}
@@ -364,6 +392,12 @@ export function MyTrips() {
           </div>
         ) : null}
       </div>
+
+      <UnlockInteractionModal
+        open={Boolean(unlockRideId)}
+        rideId={unlockRideId || undefined}
+        onClose={() => setUnlockRideId(null)}
+      />
     </div>
   );
 }
@@ -393,14 +427,14 @@ function EmptyState({ title, subtitle, buttonText, onClick }: EmptyStateProps) {
 interface TripCardProps {
   trip: Booking;
   canUseChat: boolean;
+  onOpenChat: (rideId?: string | null) => void;
   onClick: () => void;
   onRate: () => void;
   onConfirm: () => void;
   onReschedule: () => void;
 }
 
-function TripCard({ trip, canUseChat, onClick, onRate, onConfirm, onReschedule }: TripCardProps) {
-  const navigate = useNavigate();
+function TripCard({ trip, canUseChat, onOpenChat, onClick, onRate, onConfirm, onReschedule }: TripCardProps) {
   const { ride } = trip;
 
   const canChat = canUseChat && ride?.status === 'live' && ['accepted', 'booked'].includes(trip.status);
@@ -437,7 +471,7 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm, onReschedule }
         <button
           onClick={(e) => {
             e.stopPropagation();
-            navigate(`/chat/${ride._id}`);
+            onOpenChat(ride?._id);
           }}
           disabled={!canChat}
           className="p-2 bg-white/20 rounded-xl text-white disabled:opacity-50"
