@@ -274,6 +274,165 @@ const extractCnicDataWithGemini = async ({ frontBuffer, backBuffer }) => {
   };
 };
 
+const extractLicenseDataWithOpenAI = async ({ licenseBuffer }) => {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) {
+    return null;
+  }
+
+  const model = getOpenAiModel();
+  const endpoint = "https://api.openai.com/v1/chat/completions";
+
+  const prompt = [
+    "Extract driving license fields from this license image.",
+    "Return JSON only with keys: licenseNumber, licenseExpiry.",
+    "Rules:",
+    "- licenseNumber: return the main driving license number only",
+    "- licenseExpiry: normalize to YYYY-MM-DD if visible, otherwise empty string",
+    "- if uncertain, return empty string for that key",
+  ].join("\n");
+
+  const requestBody = {
+    model,
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${licenseBuffer.toString("base64")}`,
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  let response;
+  try {
+    response = await withTimeout(
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      }),
+      OPENAI_TIMEOUT_MS
+    );
+  } catch {
+    return null;
+  }
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+
+  const content = payload?.choices?.[0]?.message?.content || "";
+  const parsed = parseFirstJsonObject(content);
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  return {
+    licenseNumber: normalizeLicenseNumber(parsed.licenseNumber || ""),
+    licenseExpiry: normalizeDob(parsed.licenseExpiry || ""),
+  };
+};
+
+const extractLicenseDataWithGemini = async ({ licenseBuffer }) => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    return null;
+  }
+
+  const model = getGeminiModel();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const prompt = [
+    "Extract driving license fields from this license image.",
+    "Return JSON only with keys: licenseNumber, licenseExpiry.",
+    "Rules:",
+    "- licenseNumber: return the main driving license number only",
+    "- licenseExpiry: normalize to YYYY-MM-DD if visible, otherwise empty string",
+    "- if uncertain, return empty string for that key",
+  ].join("\n");
+
+  const requestBody = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: licenseBuffer.toString("base64"),
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      topP: 0.1,
+      maxOutputTokens: 256,
+    },
+  };
+
+  let response;
+  try {
+    response = await withTimeout(
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      }),
+      GEMINI_TIMEOUT_MS
+    );
+  } catch {
+    return null;
+  }
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+
+  const textParts = payload?.candidates?.[0]?.content?.parts || [];
+  const combinedText = textParts.map((part) => String(part?.text || "")).join("\n");
+  const parsed = parseFirstJsonObject(combinedText);
+
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  return {
+    licenseNumber: normalizeLicenseNumber(parsed.licenseNumber || ""),
+    licenseExpiry: normalizeDob(parsed.licenseExpiry || ""),
+  };
+};
+
 const getOcrVariants = async (buffer) => {
   const variants = [buffer];
 
@@ -668,7 +827,35 @@ export const extractLicenseNumber = async (licenseImagePath) => {
 };
 
 export const extractLicenseData = async (licenseImagePath) => {
-  const text = await extractText(licenseImagePath);
+  const buffer = await fs.readFile(licenseImagePath);
+
+  const openAiResult = await extractLicenseDataWithOpenAI({ licenseBuffer: buffer });
+  if (openAiResult?.licenseNumber) {
+    return openAiResult;
+  }
+
+  const geminiResult = await extractLicenseDataWithGemini({ licenseBuffer: buffer });
+  if (geminiResult?.licenseNumber) {
+    return geminiResult;
+  }
+
+  const candidates = await extractTextCandidatesFromBuffer(buffer);
+  const parsedCandidates = candidates
+    .map((candidateText) => ({
+      parsed: {
+        licenseNumber: parseLicenseText(candidateText),
+        licenseExpiry: parseLicenseExpiry(candidateText),
+      },
+      score: candidateText.length,
+    }))
+    .filter((entry) => entry.parsed.licenseNumber)
+    .sort((left, right) => right.score - left.score);
+
+  if (parsedCandidates.length > 0) {
+    return parsedCandidates[0].parsed;
+  }
+
+  const text = candidates[0] || "";
   return {
     licenseNumber: parseLicenseText(text),
     licenseExpiry: parseLicenseExpiry(text),
