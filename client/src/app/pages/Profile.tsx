@@ -65,6 +65,15 @@ export function Profile() {
     return <div className="p-6">No user data available</div>;
   }
 
+  const isDriver = user.role === "driver";
+  const isPassenger = user.role === "passenger";
+  const roleLabel = isDriver ? "Driver" : isPassenger ? "Passenger" : "";
+  const roleBadgeClass = isDriver
+    ? "bg-green-500/20 text-green-100 border border-green-300/40"
+    : isPassenger
+      ? "bg-blue-500/20 text-blue-100 border border-blue-300/40"
+      : "bg-white/15 text-slate-100 border border-white/20";
+
   const saveProfile = async () => {
     try {
       setSavingProfile(true);
@@ -214,6 +223,13 @@ export function Profile() {
             Logout
           </Button>
         </div>
+        {roleLabel ? (
+          <div className="mb-2">
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs md:text-sm font-medium ${roleBadgeClass}`}>
+              {roleLabel}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="px-3 py-4 md:px-5">

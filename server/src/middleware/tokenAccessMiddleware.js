@@ -7,6 +7,7 @@ const normalizeCount = (value) => Math.max(0, Number(value || 0));
 
 const buildAccessSummary = (user) => ({
   tokensLeft: normalizeCount(user?.tokens),
+  tokensSpent: normalizeCount(user?.tokensSpent),
   freeChatsLeft: normalizeCount(user?.freeChats ?? user?.freeChatsRemaining),
   freePostsLeft: normalizeCount(user?.freePosts ?? user?.freePostsRemaining),
   freeRequestsLeft: normalizeCount(user?.freeRequests ?? user?.freeRequestsRemaining),
@@ -30,28 +31,13 @@ const attachAccessSummaryOnResponse = (req, res) => {
 };
 
 const spendAccessCredit = async ({ userId, freeField }) => {
-  const freeUpdate = await User.findOneAndUpdate(
-    {
-      _id: userId,
-      [freeField]: { $gt: 0 },
-    },
-    {
-      $inc: { [freeField]: -1 },
-    },
-    { new: true }
-  );
-
-  if (freeUpdate) {
-    return { ok: true, user: freeUpdate };
-  }
-
   const tokenUpdate = await User.findOneAndUpdate(
     {
       _id: userId,
       tokens: { $gte: ACTION_COST },
     },
     {
-      $inc: { tokens: -ACTION_COST, tokenBalance: -ACTION_COST },
+      $inc: { tokens: -ACTION_COST, tokenBalance: -ACTION_COST, tokensSpent: ACTION_COST },
     },
     { new: true }
   );
@@ -78,7 +64,7 @@ const createAccessMiddleware = (freeField) => async (req, res, next) => {
 
       if (normalizeCount(spent.user?.tokens) > 0 && normalizeCount(spent.user?.tokens) < ACTION_COST) {
         return res.status(403).json({
-          message: "Insufficient tokens",
+          message: "Insufficient tokens. Please recharge.",
           requiresPayment: true,
           redirectTo: "/payment-methods",
           tokenInfo: {
@@ -90,7 +76,7 @@ const createAccessMiddleware = (freeField) => async (req, res, next) => {
       }
 
       return res.status(403).json({
-        message: "Free limit finished. Please purchase tokens.",
+        message: "Insufficient tokens. Please recharge.",
         requiresPayment: true,
         redirectTo: "/payment-methods",
         tokenInfo: {

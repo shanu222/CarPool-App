@@ -13,6 +13,8 @@ export interface User {
   rating: number;
   ratingCount?: number;
   tokenBalance?: number;
+  tokens?: number;
+  tokensSpent?: number;
   isVerified?: boolean;
   isCnicExpired?: boolean;
   isLicenseExpired?: boolean;

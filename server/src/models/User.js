@@ -208,6 +208,11 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    tokensSpent: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     freeRequests: {
       type: Number,
       default: 5,

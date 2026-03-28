@@ -3,8 +3,6 @@ import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
 import { checkExpiredRides } from "../services/rideExpiryService.js";
 
-const NEARBY_WINDOW_HOURS = 24;
-
 const classifyRequestStatus = (dateTime, baseStatus) => {
   if (baseStatus === "expired") {
     return "expired";
@@ -22,11 +20,6 @@ const classifyRequestStatus = (dateTime, baseStatus) => {
   const now = new Date();
   if (start <= now) {
     return "live";
-  }
-
-  const nearbyUntil = new Date(now.getTime() + NEARBY_WINDOW_HOURS * 60 * 60 * 1000);
-  if (start <= nearbyUntil) {
-    return "nearby";
   }
 
   return "scheduled";

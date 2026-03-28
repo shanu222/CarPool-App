@@ -11,6 +11,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   setAuth: (nextToken: string, nextUser: User) => void;
   setCurrentUser: (nextUser: User) => void;
+  syncAccessSummary: (payload: any) => void;
   logout: () => void;
 }
 
@@ -30,6 +31,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const setCurrentUser = (nextUser: User) => {
     setStoredUser(nextUser);
     setUser(nextUser);
+  };
+
+  const syncAccessSummary = (payload: any) => {
+    if (!payload || typeof payload !== "object") {
+      return;
+    }
+
+    setUser((previousUser) => {
+      if (!previousUser) {
+        return previousUser;
+      }
+
+      const hasTokensLeft = Number.isFinite(Number(payload.tokensLeft));
+      const hasTokensSpent = Number.isFinite(Number(payload.tokensSpent));
+
+      if (!hasTokensLeft && !hasTokensSpent) {
+        return previousUser;
+      }
+
+      const nextUser = {
+        ...previousUser,
+        ...(hasTokensLeft
+          ? {
+              tokens: Number(payload.tokensLeft),
+              tokenBalance: Number(payload.tokensLeft),
+            }
+          : {}),
+        ...(hasTokensSpent
+          ? {
+              tokensSpent: Number(payload.tokensSpent),
+            }
+          : {}),
+      };
+
+      setStoredUser(nextUser);
+      return nextUser;
+    });
   };
 
   useEffect(() => {
@@ -73,6 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isAuthenticated: Boolean(user && tokenState),
       setAuth,
       setCurrentUser,
+      syncAccessSummary,
       logout,
     }),
     [user, tokenState]

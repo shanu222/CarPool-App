@@ -20,7 +20,7 @@ const getMessageTime = (msg: Message) => msg.createdAt || msg.timestamp || new D
 export function Chat() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, syncAccessSummary } = useAuth();
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -253,25 +253,17 @@ export function Chat() {
       setFreeMessagesRemaining((prev) => Math.max(0, prev - 1));
     }
 
-    const socket = getSocket();
-
     try {
-      if (socket?.connected) {
-        socket.emit('send_message', {
-          rideId: id,
-          text,
-          clientMessageId,
-        });
-      } else {
-        const response = await api.post<Message>('/api/messages', {
-          rideId: id,
-          text,
-        });
+      const response = await api.post<Message & { tokensLeft?: number; tokensSpent?: number }>('/api/messages', {
+        rideId: id,
+        text,
+      });
 
-        setMessages((prev) => prev.map((item) => (item.clientMessageId === clientMessageId ? response.data : item)));
-      }
+      syncAccessSummary(response.data);
+      setMessages((prev) => prev.map((item) => (item.clientMessageId === clientMessageId ? response.data : item)));
     } catch (requestError: any) {
       const apiMessage = requestError?.response?.data?.message || 'Could not send message';
+      syncAccessSummary(requestError?.response?.data);
       if (!interactionUnlocked) {
         setFreeMessagesRemaining((prev) => Math.min(5, prev + 1));
       }

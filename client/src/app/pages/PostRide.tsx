@@ -13,7 +13,7 @@ import { pakistanCities } from '../../data/pakistanCities';
 export function PostRide() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, syncAccessSummary } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
@@ -74,7 +74,7 @@ export function PostRide() {
     try {
       setLoading(true);
       setError('');
-      await api.post('/api/rides/create', {
+      const response = await api.post('/api/rides/create', {
         fromCity: formData.fromCity,
         toCity: formData.toCity,
         date: formData.date,
@@ -83,11 +83,14 @@ export function PostRide() {
         totalSeats: Number(formData.totalSeats),
       });
 
+      syncAccessSummary(response.data);
+
       window.dispatchEvent(new CustomEvent('trips:refresh'));
       toast.success('Ride published successfully');
       navigate('/trips');
     } catch (requestError: any) {
       const responseData = requestError?.response?.data || {};
+      syncAccessSummary(responseData);
       const message = responseData?.message || responseData?.error || 'Could not publish ride';
 
       setError(message);

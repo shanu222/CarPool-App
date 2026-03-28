@@ -10,7 +10,7 @@ import { pakistanCities } from '../../data/pakistanCities';
 export function PostRequest() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, syncAccessSummary } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
@@ -68,7 +68,7 @@ export function PostRequest() {
           setError('');
           const dateTime = new Date(`${formData.date}T${formData.time}:00`).toISOString();
 
-          await api.post('/api/requests/create', {
+          const response = await api.post('/api/requests/create', {
             fromCity: formData.fromCity,
             toCity: formData.toCity,
             fromCoordinates: {
@@ -83,10 +83,13 @@ export function PostRequest() {
             seatsNeeded: Number(formData.seatsNeeded),
           });
 
+          syncAccessSummary(response.data);
+
           toast.success('Ride request posted');
           navigate('/trips');
         } catch (requestError: any) {
           const responseData = requestError?.response?.data || {};
+          syncAccessSummary(responseData);
           const message = responseData?.message || responseData?.error || 'Could not post request';
           setError(message);
           if (message === 'Only Pakistani cities allowed') {

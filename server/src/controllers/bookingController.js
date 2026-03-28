@@ -36,6 +36,33 @@ const sanitizeDriverForBooking = (booking, includeSensitive) => {
   return plain;
 };
 
+const parseRideDateTime = (date, time) => {
+  const value = new Date(`${date}T${time}:00`);
+  if (Number.isNaN(value.getTime())) {
+    return null;
+  }
+
+  return value;
+};
+
+const getRideStartDateTime = (ride) => {
+  const fromDateTime = new Date(ride?.dateTime || ride?.startTime || 0);
+  if (!Number.isNaN(fromDateTime.getTime())) {
+    return fromDateTime;
+  }
+
+  return parseRideDateTime(ride?.date, ride?.time);
+};
+
+const classifyRideTimeStatus = (ride, now = new Date()) => {
+  const rideStart = getRideStartDateTime(ride);
+  if (!rideStart) {
+    return "scheduled";
+  }
+
+  return now >= rideStart ? "live" : "scheduled";
+};
+
 export const createBooking = async (req, res, next) => {
   try {
     const { rideId, seatsRequested, seatsBooked } = req.body;
@@ -244,12 +271,30 @@ export const getMyBookings = async (req, res, next) => {
       })
       .sort({ createdAt: -1 });
 
-    const sanitized = bookings.map((booking) =>
-      sanitizeDriverForBooking(
+    const now = new Date();
+    const sanitized = bookings.map((booking) => {
+      const plainBooking = sanitizeDriverForBooking(
         booking,
         ["accepted", "booked", "ongoing", "completed"].includes(booking.status)
-      )
-    );
+      );
+
+      if (!plainBooking?.ride) {
+        return plainBooking;
+      }
+
+      const currentRideStatus = String(plainBooking.ride.status || "");
+      if (["completed", "cancelled", "expired"].includes(currentRideStatus)) {
+        return plainBooking;
+      }
+
+      return {
+        ...plainBooking,
+        ride: {
+          ...plainBooking.ride,
+          status: classifyRideTimeStatus(plainBooking.ride, now),
+        },
+      };
+    });
 
     return res.json(sanitized);
   } catch (error) {

@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { useEffect } from "react";
 import { api } from "../lib/api";
+import { TokenIndicator } from "./TokenIndicator";
 
 export function ProtectedRoute() {
   const { isAuthenticated, user, setCurrentUser } = useAuth();
@@ -50,5 +51,12 @@ export function ProtectedRoute() {
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <div className="pointer-events-none fixed left-3 top-3 z-40 md:left-4 md:top-4">
+        <TokenIndicator user={user} />
+      </div>
+      <Outlet />
+    </>
+  );
 }

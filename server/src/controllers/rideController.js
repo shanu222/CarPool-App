@@ -42,6 +42,24 @@ const parseRideDateTime = (date, time) => {
   return value;
 };
 
+const getRideStartDateTime = (ride) => {
+  const fromDateTime = new Date(ride?.dateTime || ride?.startTime || 0);
+  if (!Number.isNaN(fromDateTime.getTime())) {
+    return fromDateTime;
+  }
+
+  return parseRideDateTime(ride?.date, ride?.time);
+};
+
+const classifyRideTimeStatus = (ride, now = new Date()) => {
+  const rideStart = getRideStartDateTime(ride);
+  if (!rideStart) {
+    return "scheduled";
+  }
+
+  return now >= rideStart ? "live" : "scheduled";
+};
+
 const deriveStatusFromDateTime = (dateTime, now = new Date()) => {
   if (dateTime <= now) {
     return "live";
@@ -621,10 +639,18 @@ export const getNearbyRides = async (req, res, next) => {
       )
       .sort({ featured: -1, dateTime: 1, createdAt: -1 });
 
-    const allRides = rides.map((ride) => ({
-      ...ride.toObject(),
-      status: ride.status === "nearby" ? "scheduled" : ride.status,
-    }));
+    const now = new Date();
+    const allRides = rides
+      .map((ride) => {
+        const baseRide = ride.toObject();
+        const timeStatus = classifyRideTimeStatus(baseRide, now);
+
+        return {
+          ...baseRide,
+          status: timeStatus,
+        };
+      })
+      .filter((ride) => ["live", "scheduled"].includes(String(ride.status || "")));
 
     const liveRides = prioritizeNormalVisibility(allRides.filter((ride) => ride.status === "live"));
     const scheduledRides = prioritizeNormalVisibility(allRides.filter((ride) => ride.status === "scheduled"));
@@ -650,11 +676,26 @@ export const getMyRides = async (req, res, next) => {
       )
       .sort({ dateTime: 1, createdAt: -1 });
 
-    const liveRides = rides.filter((ride) => ride.status === "live");
-    const nearbyRides = rides.filter((ride) => ride.status === "nearby");
-    const scheduledRides = rides.filter((ride) => ride.status === "scheduled");
-    const expiredRides = rides.filter((ride) => ride.status === "expired");
-    const completedRides = rides.filter((ride) => ride.status === "completed");
+    const now = new Date();
+    const normalizedRides = rides.map((ride) => {
+      const baseRide = ride.toObject();
+      const currentStatus = String(baseRide.status || "");
+
+      if (["completed", "cancelled", "expired"].includes(currentStatus)) {
+        return baseRide;
+      }
+
+      return {
+        ...baseRide,
+        status: classifyRideTimeStatus(baseRide, now),
+      };
+    });
+
+    const liveRides = normalizedRides.filter((ride) => ride.status === "live");
+    const nearbyRides = [];
+    const scheduledRides = normalizedRides.filter((ride) => ride.status === "scheduled");
+    const expiredRides = normalizedRides.filter((ride) => ride.status === "expired");
+    const completedRides = normalizedRides.filter((ride) => ride.status === "completed");
 
     return res.json({
       liveRides,
@@ -663,7 +704,7 @@ export const getMyRides = async (req, res, next) => {
       scheduledRides,
       expiredRides,
       completedRides,
-      rides,
+      rides: normalizedRides,
     });
   } catch (error) {
     return next(error);
