@@ -185,6 +185,9 @@ export function AdminDashboard() {
 
   const passengerUsers = useMemo(() => users.filter((item) => item.role === "passenger"), [users]);
   const driverUsers = useMemo(() => users.filter((item) => item.role === "driver"), [users]);
+  const pendingPayments = useMemo(() => payments.filter((item) => item.status === "pending"), [payments]);
+  const approvedPayments = useMemo(() => payments.filter((item) => item.status === "approved"), [payments]);
+  const rejectedPayments = useMemo(() => payments.filter((item) => item.status === "rejected"), [payments]);
 
   const metrics = useMemo(
     () => [
@@ -666,51 +669,89 @@ export function AdminDashboard() {
 
           {!loading && section === "payments" ? (
             <SectionCard title="Payments Panel" subtitle="Review proofs and approve/reject transactions">
-              <TableWrap>
-                <table className="admin-table min-w-[820px] text-left text-sm text-slate-100">
-                  <thead>
-                    <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
-                      <th className="px-3 py-3">User</th>
-                      <th className="px-3 py-3">Amount</th>
-                      <th className="px-3 py-3">Proof</th>
-                      <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.map((payment) => (
-                      <tr key={payment._id} className="border-b border-white/10">
-                        <td className="px-3 py-3">{payment.userId?.name || "User"}</td>
-                        <td className="px-3 py-3">{payment.currency || "PKR"} {payment.amount}</td>
-                        <td className="px-3 py-3">
-                          {payment.screenshot ? (
-                            <a href={payment.screenshot} target="_blank" rel="noreferrer" className="text-cyan-200 underline">
-                              View proof
-                            </a>
+              <div className="space-y-4">
+                {[
+                  { key: "pending", label: "Pending Payments", rows: pendingPayments, canReview: true },
+                  { key: "approved", label: "Approved Payments", rows: approvedPayments, canReview: false },
+                  { key: "rejected", label: "Rejected Payments", rows: rejectedPayments, canReview: false },
+                ].map((group) => (
+                  <div key={group.key} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-white">{group.label}</h3>
+                      <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-slate-200">{group.rows.length}</span>
+                    </div>
+
+                    <TableWrap>
+                      <table className="admin-table min-w-[980px] text-left text-sm text-slate-100">
+                        <thead>
+                          <tr className="border-b border-white/20 text-xs uppercase tracking-wide text-slate-200">
+                            <th className="px-3 py-3">User</th>
+                            <th className="px-3 py-3">Type</th>
+                            <th className="px-3 py-3">Method</th>
+                            <th className="px-3 py-3">Amount</th>
+                            <th className="px-3 py-3">Submitted</th>
+                            <th className="px-3 py-3">Proof</th>
+                            <th className="px-3 py-3">Status</th>
+                            <th className="px-3 py-3">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.rows.length === 0 ? (
+                            <tr>
+                              <td className="px-3 py-4 text-slate-300" colSpan={8}>
+                                No {group.key} payments
+                              </td>
+                            </tr>
                           ) : (
-                            "-"
+                            group.rows.map((payment) => (
+                              <tr key={payment._id} className="border-b border-white/10 align-top">
+                                <td className="px-3 py-3">{payment.userId?.name || "User"}</td>
+                                <td className="px-3 py-3 capitalize">{String(payment.type || "-").replace(/_/g, " ")}</td>
+                                <td className="px-3 py-3 capitalize">{payment.method || "-"}</td>
+                                <td className="px-3 py-3">{payment.currency || "PKR"} {payment.amount}</td>
+                                <td className="px-3 py-3">{formatDateTime(payment.createdAt)}</td>
+                                <td className="px-3 py-3">
+                                  {payment.screenshot || payment.proofImage ? (
+                                    <a
+                                      href={payment.screenshot || payment.proofImage}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-cyan-200 underline"
+                                    >
+                                      View proof
+                                    </a>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 capitalize">{payment.status}</td>
+                                <td className="px-3 py-3">
+                                  {group.canReview ? (
+                                    <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                                      <ActionButton
+                                        tone="success"
+                                        label="Approve"
+                                        onClick={() => openConfirmation({ kind: "payment-approve", paymentId: payment._id })}
+                                      />
+                                      <ActionButton
+                                        tone="danger"
+                                        label="Reject"
+                                        onClick={() => openConfirmation({ kind: "payment-reject", paymentId: payment._id })}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-300">Reviewed</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
                           )}
-                        </td>
-                        <td className="px-3 py-3">{payment.status}</td>
-                        <td className="px-3 py-3">
-                          <div className="actions flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                            <ActionButton
-                              tone="success"
-                              label="Approve"
-                              onClick={() => openConfirmation({ kind: "payment-approve", paymentId: payment._id })}
-                            />
-                            <ActionButton
-                              tone="danger"
-                              label="Reject"
-                              onClick={() => openConfirmation({ kind: "payment-reject", paymentId: payment._id })}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TableWrap>
+                        </tbody>
+                      </table>
+                    </TableWrap>
+                  </div>
+                ))}
+              </div>
             </SectionCard>
           ) : null}
 

@@ -72,6 +72,12 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    approvedAt: {
+      type: Date,
+    },
+    rejectedAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );

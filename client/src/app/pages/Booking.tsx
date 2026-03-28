@@ -46,9 +46,10 @@ export function Booking() {
     }
 
     api
-      .get<Payment[]>(`/api/payments/my?rideId=${id}`)
+      .get<{ payments?: Payment[] } | Payment[]>(`/api/payments/my?rideId=${id}`)
       .then((response) => {
-        const hasApproved = (response.data || []).some(
+        const paymentRows = Array.isArray(response.data) ? response.data : response.data?.payments || [];
+        const hasApproved = paymentRows.some(
           (payment) => payment.type === 'interaction_unlock' && payment.status === 'approved',
         );
         setInteractionUnlocked(hasApproved);

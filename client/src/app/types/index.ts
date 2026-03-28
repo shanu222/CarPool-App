@@ -209,16 +209,20 @@ export interface Payment {
   _id: string;
   userId: User;
   role?: "passenger" | "driver";
-  type: "interaction_unlock" | "ride_post" | "booking_unlock";
+  type: "interaction_unlock" | "ride_post" | "booking_unlock" | "token_purchase";
   rideId?: Ride;
   distanceKm?: number;
   amount: number;
+  tokensRequested?: number;
   currency?: string;
   method: "easypaisa" | "jazzcash" | "bank";
   screenshot?: string;
+  proofImage?: string;
   status: "pending" | "approved" | "rejected";
   reviewedBy?: Pick<User, "id" | "_id" | "name" | "email">;
   rejectionReason?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
   createdAt: string;
 }
 

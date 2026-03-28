@@ -43,7 +43,7 @@ export const getPaymentQuote = async (req, res, next) => {
 export const submitPaymentProof = async (req, res, next) => {
   try {
     const { method, rideId } = req.body;
-    const amount = Number(req.body?.amount || 0);
+    const requestedAmount = Number(req.body?.amount || 0);
     const type = "interaction_unlock";
     const uploadedFile = req.file || req.files?.paymentProof?.[0] || req.files?.proof?.[0];
     const screenshot = buildFilePath(req, uploadedFile);
@@ -54,21 +54,29 @@ export const submitPaymentProof = async (req, res, next) => {
       return res.status(400).json({ message: "Payment screenshot is required" });
     }
 
-    if (!rideId) {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return res.status(400).json({ message: "Valid amount is required for token purchase" });
-      }
+    if (!method) {
+      return res.status(400).json({ message: "Payment method is required" });
+    }
 
-      const tokensRequested = Math.max(0, Math.floor(amount * 2));
+    if (!["easypaisa", "jazzcash", "bank"].includes(method)) {
+      return res.status(400).json({ message: "Valid payment method is required" });
+    }
+
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return res.status(400).json({ message: "Valid amount is required" });
+    }
+
+    if (!rideId) {
+      const tokensRequested = Math.max(0, Math.floor(requestedAmount * 2));
 
       const payment = await Payment.create({
         userId: req.user._id,
         role: req.user.role,
         type: "token_purchase",
-        amount,
+        amount: requestedAmount,
         tokensRequested,
         currency: PRICING_CURRENCY,
-        method: method || "bank",
+        method,
         screenshot,
         proofImage: screenshot,
         status: "pending",
@@ -85,18 +93,6 @@ export const submitPaymentProof = async (req, res, next) => {
       });
     }
 
-    if (!rideId) {
-      return res.status(400).json({ message: "rideId is required" });
-    }
-
-    if (!method) {
-      return res.status(400).json({ message: "Payment method is required" });
-    }
-
-    if (!["easypaisa", "jazzcash", "bank"].includes(method)) {
-      return res.status(400).json({ message: "Valid payment method is required" });
-    }
-
     if (!["driver", "passenger"].includes(req.user.role)) {
       return res.status(403).json({ message: "Only drivers and passengers can submit interaction payment" });
     }
@@ -106,16 +102,7 @@ export const submitPaymentProof = async (req, res, next) => {
       return res.status(404).json({ message: "Ride not found" });
     }
 
-    const existing = await Payment.findOne({
-      userId: req.user._id,
-      rideId,
-      type,
-      status: { $in: ["pending", "approved"] },
-    }).sort({ createdAt: -1 });
-
-    if (existing) {
-      return res.status(409).json({ message: existing.status === "approved" ? "Interaction already unlocked for this ride" : "Payment review already pending for this ride" });
-    }
+    const interactionAmount = requestedAmount > 0 ? requestedAmount : Number(quote.amount || 0);
 
     const payment = await Payment.create({
       userId: req.user._id,
@@ -123,8 +110,8 @@ export const submitPaymentProof = async (req, res, next) => {
       type,
       rideId,
       distanceKm: quote.distanceKm,
-      amount: quote.amount,
-      tokensRequested: Math.max(0, Math.floor(Number(quote.amount || 0) * 2)),
+      amount: interactionAmount,
+      tokensRequested: Math.max(0, Math.floor(Number(interactionAmount || 0) * 2)),
       currency: quote.currency || PRICING_CURRENCY,
       method,
       screenshot,

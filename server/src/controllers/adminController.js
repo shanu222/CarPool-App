@@ -342,6 +342,8 @@ export const approvePaymentByAdmin = async (req, res, next) => {
     payment.status = status;
     payment.reviewedBy = req.user._id;
     payment.rejectionReason = status === "rejected" ? (rejectionReason || "").trim() : "";
+    payment.approvedAt = status === "approved" ? new Date() : null;
+    payment.rejectedAt = status === "rejected" ? new Date() : null;
     await payment.save();
 
     if (status === "approved") {

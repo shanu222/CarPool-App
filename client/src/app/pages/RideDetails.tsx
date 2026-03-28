@@ -51,11 +51,14 @@ export function RideDetails() {
       try {
         const [quoteResponse, paymentResponse] = await Promise.all([
           api.get<PaymentQuote>(`/api/payments/quote/${id}`),
-          api.get<Payment[]>(`/api/payments/my?rideId=${id}`),
+          api.get<{ payments?: Payment[] } | Payment[]>(`/api/payments/my?rideId=${id}`),
         ]);
 
         setInteractionQuote(quoteResponse.data);
-        const hasApproved = (paymentResponse.data || []).some(
+        const paymentRows = Array.isArray(paymentResponse.data)
+          ? paymentResponse.data
+          : paymentResponse.data?.payments || [];
+        const hasApproved = paymentRows.some(
           (payment) => payment.type === 'interaction_unlock' && payment.status === 'approved',
         );
         setInteractionUnlocked(hasApproved);

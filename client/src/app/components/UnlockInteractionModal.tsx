@@ -4,6 +4,20 @@ import type { Payment, PaymentQuote, PaymentSettings } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
+type PaymentsApiResponse = Payment[] | { payments?: Payment[] };
+
+const extractPayments = (payload: PaymentsApiResponse | undefined): Payment[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && Array.isArray(payload.payments)) {
+    return payload.payments;
+  }
+
+  return [];
+};
+
 interface UnlockInteractionModalProps {
   open: boolean;
   rideId?: string;
@@ -15,6 +29,7 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
   const { user } = useAuth();
   const [method, setMethod] = useState<'easypaisa' | 'jazzcash' | 'bank'>('easypaisa');
   const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [amount, setAmount] = useState('');
   const [settings, setSettings] = useState<PaymentSettings | null>(null);
   const [quote, setQuote] = useState<PaymentQuote | null>(null);
   const [latestStatus, setLatestStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
@@ -32,13 +47,14 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
         const [settingsResponse, quoteResponse, paymentsResponse] = await Promise.all([
           api.get<PaymentSettings>('/api/payments/settings'),
           api.get<PaymentQuote>(`/api/payments/quote/${rideId}`),
-          api.get<Payment[]>(`/api/payments/my?rideId=${rideId}`),
+          api.get<PaymentsApiResponse>(`/api/payments/my?rideId=${rideId}`),
         ]);
 
         setSettings(settingsResponse.data);
         setQuote(quoteResponse.data);
+        setAmount(String(quoteResponse.data?.amount ?? ''));
 
-        const latest = (paymentsResponse.data || [])
+        const latest = extractPayments(paymentsResponse.data)
           .filter((payment) => payment.type === 'interaction_unlock')
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         setLatestStatus(latest?.status || null);
@@ -62,7 +78,10 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
       return;
     }
 
-    if (latestStatus === 'pending' || latestStatus === 'approved') {
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error('Enter a valid payment amount');
       return;
     }
 
@@ -76,6 +95,7 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
       const formData = new FormData();
       formData.append('rideId', rideId);
       formData.append('method', method);
+      formData.append('amount', String(parsedAmount));
       formData.append('proof', screenshot);
 
       await api.post('/api/payments/create', formData, {
@@ -86,6 +106,7 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
 
       toast.success('Payment submitted for admin approval');
       setLatestStatus('pending');
+      setScreenshot(null);
       onSubmitted?.();
       onClose();
     } catch (error: any) {
@@ -106,6 +127,9 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
           <p>Distance: {quote ? `${Math.round(quote.distanceKm)} KM` : '-'}</p>
           <p>Price: {roleLabel} → PKR {quote?.amount ?? '-'}</p>
+          <p className="mt-1 text-xs text-slate-600">
+            1 PKR = {settings?.tokenRate || 2} Tokens, and each chat/post/request costs {settings?.actionTokenCost || 2} tokens.
+          </p>
         </div>
 
         {latestStatus ? (
@@ -126,10 +150,18 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
         </div>
 
         <div className="mt-4 space-y-3">
+          <input
+            type="number"
+            min={1}
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            placeholder="Enter amount"
+          />
+
           <select
             value={method}
             onChange={(event) => setMethod(event.target.value as 'easypaisa' | 'jazzcash' | 'bank')}
-            disabled={latestStatus === 'pending' || latestStatus === 'approved'}
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
           >
             <option value="easypaisa">Easypaisa</option>
@@ -141,8 +173,7 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
             type="file"
             accept="image/*"
             onChange={(event) => setScreenshot(event.target.files?.[0] || null)}
-            disabled={latestStatus === 'pending' || latestStatus === 'approved'}
-            className="w-full text-sm disabled:cursor-not-allowed"
+            className="w-full text-sm"
           />
 
           <div className="flex gap-2">
@@ -156,16 +187,10 @@ export function UnlockInteractionModal({ open, rideId, onClose, onSubmitted }: U
             <button
               type="button"
               onClick={submitUnlock}
-              disabled={submitting || latestStatus === 'pending' || latestStatus === 'approved'}
+              disabled={submitting}
               className="flex-1 rounded-xl bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
             >
-              {submitting
-                ? 'Submitting...'
-                : latestStatus === 'pending'
-                ? 'Waiting for Approval'
-                : latestStatus === 'approved'
-                ? 'Unlocked'
-                : 'Pay & Unlock Chat'}
+              {submitting ? 'Submitting...' : 'Pay & Unlock Chat'}
             </button>
           </div>
         </div>

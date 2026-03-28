@@ -45,7 +45,10 @@ export function PaymentModal({ open, onClose, paymentType = 'booking_unlock', on
         ]);
 
         setSettings(settingsResponse.data);
-        const latest = (paymentsResponse.data || [])
+        const paymentRows = Array.isArray(paymentsResponse.data)
+          ? paymentsResponse.data
+          : paymentsResponse.data?.payments || [];
+        const latest = paymentRows
           .filter((payment) => payment.type === paymentType)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
 
