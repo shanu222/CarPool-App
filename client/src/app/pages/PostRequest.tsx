@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft, MapPin, Calendar, Clock, Users } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import { pakistanCities } from '../../data/pakistanCities';
 
 export function PostRequest() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,6 +24,41 @@ export function PostRequest() {
   const updateField = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  useEffect(() => {
+    const state = location.state as
+      | {
+          fromCity?: string;
+          toCity?: string;
+          dateTime?: string;
+          seatsNeeded?: number;
+        }
+      | undefined;
+
+    if (!state) {
+      return;
+    }
+
+    let date = '';
+    let time = '';
+
+    if (state.dateTime) {
+      const dt = new Date(state.dateTime);
+      if (!Number.isNaN(dt.getTime())) {
+        date = dt.toISOString().slice(0, 10);
+        time = dt.toISOString().slice(11, 16);
+      }
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      fromCity: state.fromCity || prev.fromCity,
+      toCity: state.toCity || prev.toCity,
+      date: date || prev.date,
+      time: time || prev.time,
+      seatsNeeded: state.seatsNeeded ? String(state.seatsNeeded) : prev.seatsNeeded,
+    }));
+  }, [location.state]);
 
   const submitRequest = () => {
     navigator.geolocation.getCurrentPosition(
@@ -50,10 +86,22 @@ export function PostRequest() {
           toast.success('Ride request posted');
           navigate('/trips');
         } catch (requestError: any) {
-          const message = requestError?.response?.data?.message || 'Could not post request';
+          const responseData = requestError?.response?.data || {};
+          const message = responseData?.message || responseData?.error || 'Could not post request';
           setError(message);
           if (message === 'Only Pakistani cities allowed') {
             toast.error('Please enter a valid Pakistani city');
+          } else {
+            toast.error(message);
+          }
+
+          if (responseData?.requiresPayment && responseData?.redirectTo) {
+            navigate(responseData.redirectTo, {
+              state: {
+                action: 'ride_request',
+                tokenInfo: responseData?.tokenInfo,
+              },
+            });
           }
         } finally {
           setLoading(false);

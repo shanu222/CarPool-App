@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { pakistanCities } from '../../data/pakistanCities';
 
 export function PostRide() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -29,6 +30,33 @@ export function PostRide() {
       setError('Switch to Driver to post a ride');
     }
   }, [user?.role]);
+
+  useEffect(() => {
+    const state = location.state as
+      | {
+          fromCity?: string;
+          toCity?: string;
+          date?: string;
+          time?: string;
+          pricePerSeat?: number;
+          totalSeats?: number;
+        }
+      | undefined;
+
+    if (!state) {
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      fromCity: state.fromCity || prev.fromCity,
+      toCity: state.toCity || prev.toCity,
+      date: state.date || prev.date,
+      time: state.time || prev.time,
+      pricePerSeat: state.pricePerSeat ? String(state.pricePerSeat) : prev.pricePerSeat,
+      totalSeats: state.totalSeats ? String(state.totalSeats) : prev.totalSeats,
+    }));
+  }, [location.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +87,20 @@ export function PostRide() {
       toast.success('Ride published successfully');
       navigate('/trips');
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Could not publish ride');
-      toast.error(requestError?.response?.data?.message || 'Could not publish ride');
+      const responseData = requestError?.response?.data || {};
+      const message = responseData?.message || responseData?.error || 'Could not publish ride';
+
+      setError(message);
+      toast.error(message);
+
+      if (responseData?.requiresPayment && responseData?.redirectTo) {
+        navigate(responseData.redirectTo, {
+          state: {
+            action: 'post_ride',
+            tokenInfo: responseData?.tokenInfo,
+          },
+        });
+      }
     } finally {
       setLoading(false);
     }

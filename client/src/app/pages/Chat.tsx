@@ -282,6 +282,15 @@ export function Chat() {
         setMessages((prev) => prev.filter((item) => item.clientMessageId !== clientMessageId));
       }
 
+      if (requestError?.response?.data?.requiresPayment && requestError?.response?.data?.redirectTo) {
+        navigate(requestError.response.data.redirectTo, {
+          state: {
+            action: 'chat',
+            tokenInfo: requestError?.response?.data?.tokenInfo,
+          },
+        });
+      }
+
       if (String(apiMessage).toLowerCase().includes('free chat limit')) {
         setChatLimitReached(true);
         setShowUnlockModal(true);

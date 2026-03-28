@@ -1,10 +1,15 @@
 import { RideRequest } from "../models/RideRequest.js";
 import { Ride } from "../models/Ride.js";
 import { Booking } from "../models/Booking.js";
+import { checkExpiredRides } from "../services/rideExpiryService.js";
 
 const NEARBY_WINDOW_HOURS = 24;
 
 const classifyRequestStatus = (dateTime, baseStatus) => {
+  if (baseStatus === "expired") {
+    return "expired";
+  }
+
   if (baseStatus === "completed") {
     return "completed";
   }
@@ -84,6 +89,8 @@ export const createRideRequest = async (req, res, next) => {
 
 export const getNearbyRideRequests = async (req, res, next) => {
   try {
+    await checkExpiredRides();
+
     if (req.user.role !== "driver") {
       return res.status(403).json({ message: "Drivers only" });
     }
@@ -133,6 +140,8 @@ export const getNearbyRideRequests = async (req, res, next) => {
 
 export const getMyRideRequests = async (req, res, next) => {
   try {
+    await checkExpiredRides();
+
     if (req.user.role !== "passenger") {
       return res.status(403).json({ message: "Passengers only" });
     }

@@ -1,9 +1,12 @@
 import { Outlet, useNavigate, useLocation } from 'react-router';
 import { Home, Calendar, MessageCircle, User } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { RoleIndicator } from './RoleIndicator';
 
 export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   const navItems = [
     { icon: Home, label: 'Home', path: '/home' },
@@ -14,6 +17,10 @@ export function Layout() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
+      <div className="pointer-events-none fixed right-3 top-3 z-40 md:right-4 md:top-4">
+        <RoleIndicator role={user?.role} />
+      </div>
+
       {/* Main Content */}
       <main className="flex-1 pb-24 md:pb-28">
         <Outlet />

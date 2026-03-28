@@ -1,4 +1,12 @@
 import { User } from "../models/User.js";
+import { extractCnicData, extractLicenseData } from "../services/ocrService.js";
+import {
+  buildVerificationMeta,
+  isDateExpired,
+  toDateOrNull,
+  verifyIdentityDocuments,
+} from "../services/verificationFlowService.js";
+import { normalizeCnic } from "../utils/kycUtils.js";
 
 const buildFilePath = (req, file) => {
   if (!file) {
@@ -7,6 +15,21 @@ const buildFilePath = (req, file) => {
 
   return `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
 };
+
+const toStoredUploadPath = (file) => (file?.path ? file.path : "");
+
+const statusResponse = (user, extra = {}) => ({
+  message: extra.message,
+  warningMessages: extra.warningMessages || [],
+  ...buildVerificationMeta({
+    isVerified: user?.isVerified,
+    isCnicExpired: user?.isCnicExpired,
+    isLicenseExpired: user?.isLicenseExpired,
+    role: user?.role,
+  }),
+  cnicExpiryDate: user?.cnicExpiryDate || null,
+  licenseExpiryDate: user?.licenseExpiryDate || null,
+});
 
 export const submitVerification = async (req, res, next) => {
   try {
@@ -104,6 +127,173 @@ export const verifyUser = async (req, res, next) => {
     }
 
     return res.json(user);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const reverifySelf = async (req, res, next) => {
+  try {
+    const { cnic, cnicNumber, dob } = req.body;
+    const profileImageFile = req.files?.profileImage?.[0];
+    const cnicFrontFile = req.files?.cnicFront?.[0];
+    const cnicBackFile = req.files?.cnicBack?.[0];
+
+    if (!cnic && !cnicNumber) {
+      return res.status(400).json({ message: "cnic is required" });
+    }
+
+    if (!dob) {
+      return res.status(400).json({ message: "dob is required" });
+    }
+
+    if (!profileImageFile || !cnicFrontFile || !cnicBackFile) {
+      return res.status(400).json({ message: "profileImage, cnicFront and cnicBack are required" });
+    }
+
+    const verifyResult = await verifyIdentityDocuments({
+      name: req.user.name,
+      dob,
+      cnic: cnic || cnicNumber,
+      role: req.user.role,
+      cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+      cnicBackPath: toStoredUploadPath(cnicBackFile),
+      profileImagePath: toStoredUploadPath(profileImageFile),
+      enforceLicenseCheck: false,
+    });
+
+    if (!verifyResult.ok) {
+      return res.status(400).json({
+        message: "Information does not match CNIC",
+        reason: verifyResult.reason,
+        details: verifyResult.details,
+      });
+    }
+
+    req.user.cnic = verifyResult.normalizedCnic;
+    req.user.cnicNumber = verifyResult.normalizedCnic;
+    req.user.dob = verifyResult.normalizedDob;
+    req.user.cnicFrontImage = buildFilePath(req, cnicFrontFile);
+    req.user.cnicBackImage = buildFilePath(req, cnicBackFile);
+    req.user.profilePhoto = buildFilePath(req, profileImageFile);
+    req.user.selfieImage = buildFilePath(req, profileImageFile);
+    req.user.isVerified = true;
+    req.user.verified = true;
+    req.user.verificationStatus = "verified";
+    req.user.cnicExpiryDate = verifyResult.cnicExpiryDate;
+    req.user.isCnicExpired = verifyResult.isCnicExpired;
+
+    const warningMessages = [];
+    if (verifyResult.isCnicExpired) {
+      warningMessages.push("Your CNIC is expired. This will be visible to other users.");
+    }
+
+    await req.user.save();
+
+    return res.json(
+      statusResponse(req.user, {
+        message: "Verification completed successfully.",
+        warningMessages,
+      })
+    );
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const renewCnicSelf = async (req, res, next) => {
+  try {
+    const cnicFrontFile = req.files?.cnicFront?.[0];
+    const cnicBackFile = req.files?.cnicBack?.[0];
+
+    if (!cnicFrontFile || !cnicBackFile) {
+      return res.status(400).json({ message: "cnicFront and cnicBack are required" });
+    }
+
+    const cnicData = await extractCnicData({
+      cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+      cnicBackPath: toStoredUploadPath(cnicBackFile),
+    });
+
+    if (!cnicData?.cnic) {
+      return res.status(400).json({ message: "Unable to extract CNIC data" });
+    }
+
+    const extractedCnic = normalizeCnic(cnicData.cnic);
+    const currentCnic = normalizeCnic(req.user.cnicNumber || req.user.cnic || "");
+
+    if (currentCnic && extractedCnic && currentCnic !== extractedCnic) {
+      return res.status(400).json({ message: "Uploaded CNIC does not match your account CNIC" });
+    }
+
+    const cnicExpiryDate = toDateOrNull(cnicData.cnicExpiry);
+    const isCnicExpired = isDateExpired(cnicExpiryDate);
+
+    req.user.cnicFrontImage = buildFilePath(req, cnicFrontFile);
+    req.user.cnicBackImage = buildFilePath(req, cnicBackFile);
+    if (extractedCnic) {
+      req.user.cnic = extractedCnic;
+      req.user.cnicNumber = extractedCnic;
+    }
+    req.user.cnicExpiryDate = cnicExpiryDate;
+    req.user.isCnicExpired = isCnicExpired;
+
+    await req.user.save();
+
+    const warningMessages = [];
+    if (isCnicExpired) {
+      warningMessages.push("Your CNIC is expired. This will be visible to other users.");
+    }
+
+    return res.json(
+      statusResponse(req.user, {
+        message: isCnicExpired ? "CNIC updated but it is still expired." : "CNIC renewed successfully.",
+        warningMessages,
+      })
+    );
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const renewLicenseSelf = async (req, res, next) => {
+  try {
+    if (req.user.role !== "driver") {
+      return res.status(403).json({ message: "Only drivers can renew license" });
+    }
+
+    const licenseImageFile = req.files?.licenseImage?.[0];
+
+    if (!licenseImageFile) {
+      return res.status(400).json({ message: "licenseImage is required" });
+    }
+
+    const licenseData = await extractLicenseData(toStoredUploadPath(licenseImageFile));
+    const licenseExpiryDate = toDateOrNull(licenseData?.licenseExpiry);
+    const isLicenseExpired = isDateExpired(licenseExpiryDate);
+
+    req.user.licensePhoto = buildFilePath(req, licenseImageFile);
+    if (req.user.role === "driver") {
+      req.user.cnicPhoto = buildFilePath(req, licenseImageFile);
+    }
+    req.user.licenseExpiryDate = licenseExpiryDate;
+    req.user.isLicenseExpired = isLicenseExpired;
+
+    await req.user.save();
+
+    const warningMessages = [];
+    if (isLicenseExpired) {
+      warningMessages.push("Your license is expired. This will be visible to other users.");
+    }
+
+    return res.json(
+      statusResponse(req.user, {
+        message: isLicenseExpired
+          ? "License updated but it is still expired."
+          : "License renewed successfully.",
+        warningMessages,
+      })
+    );
   } catch (error) {
     return next(error);
   }

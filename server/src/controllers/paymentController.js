@@ -47,12 +47,18 @@ export const submitPaymentProof = async (req, res, next) => {
     const type = "interaction_unlock";
     const uploadedFile = req.file || req.files?.paymentProof?.[0] || req.files?.proof?.[0];
     const screenshot = buildFilePath(req, uploadedFile);
+    const tokenRate = 2;
+    const costPerAction = 2;
 
     if (!screenshot) {
       return res.status(400).json({ message: "Payment screenshot is required" });
     }
 
-    if (amount > 0 && !rideId) {
+    if (!rideId) {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ message: "Valid amount is required for token purchase" });
+      }
+
       const tokensRequested = Math.max(0, Math.floor(amount * 2));
 
       const payment = await Payment.create({
@@ -71,6 +77,10 @@ export const submitPaymentProof = async (req, res, next) => {
       return res.status(201).json({
         message: "Payment proof uploaded",
         payment,
+        tokenInfo: {
+          tokenRate,
+          costPerAction,
+        },
         ...getUserAccessSummary(req.user),
       });
     }
@@ -124,6 +134,10 @@ export const submitPaymentProof = async (req, res, next) => {
 
     return res.status(201).json({
       payment,
+      tokenInfo: {
+        tokenRate,
+        costPerAction,
+      },
       ...getUserAccessSummary(req.user),
     });
   } catch (error) {
@@ -150,14 +164,19 @@ export const getPaymentSettingsPublic = async (_req, res, next) => {
   try {
     const settings = await PaymentSettings.findOne().sort({ updatedAt: -1 });
 
-    return res.json(
+    const payload =
       settings || {
         easypaisaNumber: "",
         jazzcashNumber: "",
         bankAccount: "",
         accountTitle: "",
-      }
-    );
+      };
+
+    return res.json({
+      ...payload,
+      tokenRate: 2,
+      actionTokenCost: 2,
+    });
   } catch (error) {
     return next(error);
   }

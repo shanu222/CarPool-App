@@ -14,10 +14,16 @@ export interface User {
   ratingCount?: number;
   tokenBalance?: number;
   isVerified?: boolean;
+  isCnicExpired?: boolean;
+  isLicenseExpired?: boolean;
+  statusLabel?: "Not Verified" | "CNIC Expired" | "License Expired" | "Verified";
+  visibility?: "low" | "normal";
   isFeatured?: boolean;
   verificationStatus?: "none" | "pending" | "approved" | "rejected";
   cnicNumber?: string;
   cnicPhoto?: string;
+  cnicExpiryDate?: string;
+  licenseExpiryDate?: string;
   maskedCnic?: string;
   cnic?: string;
   profilePhoto?: string;
@@ -79,7 +85,8 @@ export interface Ride {
   distanceText?: string;
   durationText?: string;
   distanceKm?: number;
-  status?: "live" | "nearby" | "scheduled" | "completed" | "cancelled" | "ongoing";
+  status?: "live" | "nearby" | "scheduled" | "matched" | "expired" | "completed" | "cancelled" | "ongoing";
+  expiredReason?: string;
   featured?: boolean;
   featuredAt?: string;
 }
@@ -226,6 +233,8 @@ export interface PaymentSettings {
   jazzcashNumber: string;
   bankAccount: string;
   accountTitle: string;
+  tokenRate?: number;
+  actionTokenCost?: number;
 }
 
 export interface UserReportItem {
@@ -271,6 +280,7 @@ export interface MyRidesResponse {
   nearbyRides?: Ride[];
   ongoingRides: Ride[];
   scheduledRides: Ride[];
+  expiredRides?: Ride[];
   completedRides: Ride[];
   rides: Ride[];
 }
@@ -290,8 +300,9 @@ export interface RideRequest {
   };
   dateTime: string;
   seatsNeeded: number;
-  status: "open" | "matched" | "completed";
-  timeClass?: "live" | "nearby" | "scheduled" | "completed";
+  status: "open" | "scheduled" | "matched" | "expired" | "completed";
+  timeClass?: "live" | "nearby" | "scheduled" | "expired" | "completed";
+  expiredReason?: string;
   distanceKm?: number;
   matchedRideId?: string;
   matchedBookingId?: string;

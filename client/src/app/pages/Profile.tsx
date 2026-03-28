@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { BadgeCheck, Bell, ChevronDown, ChevronUp, CreditCard, Crown, HelpCircle, Lock, LogOut, Shield, ShieldCheck, UserCircle2 } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, CreditCard, Crown, HelpCircle, LogOut, Shield, UserCircle2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { Button } from "../components/Button";
 import { VerifiedBadge } from "../components/VerifiedBadge";
-import type { ChangeRequest, User } from "../types";
+import { VerificationStatusBanner } from "../components/VerificationStatusBanner";
+import type { User } from "../types";
 
 const maskPhone = (value?: string) => {
   const phone = String(value || "").trim();
@@ -24,7 +25,8 @@ const maskPhone = (value?: string) => {
 };
 
 export function Profile() {
-  type SectionKey = "profile" | "account" | "settings" | "verification";
+  type SectionKey = "profile" | "settings";
+  type VerificationMode = "reverify" | "renew-cnic" | "renew-license";
 
   const navigate = useNavigate();
   const { user, setCurrentUser, logout } = useAuth();
@@ -34,17 +36,14 @@ export function Profile() {
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const [changeType, setChangeType] = useState<"cnic_update" | "car_update">("cnic_update");
-  const [reason, setReason] = useState("");
-  const [newCnic, setNewCnic] = useState("");
-  const [carMake, setCarMake] = useState("");
-  const [carModel, setCarModel] = useState("");
-  const [carColor, setCarColor] = useState("");
-  const [carPlateNumber, setCarPlateNumber] = useState("");
-  const [carYear, setCarYear] = useState("");
-  const [submittingRequest, setSubmittingRequest] = useState(false);
-
-  const [requests, setRequests] = useState<ChangeRequest[]>([]);
+  const [verificationMode, setVerificationMode] = useState<VerificationMode | null>(null);
+  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
+  const [verificationCnic, setVerificationCnic] = useState(user?.cnicNumber || user?.cnic || "");
+  const [verificationDob, setVerificationDob] = useState(user?.dob || "");
+  const [verificationCnicFront, setVerificationCnicFront] = useState<File | null>(null);
+  const [verificationCnicBack, setVerificationCnicBack] = useState<File | null>(null);
+  const [verificationProfileImage, setVerificationProfileImage] = useState<File | null>(null);
+  const [verificationLicenseImage, setVerificationLicenseImage] = useState<File | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey | null>("profile");
 
   useEffect(() => {
@@ -54,29 +53,9 @@ export function Profile() {
 
     setName(user.name || "");
     setPhone(user.phone || "");
-    setCarMake(user.carMake || "");
-    setCarModel(user.carModel || "");
-    setCarColor(user.carColor || "");
-    setCarPlateNumber(user.carPlateNumber || "");
-    setCarYear(user.carYear ? String(user.carYear) : "");
+    setVerificationCnic(user.cnicNumber || user.cnic || "");
+    setVerificationDob(user.dob || "");
   }, [user]);
-
-  useEffect(() => {
-    const loadChangeRequests = async () => {
-      try {
-        const response = await api.get<ChangeRequest[]>("/api/change-request/my");
-        setRequests(response.data || []);
-      } catch {
-        setRequests([]);
-      }
-    };
-
-    if (user) {
-      loadChangeRequests();
-    }
-  }, [user]);
-
-  const latestRequest = useMemo(() => requests[0], [requests]);
 
   const toggleSection = (key: SectionKey) => {
     setActiveSection((prev) => (prev === key ? null : key));
@@ -113,40 +92,111 @@ export function Profile() {
     }
   };
 
-  const submitChangeRequest = async () => {
-    if (!reason.trim()) {
-      toast.error("Please provide reason for change");
+  const resetVerificationForm = () => {
+    setVerificationCnicFront(null);
+    setVerificationCnicBack(null);
+    setVerificationProfileImage(null);
+    setVerificationLicenseImage(null);
+  };
+
+  const closeVerificationModal = () => {
+    setVerificationMode(null);
+    resetVerificationForm();
+  };
+
+  const applyVerificationResponseToUser = (responseData: any) => {
+    setCurrentUser({
+      ...user,
+      isVerified: Boolean(responseData?.isVerified),
+      isCnicExpired: Boolean(responseData?.isCnicExpired),
+      isLicenseExpired: Boolean(responseData?.isLicenseExpired),
+      statusLabel: responseData?.statusLabel,
+      visibility: responseData?.visibility,
+      cnicExpiryDate: responseData?.cnicExpiryDate || user?.cnicExpiryDate,
+      licenseExpiryDate: responseData?.licenseExpiryDate || user?.licenseExpiryDate,
+    });
+  };
+
+  const submitVerificationAction = async () => {
+    if (!user || !verificationMode) {
       return;
     }
 
-    const requestedData =
-      changeType === "cnic_update"
-        ? { cnicNumber: newCnic.trim() }
-        : {
-            carMake: carMake.trim(),
-            carModel: carModel.trim(),
-            carColor: carColor.trim(),
-            carPlateNumber: carPlateNumber.trim(),
-            carYear: carYear ? Number(carYear) : undefined,
-          };
-
     try {
-      setSubmittingRequest(true);
-      await api.post("/api/change-request", {
-        type: changeType,
-        requestedData,
-        reason: reason.trim(),
-      });
+      setVerificationSubmitting(true);
 
-      const response = await api.get<ChangeRequest[]>("/api/change-request/my");
-      setRequests(response.data || []);
-      setReason("");
-      setNewCnic("");
-      toast.success("Change request submitted");
+      if (verificationMode === "reverify") {
+        if (!verificationCnic.trim() || !verificationDob.trim()) {
+          toast.error("CNIC and DOB are required");
+          return;
+        }
+
+        if (!verificationCnicFront || !verificationCnicBack || !verificationProfileImage) {
+          toast.error("CNIC front/back and profile image are required");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("cnic", verificationCnic.trim());
+        formData.append("dob", verificationDob.trim());
+        formData.append("cnicFront", verificationCnicFront);
+        formData.append("cnicBack", verificationCnicBack);
+        formData.append("profileImage", verificationProfileImage);
+
+        const response = await api.post("/api/verification/reverify", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        applyVerificationResponseToUser(response.data);
+        toast.success(response.data?.message || "Verification completed");
+      }
+
+      if (verificationMode === "renew-cnic") {
+        if (!verificationCnicFront || !verificationCnicBack) {
+          toast.error("CNIC front and CNIC back are required");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("cnicFront", verificationCnicFront);
+        formData.append("cnicBack", verificationCnicBack);
+
+        const response = await api.post("/api/verification/renew-cnic", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        applyVerificationResponseToUser(response.data);
+        toast.success(response.data?.message || "CNIC updated");
+      }
+
+      if (verificationMode === "renew-license") {
+        if (!verificationLicenseImage) {
+          toast.error("License image is required");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("licenseImage", verificationLicenseImage);
+
+        const response = await api.post("/api/verification/renew-license", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        applyVerificationResponseToUser(response.data);
+        toast.success(response.data?.message || "License updated");
+      }
+
+      closeVerificationModal();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Could not submit request");
+      toast.error(error?.response?.data?.message || "Could not complete verification action");
     } finally {
-      setSubmittingRequest(false);
+      setVerificationSubmitting(false);
     }
   };
 
@@ -167,6 +217,16 @@ export function Profile() {
       </div>
 
       <div className="px-3 py-4 md:px-5">
+        <div className="mb-4">
+          <VerificationStatusBanner
+            user={user}
+            loading={verificationSubmitting}
+            onVerifyNow={() => setVerificationMode("reverify")}
+            onRenewCnic={() => setVerificationMode("renew-cnic")}
+            onRenewLicense={() => setVerificationMode("renew-license")}
+          />
+        </div>
+
         <div className="space-y-4">
           <AccordionSection
             title="Profile Info"
@@ -217,26 +277,6 @@ export function Profile() {
           </AccordionSection>
 
           <AccordionSection
-            title="Account Type"
-            icon={<BadgeCheck className="h-4 w-4" />}
-            isOpen={activeSection === "account"}
-            onToggle={() => toggleSection("account")}
-          >
-            <section className="glass-subtle rounded-2xl p-4">
-              <p className="text-xs text-slate-300 mb-1">Account Type</p>
-              <p className="text-sm text-white capitalize">{user.role}</p>
-              <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-green-900/30 px-3 py-2 text-xs text-green-200">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Verified badge is visible to everyone
-              </div>
-              <div className="mt-2 inline-flex items-center gap-2 rounded-xl bg-amber-900/30 px-3 py-2 text-xs text-amber-200">
-                <BadgeCheck className="h-3.5 w-3.5" />
-                Featured badge is visible only on your own profile
-              </div>
-            </section>
-          </AccordionSection>
-
-          <AccordionSection
             title="Settings"
             icon={<Bell className="h-4 w-4" />}
             isOpen={activeSection === "settings"}
@@ -249,76 +289,126 @@ export function Profile() {
               <SettingsCard icon={<HelpCircle className="h-4 w-4" />} label="Help & Support" onClick={() => navigate("/support")} />
             </section>
           </AccordionSection>
-
-          <AccordionSection
-            title="Verification Details"
-            icon={<Lock className="h-4 w-4" />}
-            isOpen={activeSection === "verification"}
-            onToggle={() => toggleSection("verification")}
-          >
-            <section className="glass-subtle rounded-2xl p-4 space-y-3">
-              <h3 className="text-sm md:text-base text-white">Locked Sensitive Fields</h3>
-              <div className="rounded-xl border border-white/25 bg-white/10 p-3">
-                <p className="text-xs text-slate-300 mb-1">CNIC</p>
-                <p className="text-sm text-white">{user.cnicNumber || user.cnic || "Not available"}</p>
-              </div>
-              <div className="rounded-xl border border-white/25 bg-white/10 p-3">
-                <p className="text-xs text-slate-300 mb-1">Car Details</p>
-                <p className="text-sm text-white">{user.carMake || "-"} {user.carModel || ""}</p>
-                <p className="text-xs text-slate-100">{user.carColor || "-"} • {user.carPlateNumber || "-"} • {user.carYear || "-"}</p>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-xl bg-slate-900/40 px-3 py-2 text-xs text-slate-100">
-                <Lock className="h-3.5 w-3.5" />
-                CNIC, car details, and documents are admin-controlled
-              </div>
-            </section>
-
-            <section className="mt-3 glass-subtle rounded-2xl p-4 space-y-3">
-              <h3 className="text-sm md:text-base text-white">Request Change</h3>
-              <div>
-                <label className="block text-sm text-slate-100 mb-1">Type</label>
-                <select value={changeType} onChange={(event) => setChangeType(event.target.value as "cnic_update" | "car_update")} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white">
-                  <option value="cnic_update">CNIC Update</option>
-                  <option value="car_update">Car Details Update</option>
-                </select>
-              </div>
-
-              {changeType === "cnic_update" ? (
-                <div>
-                  <label className="block text-sm text-slate-100 mb-1">New CNIC</label>
-                  <input value={newCnic} onChange={(event) => setNewCnic(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <input placeholder="Car Make" value={carMake} onChange={(event) => setCarMake(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
-                  <input placeholder="Car Model" value={carModel} onChange={(event) => setCarModel(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
-                  <input placeholder="Car Color" value={carColor} onChange={(event) => setCarColor(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
-                  <input placeholder="Plate Number" value={carPlateNumber} onChange={(event) => setCarPlateNumber(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
-                  <input placeholder="Year" value={carYear} onChange={(event) => setCarYear(event.target.value)} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white md:col-span-2" />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm text-slate-100 mb-1">Reason</label>
-                <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white" />
-              </div>
-
-              <Button onClick={submitChangeRequest} loading={submittingRequest} loadingText="Processing..." variant="primary">
-                Request Change
-              </Button>
-
-              {latestRequest ? (
-                <div className="rounded-xl bg-white/10 p-3 text-xs text-slate-100">
-                  <p className="font-medium">Latest Request Status: {latestRequest.status}</p>
-                  <p className="mt-1">{latestRequest.type.replace("_", " ")}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-200">No change requests yet.</p>
-              )}
-            </section>
-          </AccordionSection>
         </div>
       </div>
+
+      <AnimatePresence>
+        {verificationMode ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+              className="glass-panel w-full max-w-lg rounded-3xl p-4 md:p-5"
+            >
+              <h3 className="text-base md:text-lg text-white">
+                {verificationMode === "reverify"
+                  ? "Complete Verification"
+                  : verificationMode === "renew-cnic"
+                    ? "Renew CNIC"
+                    : "Renew License"}
+              </h3>
+              <p className="mt-1 text-xs md:text-sm text-slate-200">
+                {verificationMode === "reverify"
+                  ? "Submit documents to re-verify your account."
+                  : verificationMode === "renew-cnic"
+                    ? "Upload updated CNIC images to refresh expiry status."
+                    : "Upload your latest driving license image to refresh expiry status."}
+              </p>
+
+              <div className="mt-4 space-y-3">
+                {verificationMode === "reverify" ? (
+                  <>
+                    <div>
+                      <label className="block text-sm text-slate-100 mb-1">CNIC Number</label>
+                      <input
+                        value={verificationCnic}
+                        onChange={(event) => setVerificationCnic(event.target.value)}
+                        className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-100 mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={verificationDob}
+                        onChange={(event) => setVerificationDob(event.target.value)}
+                        className="w-full rounded-xl border border-white/35 bg-white/20 px-3 py-3 text-sm text-white"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                {verificationMode !== "renew-license" ? (
+                  <>
+                    <div>
+                      <label className="block text-sm text-slate-100 mb-1">CNIC Front</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => setVerificationCnicFront(event.target.files?.[0] || null)}
+                        className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/90 file:px-3 file:py-2 file:text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-100 mb-1">CNIC Back</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => setVerificationCnicBack(event.target.files?.[0] || null)}
+                        className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/90 file:px-3 file:py-2 file:text-slate-900"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                {verificationMode === "reverify" ? (
+                  <div>
+                    <label className="block text-sm text-slate-100 mb-1">Profile Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => setVerificationProfileImage(event.target.files?.[0] || null)}
+                      className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/90 file:px-3 file:py-2 file:text-slate-900"
+                    />
+                  </div>
+                ) : null}
+
+                {verificationMode === "renew-license" ? (
+                  <div>
+                    <label className="block text-sm text-slate-100 mb-1">License Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => setVerificationLicenseImage(event.target.files?.[0] || null)}
+                      className="w-full text-sm text-white file:mr-4 file:rounded-lg file:border-0 file:bg-white/90 file:px-3 file:py-2 file:text-slate-900"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <Button variant="secondary" onClick={closeVerificationModal} disabled={verificationSubmitting}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={submitVerificationAction}
+                  loading={verificationSubmitting}
+                  loadingText="Processing..."
+                >
+                  Submit
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

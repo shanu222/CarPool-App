@@ -1,6 +1,7 @@
 import { User } from "../models/User.js";
 
 const ACTION_COST = 2;
+const TOKEN_RATE_PER_PKR = 2;
 
 const normalizeCount = (value) => Math.max(0, Number(value || 0));
 
@@ -78,12 +79,24 @@ const createAccessMiddleware = (freeField) => async (req, res, next) => {
       if (normalizeCount(spent.user?.tokens) > 0 && normalizeCount(spent.user?.tokens) < ACTION_COST) {
         return res.status(403).json({
           message: "Insufficient tokens",
+          requiresPayment: true,
+          redirectTo: "/payment-methods",
+          tokenInfo: {
+            tokenRate: TOKEN_RATE_PER_PKR,
+            costPerAction: ACTION_COST,
+          },
           ...buildAccessSummary(spent.user),
         });
       }
 
       return res.status(403).json({
         message: "Free limit finished. Please purchase tokens.",
+        requiresPayment: true,
+        redirectTo: "/payment-methods",
+        tokenInfo: {
+          tokenRate: TOKEN_RATE_PER_PKR,
+          costPerAction: ACTION_COST,
+        },
         ...buildAccessSummary(spent.user),
       });
     }

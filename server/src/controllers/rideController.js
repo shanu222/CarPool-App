@@ -2,6 +2,7 @@ import { Ride } from "../models/Ride.js";
 import { User } from "../models/User.js";
 import { Notification } from "../models/Notification.js";
 import { Booking } from "../models/Booking.js";
+import { checkExpiredRides } from "../services/rideExpiryService.js";
 import { geocodeCity, getDistanceAndDuration } from "../services/mapsService.js";
 import { sendPushNotification } from "../services/pushService.js";
 import {
@@ -225,11 +226,13 @@ const resolvePakistanCity = async (city) => {
 };
 
 const refreshRideLifecycleStatuses = async (now = new Date()) => {
+  await checkExpiredRides(now);
+
   const nearbyUntil = new Date(now.getTime() + NEARBY_WINDOW_HOURS * 60 * 60 * 1000);
 
   await Ride.updateMany(
     {
-      status: { $nin: ["completed", "cancelled"] },
+      status: { $nin: ["completed", "cancelled", "expired"] },
       dateTime: { $lte: now },
     },
     {
@@ -239,7 +242,7 @@ const refreshRideLifecycleStatuses = async (now = new Date()) => {
 
   await Ride.updateMany(
     {
-      status: { $nin: ["completed", "cancelled", "live"] },
+      status: { $nin: ["completed", "cancelled", "live", "expired"] },
       dateTime: { $gt: now, $lte: nearbyUntil },
     },
     {
@@ -249,7 +252,7 @@ const refreshRideLifecycleStatuses = async (now = new Date()) => {
 
   await Ride.updateMany(
     {
-      status: { $nin: ["completed", "cancelled"] },
+      status: { $nin: ["completed", "cancelled", "expired"] },
       dateTime: { $gt: nearbyUntil },
     },
     {
@@ -645,6 +648,7 @@ export const getMyRides = async (req, res, next) => {
     const liveRides = rides.filter((ride) => ride.status === "live");
     const nearbyRides = rides.filter((ride) => ride.status === "nearby");
     const scheduledRides = rides.filter((ride) => ride.status === "scheduled");
+    const expiredRides = rides.filter((ride) => ride.status === "expired");
     const completedRides = rides.filter((ride) => ride.status === "completed");
 
     return res.json({
@@ -652,6 +656,7 @@ export const getMyRides = async (req, res, next) => {
       nearbyRides,
       ongoingRides: liveRides,
       scheduledRides,
+      expiredRides,
       completedRides,
       rides,
     });

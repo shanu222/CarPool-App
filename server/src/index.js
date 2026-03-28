@@ -24,6 +24,7 @@ import publicAuthRoutes from "./routes/publicAuthRoutes.js";
 import identityAuthRoutes from "./identity/routes/identityAuthRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { initializeSocket } from "./socket/setupSocket.js";
+import { checkExpiredRides, startRideExpiryScheduler } from "./services/rideExpiryService.js";
 
 dotenv.config();
 
@@ -178,6 +179,7 @@ app.use(errorHandler);
 
 const startServer = async () => {
   initializeSocket(httpServer);
+  startRideExpiryScheduler();
 
   httpServer.listen(port, host, () => {
     console.log(`Server listening on ${host}:${port}`);
@@ -188,6 +190,7 @@ const startServer = async () => {
       await connectDb();
       isDbConnected = true;
       console.log("MongoDB connected");
+      await checkExpiredRides();
     } catch (error) {
       isDbConnected = false;
       console.error(`MongoDB connection failed: ${error.message}`);

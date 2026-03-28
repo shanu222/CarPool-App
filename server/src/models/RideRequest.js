@@ -39,9 +39,14 @@ const rideRequestSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["open", "matched", "completed"],
+      enum: ["open", "scheduled", "matched", "expired", "completed"],
       default: "open",
       index: true,
+    },
+    expiredReason: {
+      type: String,
+      trim: true,
+      default: "",
     },
     matchedRideId: {
       type: mongoose.Schema.Types.ObjectId,

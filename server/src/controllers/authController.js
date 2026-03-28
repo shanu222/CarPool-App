@@ -5,9 +5,8 @@ import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
 import { getUserAccessSummary } from "../middleware/tokenAccessMiddleware.js";
 import { compareFaceWithSelfie, extractCnicDataFromImages } from "../services/kycVerificationService.js";
-import { compareFaces } from "../services/faceService.js";
-import { extractCnicData, extractLicenseData } from "../services/ocrService.js";
-import { isNameMatch, isSameDate, normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js";
+import { buildVerificationMeta, verifyIdentityDocuments } from "../services/verificationFlowService.js";
+import { normalizeCnic } from "../utils/kycUtils.js";
 
 const getAdminEmails = () =>
   (process.env.ADMIN_EMAILS || "")
@@ -57,56 +56,6 @@ export function normalizeNumber(number) {
 }
 
 const normalizePhone = (value) => normalizeNumber(value);
-const normalizeLicenseNumber = (value) =>
-  String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .trim();
-
-const toDateOrNull = (value) => {
-  const normalized = normalizeDob(value);
-  if (!normalized) {
-    return null;
-  }
-
-  const parsed = new Date(`${normalized}T00:00:00.000Z`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const isDateExpired = (dateValue) => {
-  if (!dateValue) {
-    return false;
-  }
-
-  const target = new Date(dateValue);
-  if (Number.isNaN(target.getTime())) {
-    return false;
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return target < today;
-};
-
-const buildVerificationMeta = ({ isVerified, isCnicExpired, isLicenseExpired, role }) => {
-  let statusLabel = "Verified";
-
-  if (!isVerified) {
-    statusLabel = "Not Verified";
-  } else if (isCnicExpired) {
-    statusLabel = "CNIC Expired";
-  } else if (role === "driver" && isLicenseExpired) {
-    statusLabel = "License Expired";
-  }
-
-  return {
-    isVerified: Boolean(isVerified),
-    isCnicExpired: Boolean(isCnicExpired),
-    isLicenseExpired: Boolean(isLicenseExpired),
-    statusLabel,
-    visibility: isVerified ? "normal" : "low",
-  };
-};
 
 const getUserVerificationMeta = (user) =>
   buildVerificationMeta({
@@ -699,31 +648,6 @@ const strictSignup = async ({ req, res, role }) => {
   }
 
   const normalizedCnic = normalizeCnic(cnic);
-  const normalizedDob = normalizeDob(dob);
-
-  if (!normalizedCnic) {
-    return verificationFail({
-      reason: "CNIC_FORMAT_INVALID",
-      details: {
-        failedField: "cnic",
-        why: "CNIC format is invalid",
-        hint: "Use XXXXX-XXXXXXX-X format (13 digits with optional dashes).",
-        inputValue: String(cnic || ""),
-      },
-    });
-  }
-
-  if (!normalizedDob) {
-    return verificationFail({
-      reason: "DOB_FORMAT_INVALID",
-      details: {
-        failedField: "dob",
-        why: "Date format is invalid",
-        hint: "Use a valid date that matches CNIC Date of Birth.",
-        inputValue: String(dob || ""),
-      },
-    });
-  }
 
   if (!profileImageFile || !cnicFrontFile || !cnicBackFile) {
     return jsonError(res, 400, "Missing required verification images");
@@ -741,171 +665,33 @@ const strictSignup = async ({ req, res, role }) => {
     return jsonError(res, 409, "Account already exists");
   }
 
-  let cnicData;
-  try {
-    cnicData = await extractCnicData({
-      cnicFrontPath: toStoredUploadPath(cnicFrontFile),
-      cnicBackPath: toStoredUploadPath(cnicBackFile),
-    });
-  } catch (error) {
-    console.error("[AUTH][SIGNUP][OCR_ERROR]", {
-      role,
-      message: error?.message,
-      stack: error?.stack,
-    });
+  const verificationResult = await verifyIdentityDocuments({
+    name,
+    dob,
+    cnic,
+    role,
+    licenseNumber,
+    cnicFrontPath: toStoredUploadPath(cnicFrontFile),
+    cnicBackPath: toStoredUploadPath(cnicBackFile),
+    profileImagePath: toStoredUploadPath(profileImageFile),
+    licenseImagePath: toStoredUploadPath(licenseImageFile),
+    enforceLicenseCheck: role === "driver",
+  });
 
+  if (!verificationResult.ok) {
     return verificationFail({
-      reason: "OCR_EXTRACTION_FAILED",
-      details: {
-        failedField: "cnic_images",
-        why: "OCR could not read CNIC clearly",
-        hint: "Use a sharp image, avoid blur/glare, keep full card visible, and ensure text is readable.",
-      },
-    });
-  }
-
-  if (!cnicData?.cnic || normalizeCnic(cnicData.cnic) !== normalizedCnic) {
-    return verificationFail({
-      reason: "CNIC_MISMATCH",
-      details: {
-        failedField: "cnic",
-        why: "CNIC number does not match",
-        hint: "Check digits and dashes exactly as printed on CNIC.",
-        inputValue: normalizedCnic,
-        extractedCnic: cnicData?.cnic || "",
-      },
-    });
-  }
-
-  const normalizedInputName = normalizeName(name);
-  const extractedNameCandidates = [cnicData?.name, ...(cnicData?.nameCandidates || [])]
-    .map((value) => normalizeName(value))
-    .filter(Boolean);
-
-  const nameMatched = extractedNameCandidates.some((candidate) => isNameMatch(normalizedInputName, candidate));
-
-  if (!extractedNameCandidates.length) {
-    return verificationFail({
-      reason: "NAME_EXTRACTION_FAILED",
-      details: {
-        failedField: "name",
-        why: "OCR could not confidently extract Name from CNIC front image",
-        hint: "Retake CNIC front in bright light and keep the Name area clear and sharp.",
-      },
-    });
-  }
-
-  if (!nameMatched) {
-    return verificationFail({
-      reason: "NAME_MISMATCH",
-      details: {
-        failedField: "name",
-        why: "Name does not match",
-        hint: "Enter name exactly as printed under the Name label on CNIC.",
-        inputValue: String(name || "").trim(),
-        extractedName: cnicData?.name || "",
-        extractedNameCandidates,
-      },
-    });
-  }
-
-  if (!cnicData?.dob || !isSameDate(normalizedDob, cnicData.dob)) {
-    return verificationFail({
-      reason: "DOB_MISMATCH",
-      details: {
-        failedField: "dob",
-        why: "Date of Birth does not match",
-        hint: "Match CNIC Date of Birth exactly (day/month/year).",
-        inputValue: normalizedDob,
-        extractedDob: cnicData?.dob || "",
-      },
-    });
-  }
-
-  let licenseExpiryDetected = "";
-
-  if (role === "driver") {
-    let extractedLicense = "";
-    let extractedLicenseExpiry = "";
-    try {
-      const licenseData = await extractLicenseData(toStoredUploadPath(licenseImageFile));
-      extractedLicense = licenseData?.licenseNumber || "";
-      extractedLicenseExpiry = licenseData?.licenseExpiry || "";
-    } catch (error) {
-      return verificationFail({
-        reason: "LICENSE_EXTRACTION_FAILED",
-        details: {
-          failedField: "licenseImage",
-          why: "License OCR failed",
-          hint: "Upload a clearer license image with visible number and no glare/blur.",
-          errorMessage: error?.message,
-        },
-      });
-    }
-
-    if (!extractedLicense || normalizeLicenseNumber(extractedLicense) !== normalizeLicenseNumber(licenseNumber)) {
-      return verificationFail({
-        reason: "LICENSE_MISMATCH",
-        details: {
-          failedField: "licenseNumber",
-          why: "License number does not match",
-          hint: "Enter the same license number shown on uploaded driving license image.",
-          inputValue: normalizeLicenseNumber(licenseNumber),
-          extractedLicense: normalizeLicenseNumber(extractedLicense),
-        },
-      });
-    }
-
-    licenseExpiryDetected = extractedLicenseExpiry;
-  }
-
-  let faceResult;
-  try {
-    faceResult = await compareFaces(
-      toStoredUploadPath(cnicFrontFile),
-      toStoredUploadPath(profileImageFile),
-      Number(process.env.FACE_MATCH_THRESHOLD || 80)
-    );
-  } catch (error) {
-    console.error("[AUTH][SIGNUP][FACE_COMPARE_ERROR]", {
-      role,
-      message: error?.message,
-      stack: error?.stack,
-    });
-
-    return verificationFail({
-      reason: "FACE_CHECK_FAILED",
-      details: {
-        failedField: "profileImage",
-        why: "Face comparison could not run",
-        hint: "Use a clear front-facing selfie and ensure CNIC face is fully visible.",
-      },
-    });
-  }
-
-  if (!faceResult?.matched) {
-    return verificationFail({
-      reason: "FACE_MISMATCH",
-      details: {
-        failedField: "face",
-        why: "Face does not match CNIC photo",
-        hint: "Retake selfie in good light, without blur, sunglasses, or heavy angle.",
-        similarity: Number(faceResult?.similarity || 0),
-        threshold: Number(process.env.FACE_MATCH_THRESHOLD || 80),
-        source: faceResult?.source || "aws",
-        openAiConfidence: Number(faceResult?.openAiConfidence || 0),
-        openAiReason: faceResult?.openAiReason || "",
-      },
+      reason: verificationResult.reason,
+      details: verificationResult.details,
     });
   }
 
   const normalizedEmail = `${normalizedMobile.replace(/[^\d+]/g, "")}.${role}@noemail.local`;
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const cnicExpiryDate = toDateOrNull(cnicData?.cnicExpiry);
-  const licenseExpiryDate = toDateOrNull(licenseExpiryDetected);
-  const isCnicExpired = isDateExpired(cnicExpiryDate);
-  const isLicenseExpired = role === "driver" ? isDateExpired(licenseExpiryDate) : false;
+  const cnicExpiryDate = verificationResult.cnicExpiryDate;
+  const licenseExpiryDate = verificationResult.licenseExpiryDate;
+  const isCnicExpired = verificationResult.isCnicExpired;
+  const isLicenseExpired = verificationResult.isLicenseExpired;
   const verificationMeta = buildVerificationMeta({
     isVerified: true,
     isCnicExpired,
@@ -929,7 +715,7 @@ const strictSignup = async ({ req, res, role }) => {
     role,
     cnicNumber: normalizedCnic,
     cnic: normalizedCnic,
-    dob: normalizedDob,
+    dob: verificationResult.normalizedDob,
     selfieImage: buildFilePath(req, profileImageFile),
     profilePhoto: buildFilePath(req, profileImageFile),
     cnicFrontImage: buildFilePath(req, cnicFrontFile),

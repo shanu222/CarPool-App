@@ -390,6 +390,7 @@ export const approvePaymentByAdmin = async (req, res, next) => {
 
         return res.json({
           payment: populated,
+          userTokens: user.tokens,
           ...getUserAccessSummary(user),
         });
       }

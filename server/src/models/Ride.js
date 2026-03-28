@@ -102,9 +102,14 @@ const rideSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["live", "nearby", "scheduled", "completed", "cancelled", "ongoing"],
+      enum: ["live", "nearby", "scheduled", "matched", "expired", "completed", "cancelled", "ongoing"],
       default: "scheduled",
       index: true,
+    },
+    expiredReason: {
+      type: String,
+      trim: true,
+      default: "",
     },
     featured: {
       type: Boolean,

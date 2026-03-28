@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { listVerificationRequests, submitVerification, verifyUser } from "../controllers/verificationController.js";
+import {
+  listVerificationRequests,
+  reverifySelf,
+  renewCnicSelf,
+  renewLicenseSelf,
+  submitVerification,
+  verifyUser,
+} from "../controllers/verificationController.js";
 import { protect, requireAdmin } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 
@@ -18,5 +25,33 @@ router.post(
 );
 router.get("/requests", protect, requireAdmin, listVerificationRequests);
 router.patch("/verify/:userId", protect, requireAdmin, verifyUser);
+
+router.post(
+  "/reverify",
+  protect,
+  upload.fields([
+    { name: "profileImage", maxCount: 1 },
+    { name: "cnicFront", maxCount: 1 },
+    { name: "cnicBack", maxCount: 1 },
+  ]),
+  reverifySelf
+);
+
+router.post(
+  "/renew-cnic",
+  protect,
+  upload.fields([
+    { name: "cnicFront", maxCount: 1 },
+    { name: "cnicBack", maxCount: 1 },
+  ]),
+  renewCnicSelf
+);
+
+router.post(
+  "/renew-license",
+  protect,
+  upload.fields([{ name: "licenseImage", maxCount: 1 }]),
+  renewLicenseSelf
+);
 
 export default router;

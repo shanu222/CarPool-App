@@ -7,7 +7,7 @@ import type { Booking, MyRidesResponse, Ride, RideRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
-type MyRidesTab = 'live' | 'scheduled' | 'completed';
+type MyRidesTab = 'live' | 'scheduled' | 'expired' | 'completed';
 
 export function MyTrips() {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ export function MyTrips() {
   const [requests, setRequests] = useState<RideRequest[]>([]);
   const [driverLiveRides, setDriverLiveRides] = useState<Ride[]>([]);
   const [driverScheduledRides, setDriverScheduledRides] = useState<Ride[]>([]);
+  const [driverExpiredRides, setDriverExpiredRides] = useState<Ride[]>([]);
   const [driverCompletedRides, setDriverCompletedRides] = useState<Ride[]>([]);
   const [tab, setTab] = useState<MyRidesTab>('live');
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,7 @@ export function MyTrips() {
         setRequests(requestResponse.data);
         setDriverLiveRides([]);
         setDriverScheduledRides([]);
+        setDriverExpiredRides([]);
         setDriverCompletedRides([]);
       }
 
@@ -46,6 +48,7 @@ export function MyTrips() {
         const response = await api.get<MyRidesResponse>('/api/rides/my');
         setDriverLiveRides(response.data.liveRides || response.data.ongoingRides || []);
         setDriverScheduledRides(response.data.scheduledRides || []);
+        setDriverExpiredRides(response.data.expiredRides || []);
         setDriverCompletedRides(response.data.completedRides || []);
         setBookings([]);
         setRequests([]);
@@ -125,28 +128,36 @@ export function MyTrips() {
   const passengerCompletedBookings = bookings.filter((trip) => {
     return trip.status === 'completed' || trip.ride?.status === 'completed';
   });
+  const passengerExpiredBookings = bookings.filter((trip) => trip.ride?.status === 'expired');
 
   const passengerLiveRequests = requests.filter((item) => item.timeClass === 'live');
   const passengerScheduledRequests = requests.filter((item) => item.timeClass === 'scheduled');
   const passengerCompletedRequests = requests.filter((item) => item.timeClass === 'completed' || item.status === 'completed');
+  const passengerExpiredRequests = requests.filter((item) => item.timeClass === 'expired' || item.status === 'expired');
 
   const activePassengerTrips =
     tab === 'live'
       ? passengerLiveBookings
       : tab === 'scheduled'
       ? passengerScheduledBookings
+      : tab === 'expired'
+      ? passengerExpiredBookings
       : passengerCompletedBookings;
   const activePassengerRequests =
     tab === 'live'
       ? passengerLiveRequests
       : tab === 'scheduled'
       ? passengerScheduledRequests
+      : tab === 'expired'
+      ? passengerExpiredRequests
       : passengerCompletedRequests;
   const activeDriverTrips =
     tab === 'live'
       ? driverLiveRides
       : tab === 'scheduled'
       ? driverScheduledRides
+      : tab === 'expired'
+      ? driverExpiredRides
       : driverCompletedRides;
 
   return (
@@ -179,6 +190,13 @@ export function MyTrips() {
             >
               Completed
             </button>
+            <button
+              type="button"
+              onClick={() => setTab('expired')}
+              className={`tab-pill rounded-xl px-4 py-2 text-sm ${tab === 'expired' ? 'active' : ''}`}
+            >
+              Expired
+            </button>
           </div>
         ) : null}
       </div>
@@ -194,6 +212,16 @@ export function MyTrips() {
                 canUseChat={true}
                 onRate={() => submitReview(trip)}
                 onConfirm={() => confirmRide(trip)}
+                onReschedule={() =>
+                  navigate('/request-ride', {
+                    state: {
+                      fromCity: trip.ride?.fromCity,
+                      toCity: trip.ride?.toCity,
+                      dateTime: trip.ride?.dateTime,
+                      seatsNeeded: trip.seatsBooked || trip.seatsRequested,
+                    },
+                  })
+                }
                 onClick={() => navigate(`/ride/${trip.ride._id}`)}
               />
             ))
@@ -204,6 +232,16 @@ export function MyTrips() {
               <RequestTripCard
                 key={request._id}
                 request={request}
+                onReschedule={() =>
+                  navigate('/request-ride', {
+                    state: {
+                      fromCity: request.fromCity,
+                      toCity: request.toCity,
+                      dateTime: request.dateTime,
+                      seatsNeeded: request.seatsNeeded,
+                    },
+                  })
+                }
                 onClick={() => (request.matchedRideId ? navigate(`/ride/${request.matchedRideId}`) : navigate('/home'))}
               />
             ))
@@ -216,14 +254,26 @@ export function MyTrips() {
                 ride={ride}
                 onClick={() => navigate(`/ride/${ride._id}`)}
                 onStatusChange={updateRideStatus}
+                onReschedule={() =>
+                  navigate('/post-ride', {
+                    state: {
+                      fromCity: ride.fromCity,
+                      toCity: ride.toCity,
+                      date: ride.date,
+                      time: ride.time,
+                      pricePerSeat: ride.pricePerSeat,
+                      totalSeats: ride.totalSeats,
+                    },
+                  })
+                }
               />
             ))
           : null}
 
         {!loading && showPassengerView && activePassengerTrips.length === 0 && activePassengerRequests.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : 'Your ride history will appear here after completion.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Your live joined/requested rides appear here.' : tab === 'scheduled' ? 'Your future rides appear here.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Your ride history will appear here after completion.'}
             buttonText="Find a Ride"
             onClick={() => navigate('/home')}
           />
@@ -231,8 +281,8 @@ export function MyTrips() {
 
         {!loading && showDriverView && activeDriverTrips.length === 0 ? (
           <EmptyState
-            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : 'No completed rides'}
-            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : 'Completed rides appear here as history.'}
+            title={tab === 'live' ? 'No live rides' : tab === 'scheduled' ? 'No scheduled rides' : tab === 'expired' ? 'No expired rides' : 'No completed rides'}
+            subtitle={tab === 'live' ? 'Live rides with ongoing trips appear here.' : tab === 'scheduled' ? 'Post a ride within 15 days to see it here.' : tab === 'expired' ? 'Unmatched rides move here after timeout or passed time.' : 'Completed rides appear here as history.'}
             buttonText="Post a Ride"
             onClick={() => navigate('/post-ride')}
           />
@@ -280,9 +330,10 @@ interface TripCardProps {
   onClick: () => void;
   onRate: () => void;
   onConfirm: () => void;
+  onReschedule: () => void;
 }
 
-function TripCard({ trip, canUseChat, onClick, onRate, onConfirm }: TripCardProps) {
+function TripCard({ trip, canUseChat, onClick, onRate, onConfirm, onReschedule }: TripCardProps) {
   const navigate = useNavigate();
   const { ride } = trip;
 
@@ -300,6 +351,8 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm }: TripCardProp
       ? 'bg-indigo-100 text-indigo-700'
       : trip.status === 'completed'
       ? 'bg-slate-200 text-slate-700'
+      : trip.ride?.status === 'expired'
+      ? 'bg-red-100 text-red-700'
       : 'bg-red-100 text-red-600';
 
   return (
@@ -402,6 +455,24 @@ function TripCard({ trip, canUseChat, onClick, onRate, onConfirm }: TripCardProp
           Confirmation: Passenger {trip.passengerConfirm ? 'Yes' : 'No'} • Driver {trip.driverConfirm ? 'Yes' : 'No'}
         </div>
       ) : null}
+
+      {trip.ride?.status === 'expired' ? (
+        <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+          {trip.ride.expiredReason || 'Ride expired: No match found. Please reschedule again.'}
+        </div>
+      ) : null}
+
+      {trip.ride?.status === 'expired' ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onReschedule();
+          }}
+          className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
+        >
+          Reschedule Ride
+        </button>
+      ) : null}
     </motion.div>
   );
 }
@@ -410,10 +481,12 @@ function DriverTripCard({
   ride,
   onClick,
   onStatusChange,
+  onReschedule,
 }: {
   ride: Ride;
   onClick: () => void;
   onStatusChange: (rideId: string, status: 'scheduled' | 'nearby' | 'live' | 'completed' | 'cancelled') => void;
+  onReschedule: () => void;
 }) {
   const driverStatusBadge =
     ride.status === 'completed'
@@ -423,6 +496,8 @@ function DriverTripCard({
       : ride.status === 'nearby'
       ? 'bg-blue-100 text-blue-700'
       : ride.status === 'cancelled'
+      ? 'bg-red-100 text-red-700'
+      : ride.status === 'expired'
       ? 'bg-red-100 text-red-700'
       : 'bg-green-100 text-green-600';
 
@@ -502,11 +577,36 @@ function DriverTripCard({
           History: {ride.fromCity} → {ride.toCity} • {ride.date} {ride.time} • {ride.driver.name} • Rating {ride.driver.rating || 0}
         </div>
       ) : null}
+
+      {ride.status === 'expired' ? (
+        <>
+          <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+            {ride.expiredReason || 'Ride expired: No match found. Please reschedule again.'}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onReschedule();
+            }}
+            className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
+          >
+            Reschedule Ride
+          </button>
+        </>
+      ) : null}
     </motion.div>
   );
 }
 
-function RequestTripCard({ request, onClick }: { request: RideRequest; onClick: () => void }) {
+function RequestTripCard({
+  request,
+  onClick,
+  onReschedule,
+}: {
+  request: RideRequest;
+  onClick: () => void;
+  onReschedule: () => void;
+}) {
   const statusText = request.status.charAt(0).toUpperCase() + request.status.slice(1);
   const requestDate = new Date(request.dateTime);
 
@@ -527,6 +627,23 @@ function RequestTripCard({ request, onClick }: { request: RideRequest; onClick: 
       <div className="text-sm text-slate-100">
         {Number.isNaN(requestDate.getTime()) ? request.dateTime : requestDate.toLocaleString()}
       </div>
+
+      {request.status === 'expired' ? (
+        <>
+          <div className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+            {request.expiredReason || 'Ride expired: No match found. Please reschedule again.'}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onReschedule();
+            }}
+            className="mt-3 min-h-12 w-full md:w-auto rounded-lg bg-blue-100 px-3 py-2 text-xs md:text-sm text-blue-700"
+          >
+            Reschedule Ride
+          </button>
+        </>
+      ) : null}
     </motion.div>
   );
 }

@@ -9,6 +9,7 @@ import { RideCard } from '../components/RideCard';
 import { pakistanCities } from '../../data/pakistanCities';
 import { CityAutocomplete } from '../components/CityAutocomplete';
 import { toast } from 'sonner';
+import { VerificationStatusBanner } from '../components/VerificationStatusBanner';
 
 interface NearbyRideResponse {
   nearbyRides: Ride[];
@@ -162,6 +163,17 @@ export function Home() {
       </div>
 
       <div className="px-3 py-4 md:px-5 md:py-5">
+        {user ? (
+          <div className="mb-4">
+            <VerificationStatusBanner
+              user={user}
+              onVerifyNow={() => navigate('/profile')}
+              onRenewCnic={() => navigate('/profile')}
+              onRenewLicense={() => navigate('/profile')}
+            />
+          </div>
+        ) : null}
+
         <div className="mb-4 flex flex-wrap gap-2">
           {isDriver ? (
             <>
