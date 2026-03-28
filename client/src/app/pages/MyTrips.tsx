@@ -501,6 +501,10 @@ function DriverTripCard({
       ? 'bg-red-100 text-red-700'
       : 'bg-green-100 text-green-600';
 
+  const isScheduledRide = ride.status === 'scheduled' || ride.status === 'nearby';
+  const isLiveRide = ride.status === 'live';
+  const showActionButtons = isScheduledRide || isLiveRide;
+
   return (
     <motion.div
       whileHover={{ scale: 1.02 }}
@@ -525,53 +529,43 @@ function DriverTripCard({
         </span>
         <span className="text-blue-600">PKR {ride.pricePerSeat}/seat</span>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onStatusChange(ride._id, 'scheduled');
-          }}
-          className="min-h-12 rounded-lg bg-slate-100 px-2 py-1 text-xs md:text-sm text-slate-700"
-        >
-          Set Scheduled
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onStatusChange(ride._id, 'live');
-          }}
-          className="min-h-12 rounded-lg bg-blue-100 px-2 py-1 text-xs md:text-sm text-blue-700"
-        >
-          Start Ride
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onStatusChange(ride._id, 'nearby');
-          }}
-          className="min-h-12 rounded-lg bg-indigo-100 px-2 py-1 text-xs md:text-sm text-indigo-700"
-        >
-          Set Nearby
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onStatusChange(ride._id, 'completed');
-          }}
-          className="min-h-12 rounded-lg bg-green-100 px-2 py-1 text-xs md:text-sm text-green-700"
-        >
-          Complete
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onStatusChange(ride._id, 'cancelled');
-          }}
-          className="min-h-12 rounded-lg bg-red-100 px-2 py-1 text-xs md:text-sm text-red-700"
-        >
-          Cancel
-        </button>
-      </div>
+      {showActionButtons ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+          {isScheduledRide ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(ride._id, 'live');
+              }}
+              className="min-h-12 rounded-lg bg-blue-100 px-2 py-1 text-xs md:text-sm text-blue-700"
+            >
+              Start Ride
+            </button>
+          ) : null}
+
+          {isLiveRide ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(ride._id, 'completed');
+              }}
+              className="min-h-12 rounded-lg bg-green-100 px-2 py-1 text-xs md:text-sm text-green-700"
+            >
+              Complete
+            </button>
+          ) : null}
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusChange(ride._id, 'cancelled');
+            }}
+            className="min-h-12 rounded-lg bg-red-100 px-2 py-1 text-xs md:text-sm text-red-700"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
       {ride.status === 'completed' ? (
         <div className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
           History: {ride.fromCity} → {ride.toCity} • {ride.date} {ride.time} • {ride.driver.name} • Rating {ride.driver.rating || 0}
