@@ -89,9 +89,64 @@ const verificationReasonMessage = (reason?: string) => {
     DOB_MISMATCH: 'Date of birth does not match.',
     FACE_CHECK_FAILED: 'Face verification check failed.',
     FACE_MISMATCH: 'Face does not match CNIC photo.',
+    LICENSE_EXTRACTION_FAILED: 'Unable to read driving license number from image.',
+    LICENSE_MISMATCH: 'License number does not match.',
   };
 
   return mapping[code] || '';
+};
+
+const verificationDetailsMessage = (details?: {
+  failedField?: string;
+  why?: string;
+  hint?: string;
+  inputValue?: string;
+  extractedName?: string;
+  extractedCnic?: string;
+  extractedDob?: string;
+  extractedLicense?: string;
+  similarity?: number;
+  threshold?: number;
+}) => {
+  if (!details) {
+    return '';
+  }
+
+  const parts: string[] = [];
+
+  if (details.why) {
+    parts.push(details.why);
+  }
+
+  if (details.hint) {
+    parts.push(details.hint);
+  }
+
+  if (details.inputValue && (details.extractedName || details.extractedCnic || details.extractedDob || details.extractedLicense)) {
+    parts.push(`Input: ${details.inputValue}`);
+  }
+
+  if (details.extractedName) {
+    parts.push(`OCR Name: ${details.extractedName}`);
+  }
+
+  if (details.extractedCnic) {
+    parts.push(`OCR CNIC: ${details.extractedCnic}`);
+  }
+
+  if (details.extractedDob) {
+    parts.push(`OCR DOB: ${details.extractedDob}`);
+  }
+
+  if (details.extractedLicense) {
+    parts.push(`OCR License: ${details.extractedLicense}`);
+  }
+
+  if (typeof details.similarity === 'number' && typeof details.threshold === 'number') {
+    parts.push(`Face similarity: ${details.similarity.toFixed(1)}% (required: ${details.threshold}%)`);
+  }
+
+  return parts.join(' ');
 };
 
 export function Auth() {
@@ -142,6 +197,10 @@ export function Auth() {
     }
 
     if (['FACE_CHECK_FAILED', 'FACE_MISMATCH'].includes(code)) {
+      return 3;
+    }
+
+    if (['LICENSE_EXTRACTION_FAILED', 'LICENSE_MISMATCH'].includes(code)) {
       return 3;
     }
 
@@ -306,11 +365,30 @@ export function Auth() {
       setIsLoading(false);
     } catch (error) {
       const payload = (error as {
-        response?: { data?: { error?: string; message?: string; reason?: string } };
+        response?: {
+          data?: {
+            error?: string;
+            message?: string;
+            reason?: string;
+            details?: {
+              failedField?: string;
+              why?: string;
+              hint?: string;
+              inputValue?: string;
+              extractedName?: string;
+              extractedCnic?: string;
+              extractedDob?: string;
+              extractedLicense?: string;
+              similarity?: number;
+              threshold?: number;
+            };
+          };
+        };
       })?.response?.data;
 
       const baseMessage = payload?.error || payload?.message || 'Information does not match';
       const details = verificationReasonMessage(payload?.reason);
+      const deepDetails = verificationDetailsMessage(payload?.details);
       const failedIndexFromReason = reasonToVerifyStepIndex(payload?.reason);
 
       if (failedIndexFromReason !== null) {
@@ -320,7 +398,11 @@ export function Auth() {
         setVerifyFailedIndex(Math.min(verifyIndex, verifySteps.length - 1));
       }
 
-      resetError(details ? `${baseMessage} ${details}` : baseMessage);
+      if (deepDetails) {
+        resetError(`${baseMessage} ${details} ${deepDetails}`.trim());
+      } else {
+        resetError(details ? `${baseMessage} ${details}` : baseMessage);
+      }
       setIsLoading(false);
 
       window.setTimeout(() => {
@@ -550,10 +632,10 @@ export function Auth() {
                 </p>
 
                 <div className="mt-3 space-y-3">
-                  <FloatingField label="Full Name">
+                  <FloatingField label="Name (as on CNIC)">
                     <IconInput
                       icon={<UserCircle2 className="h-4 w-4" />}
-                      placeholder="Enter full name"
+                      placeholder="Enter name exactly as on CNIC"
                       value={signup.fullName}
                       onChange={(value) => setSignup((prev) => ({ ...prev, fullName: value }))}
                     />

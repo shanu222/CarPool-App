@@ -457,7 +457,7 @@ export function IdentityAuth() {
           <form className="grid gap-4" onSubmit={handleSignupSubmit}>
             <input
               className={`h-11 rounded-xl px-3 text-white placeholder:text-white/60 ${fieldErrorClass(attempted && signupErrors.name)}`}
-              placeholder="Full Name"
+              placeholder="Name (as on CNIC)"
               value={signup.name}
               onChange={(event) => setSignup((prev) => ({ ...prev, name: event.target.value }))}
             />

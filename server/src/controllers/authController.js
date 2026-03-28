@@ -558,6 +558,7 @@ const strictSignup = async ({ req, res, role }) => {
       success: false,
       error: "Information does not match CNIC",
       reason,
+      details,
     });
   };
 
@@ -570,11 +571,27 @@ const strictSignup = async ({ req, res, role }) => {
   const normalizedMobile = normalizePhone(mobileInput);
 
   if (!normalizedCnic) {
-    return verificationFail({ reason: "CNIC_FORMAT_INVALID" });
+    return verificationFail({
+      reason: "CNIC_FORMAT_INVALID",
+      details: {
+        failedField: "cnic",
+        why: "CNIC format is invalid",
+        hint: "Use XXXXX-XXXXXXX-X format (13 digits with optional dashes).",
+        inputValue: String(cnic || ""),
+      },
+    });
   }
 
   if (!normalizedDob) {
-    return verificationFail({ reason: "DOB_FORMAT_INVALID" });
+    return verificationFail({
+      reason: "DOB_FORMAT_INVALID",
+      details: {
+        failedField: "dob",
+        why: "Date format is invalid",
+        hint: "Use a valid date that matches CNIC Date of Birth.",
+        inputValue: String(dob || ""),
+      },
+    });
   }
 
   const profileImageFile = req.files?.profileImage?.[0];
@@ -611,15 +628,25 @@ const strictSignup = async ({ req, res, role }) => {
       stack: error?.stack,
     });
 
-    return verificationFail({ reason: "OCR_EXTRACTION_FAILED" });
+    return verificationFail({
+      reason: "OCR_EXTRACTION_FAILED",
+      details: {
+        failedField: "cnic_images",
+        why: "OCR could not read CNIC clearly",
+        hint: "Use a sharp image, avoid blur/glare, keep full card visible, and ensure text is readable.",
+      },
+    });
   }
 
   if (!cnicData?.cnic || normalizeCnic(cnicData.cnic) !== normalizedCnic) {
     return verificationFail({
       reason: "CNIC_MISMATCH",
       details: {
+        failedField: "cnic",
+        why: "CNIC number does not match",
+        hint: "Check digits and dashes exactly as printed on CNIC.",
+        inputValue: normalizedCnic,
         extractedCnic: cnicData?.cnic || "",
-        normalizedInputCnic: normalizedCnic,
       },
     });
   }
@@ -628,8 +655,11 @@ const strictSignup = async ({ req, res, role }) => {
     return verificationFail({
       reason: "NAME_MISMATCH",
       details: {
+        failedField: "name",
+        why: "Name does not match",
+        hint: "Enter name exactly as printed under the Name label on CNIC.",
+        inputValue: String(name || "").trim(),
         extractedName: cnicData?.name || "",
-        normalizedInputName: normalizeName(name),
       },
     });
   }
@@ -638,17 +668,42 @@ const strictSignup = async ({ req, res, role }) => {
     return verificationFail({
       reason: "DOB_MISMATCH",
       details: {
+        failedField: "dob",
+        why: "Date of Birth does not match",
+        hint: "Match CNIC Date of Birth exactly (day/month/year).",
+        inputValue: normalizedDob,
         extractedDob: cnicData?.dob || "",
-        normalizedInputDob: normalizedDob,
       },
     });
   }
 
   if (role === "driver") {
-    const extractedLicense = await extractLicenseNumber(toStoredUploadPath(licenseImageFile));
+    let extractedLicense = "";
+    try {
+      extractedLicense = await extractLicenseNumber(toStoredUploadPath(licenseImageFile));
+    } catch (error) {
+      return verificationFail({
+        reason: "LICENSE_EXTRACTION_FAILED",
+        details: {
+          failedField: "licenseImage",
+          why: "License OCR failed",
+          hint: "Upload a clearer license image with visible number and no glare/blur.",
+          errorMessage: error?.message,
+        },
+      });
+    }
 
     if (!extractedLicense || normalizeLicenseNumber(extractedLicense) !== normalizeLicenseNumber(licenseNumber)) {
-      return jsonError(res, 400, "License number invalid");
+      return verificationFail({
+        reason: "LICENSE_MISMATCH",
+        details: {
+          failedField: "licenseNumber",
+          why: "License number does not match",
+          hint: "Enter the same license number shown on uploaded driving license image.",
+          inputValue: normalizeLicenseNumber(licenseNumber),
+          extractedLicense: normalizeLicenseNumber(extractedLicense),
+        },
+      });
     }
   }
 
@@ -666,13 +721,23 @@ const strictSignup = async ({ req, res, role }) => {
       stack: error?.stack,
     });
 
-    return verificationFail({ reason: "FACE_CHECK_FAILED" });
+    return verificationFail({
+      reason: "FACE_CHECK_FAILED",
+      details: {
+        failedField: "profileImage",
+        why: "Face comparison could not run",
+        hint: "Use a clear front-facing selfie and ensure CNIC face is fully visible.",
+      },
+    });
   }
 
   if (!faceResult?.matched) {
     return verificationFail({
       reason: "FACE_MISMATCH",
       details: {
+        failedField: "face",
+        why: "Face does not match CNIC photo",
+        hint: "Retake selfie in good light, without blur, sunglasses, or heavy angle.",
         similarity: Number(faceResult?.similarity || 0),
         threshold: Number(process.env.FACE_MATCH_THRESHOLD || 80),
       },
