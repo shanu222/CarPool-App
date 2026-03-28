@@ -7,6 +7,10 @@ import { normalizeCnic, normalizeDob, normalizeName } from "../utils/kycUtils.js
 let cachedClient;
 const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS || 18000);
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 20000);
+const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 20000);
+
+const getOpenAiApiKey = () => process.env.OPENAI_API_KEY || "";
+const getOpenAiModel = () => process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const getGeminiApiKey = () =>
   process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || "";
@@ -74,6 +78,92 @@ const parseFirstJsonObject = (text) => {
 
     return null;
   }
+};
+
+const extractCnicDataWithOpenAI = async ({ frontBuffer, backBuffer }) => {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) {
+    return null;
+  }
+
+  const model = getOpenAiModel();
+  const endpoint = "https://api.openai.com/v1/chat/completions";
+
+  const prompt = [
+    "Extract Pakistani CNIC fields from these two images (front and back).",
+    "Return JSON only with keys: name, cnic, dob.",
+    "Rules:",
+    "- name: card holder name under Name label only",
+    "- cnic: only CNIC number",
+    "- dob: normalize to YYYY-MM-DD",
+    "- if uncertain, return empty string for that key",
+  ].join("\n");
+
+  const requestBody = {
+    model,
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${frontBuffer.toString("base64")}`,
+            },
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${backBuffer.toString("base64")}`,
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  let response;
+  try {
+    response = await withTimeout(
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      }),
+      OPENAI_TIMEOUT_MS
+    );
+  } catch {
+    return null;
+  }
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+
+  const content = payload?.choices?.[0]?.message?.content || "";
+  const parsed = parseFirstJsonObject(content);
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  return {
+    name: normalizeName(parsed.name || ""),
+    cnic: normalizeCnic(parsed.cnic || ""),
+    dob: normalizeDob(parsed.dob || ""),
+  };
 };
 
 const extractCnicDataWithGemini = async ({ frontBuffer, backBuffer }) => {
@@ -429,6 +519,14 @@ const parseLicenseText = (text) => {
 
 export const extractCnicData = async ({ cnicFrontPath, cnicBackPath }) => {
   const [frontBuffer, backBuffer] = await Promise.all([fs.readFile(cnicFrontPath), fs.readFile(cnicBackPath)]);
+
+  const openAiResult = await extractCnicDataWithOpenAI({ frontBuffer, backBuffer });
+  if (openAiResult?.cnic && openAiResult?.dob && openAiResult?.name) {
+    return {
+      ...openAiResult,
+      nameCandidates: openAiResult.name ? [openAiResult.name] : [],
+    };
+  }
 
   const aiResult = await extractCnicDataWithGemini({ frontBuffer, backBuffer });
   if (aiResult?.cnic && aiResult?.dob && aiResult?.name) {
