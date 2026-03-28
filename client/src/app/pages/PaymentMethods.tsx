@@ -109,7 +109,7 @@ export function PaymentMethods() {
                 accountNumber={settings.jazzcashNumber || "Not set"}
               />
               <MethodCard
-                title="HBL Bank"
+                title="Bank"
                 accountTitle={settings.accountTitle || "Not set"}
                 accountNumber={settings.bankAccount || "Not set"}
               />
@@ -129,7 +129,7 @@ export function PaymentMethods() {
                   >
                     <option value="easypaisa">Easypaisa</option>
                     <option value="jazzcash">JazzCash</option>
-                    <option value="bank">HBL Bank</option>
+                    <option value="bank">Bank</option>
                   </select>
                 </div>
 

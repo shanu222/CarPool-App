@@ -163,14 +163,19 @@ export const getMyPayments = async (req, res, next) => {
 export const getPaymentSettingsPublic = async (_req, res, next) => {
   try {
     const settings = await PaymentSettings.findOne().sort({ updatedAt: -1 });
+    const defaultSettings = {
+      easypaisaNumber: "03403318127",
+      jazzcashNumber: "03403318127",
+      bankAccount: "24897000279603",
+      accountTitle: "Shahnawaz",
+    };
 
-    const payload =
-      settings || {
-        easypaisaNumber: "",
-        jazzcashNumber: "",
-        bankAccount: "",
-        accountTitle: "",
-      };
+    const payload = {
+      easypaisaNumber: settings?.easypaisaNumber || defaultSettings.easypaisaNumber,
+      jazzcashNumber: settings?.jazzcashNumber || defaultSettings.jazzcashNumber,
+      bankAccount: settings?.bankAccount || defaultSettings.bankAccount,
+      accountTitle: settings?.accountTitle || defaultSettings.accountTitle,
+    };
 
     return res.json({
       ...payload,
